@@ -4,7 +4,7 @@ import { FILTER_TIPS } from "../data/filterTips";
 import { CheckRow, ColumnsBody, sameSelection, CascadingMultiSelect, PillTrigger, FilterNoResults, useUnfilteredHeight } from "./Filters";
 import { EditColumnsIcon } from "./icons";
 import { DropdownSearch } from "./SearchPanelParts";
-import { companies } from "../data/companies";
+import { useLiveCompanies } from "../data/companies";
 
 /* ── Columns: every profile field is an optional column. Name is fixed. ── */
 export type UserColumnKey =
@@ -65,7 +65,6 @@ export const SUBSCRIPTIONS = ["Subscriber", "Company Plan", "Scholarship", "Free
 export const ROLES = ["Self-Learner", "Employee", "Manager", "Admin"];
 export const GOALS = ["Looking for First Trades Job", "Exploring Careers in the Skilled Trades", "Focussed on Advancing Career", "Other"];
 export const INDUSTRIES = ["HVAC", "Electrical", "Plumbing", "Solar", "Refrigeration", "Appliance Repair"];
-const COMPANY_NAMES = companies.map((c) => c.name);
 
 export function UsersFilters({
   filters,
@@ -91,6 +90,9 @@ export function UsersFilters({
   more?: UserMoreFilterKey[];
 }) {
   const moreCount = more.reduce((n, k) => n + filters[k].length, 0);
+  // Every company — the seed ones and any created this session.
+  const live = useLiveCompanies();
+  const companyNames = useMemo(() => live.map((c) => c.name), [live]);
 
   const hasFilters =
     extraActive ||
@@ -131,7 +133,7 @@ export function UsersFilters({
       />
       <MultiPill
         label="Company"
-        all={COMPANY_NAMES}
+        all={companyNames}
         value={filters.companies}
         onApply={(v) => setFilters({ ...filters, companies: v })}
         searchable

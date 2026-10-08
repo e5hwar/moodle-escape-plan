@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { idPhotoUrl, type NameChangeRequest } from "../data/nameChangeRequests";
+import { idPhotoUrl } from "../data/nameChangeRequests";
 import { FullscreenViewer } from "./FullscreenViewer";
 
 /** The ID document fields this card renders. Kept separate from any one page's
@@ -17,19 +17,6 @@ export type IdCardData = {
   /** picsum seed used for the ID portrait photo. */
   photoSeed: string;
 };
-
-/** Adapter for the Name Change Requests page's record shape. */
-export function idCardFromRequest(r: NameChangeRequest): IdCardData {
-  return {
-    name: r.currentName,
-    idType: r.idType,
-    idNumber: r.idNumber,
-    dob: r.dob,
-    expires: r.expires,
-    region: r.region,
-    photoSeed: r.photoSeed,
-  };
-}
 
 function formatDate(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);

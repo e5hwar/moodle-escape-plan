@@ -1,6 +1,6 @@
 import { Fragment, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { TimeField } from "./TimeField";
-import { CERT_DEEP_LINK_BASE as DEEP_LINK_BASE, slugify } from "../data/deepLinks";
+import { TimeField, TIME_UNIT_BY_LABEL, TIME_UNIT_LABEL, TIME_UNIT_OPTIONS, type TimeUnit } from "./TimeField";
+import { CERT_DEEP_LINK_BASE as DEEP_LINK_BASE, certSlug, slugify } from "../data/deepLinks";
 import { createPortal } from "react-dom";
 import requiresSubscriptionIcon from "../assets/requires-subscription.svg";
 import { InfoTipIcon, RowCloseIcon, InfoIcon12, WarnTriangleIcon } from "./icons";
@@ -20,6 +20,7 @@ import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
 import { SelectField } from "./SelectField";
 import { type TaskTypeKey, TASK_TYPE_OPTIONS } from "./Footer";
 import { PrmModal } from "./PrmModal";
+import { UnarchiveCertModal } from "./UnarchiveCertModal";
 import { CompletionCriteriaGate, sampleCompletionCount } from "./CriteriaLock";
 import { SelectRequirementModal, type RequirementPick } from "./SelectRequirementModal";
 import { MultiSelect } from "./NewCompanyWizard";
@@ -31,17 +32,21 @@ import {
   type Certification,
   type CareerStage as RecordCareerStage,
   type CertType as RecordCertType,
-  certifications,
   CERT_BY_USEDIN,
   formatTimeToComplete,
+  getLiveCerts,
+  useLiveCerts,
+  isSeedCert,
+  certNameById,
 } from "../data/certifications";
 import { MONTHS_3 } from "../formatDate";
 import type { CertImportReport, ImportedCertCourse, ImportedCertTask } from "../data/certImport";
 import type { Question } from "../data/questionBank";
-import { tasks as taskLibrary, formatTaskDuration, type Task, type TaskType } from "../data/tasks";
-import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
-import { AUDIENCE_B2B_ONLY, PARTNERSHIP_TAGS, TRADE_TAGS, pickTags } from "../data/filters";
+import { tasks as taskLibrary, formatTaskDuration, getTasks, isIdUpload, taskById, type Task, type TaskType } from "../data/tasks";
+import { useB2BConfig } from "../data/productConfig";
+import { AUDIENCE_B2B_ONLY, PARTNERSHIP_TAGS, TRADE_TAGS, audienceOf, pickTags } from "../data/filters";
 import { PriceIdFields, PRICE_CHANNELS, newPriceIds, samplePriceId, type PriceIds } from "./PriceIdFields";
+import { industryTagLabels } from "../data/industries";
 
 type CareerStage = "pre-apprentice" | "apprentice" | "journeyman" | "master";
 type CertType = "unit" | "credential" | "program" | "bundle";
@@ -50,20 +55,9 @@ type AccessType = "open" | "non-consumable" | "consumable";
 // Repurchase behaviour — Consumable paywalls only. Determines whether a user's
 // progress is wiped or kept when they buy the Certification again.
 type ConsumableProgress = "reset" | "preserve";
-type TimeUnit = "minutes" | "hours" | "days" | "weeks";
 
 /* Same design-system single-select as the Task wizard's unit picker
    (Figma 101:281 trigger + 591:1382 menu). */
-const TIME_UNIT_LABEL: Record<TimeUnit, string> = {
-  minutes: "Minutes",
-  hours: "Hours",
-  days: "Days",
-  weeks: "Weeks",
-};
-const TIME_UNIT_OPTIONS = Object.values(TIME_UNIT_LABEL);
-const TIME_UNIT_BY_LABEL = Object.fromEntries(
-  (Object.keys(TIME_UNIT_LABEL) as TimeUnit[]).map((u) => [TIME_UNIT_LABEL[u], u]),
-) as Record<string, TimeUnit>;
 
 type TaskKind = "xapi" | "quiz" | "hands-on" | "file";
 
@@ -106,6 +100,10 @@ type CertTask = {
    *  removed from this Course. Absent on a Task created here, which nothing
    *  else owns yet. */
   usedIn?: string[];
+  /** A Task made here (the builder's Create New, or a CSV row with no library
+   *  match): its Task-library record, filed in the library when the
+   *  Certification is created or saved. Never stored on the Certification. */
+  record?: Omit<Task, "id">;
 };
 
 // Every Task in the Certification, flattened (direct Course tasks + Lesson
@@ -197,9 +195,9 @@ type CertCourse = {
   children: CourseChild[];
   // Set when this Course was copied in from an imported Certification (the
   // "Create as Learning Plan" flow). New Course/Lesson entities are created, but
-  // the Tasks inside are reused — see buildImportedCourses.
+  // the Tasks inside are reused — see buildImportedCourses. By id only: the
+  // name is read off the live record (certReferences).
   sourceCertId?: string;
-  sourceCertName?: string;
 };
 
 /* ── Row-menu glyphs (Figma 1244:1831 / 1246:2642) ──
@@ -316,6 +314,8 @@ const TASK_TYPE_TO_KIND: Record<TaskType, TaskKind> = {
   Quiz: "quiz",
   "Hands-On Task": "hands-on",
   Resource: "file",
+  // The ID Upload Task is a learner upload — the nearest badge is Hands-On.
+  "ID Upload": "hands-on",
 };
 
 const DURATION_BY_KIND: Record<TaskKind, string> = {
@@ -332,15 +332,17 @@ const DURATION_BY_KIND: Record<TaskKind, string> = {
 // exam goes last — after the Lesson, where a learner would meet it — rather
 // than wherever the library happens to list it.
 function associatedTasks(cert: Certification): Task[] {
-  const matched = taskLibrary.filter((t) =>
-    t.usedIn.some((u) => CERT_BY_USEDIN.get(u)?.id === cert.id),
+  // The ID Upload Task is a library gate only (Add Access Restriction), never
+  // a tree Task, so it is left out of the sample structure.
+  const matched = taskLibrary.filter(
+    (t) => !isIdUpload(t) && t.usedIn.some((u) => CERT_BY_USEDIN.get(u)?.id === cert.id),
   );
   const list = matched.length > 0 ? matched : taskLibrary.slice(0, 4);
   return [...list.filter((t) => !t.finalExam), ...list.filter((t) => t.finalExam)];
 }
 
-// Existing Certifications don't persist their structure, so when editing we
-// populate plausible sample data: Tasks already associated with the Cert (by
+// The seed Certifications store no structure, so for them (only) Edit and the
+// preview panel populate plausible sample data: Tasks already associated with the Cert (by
 // name or alias) become a Course with a Lesson, and the final-exam-like Task
 // seeds one Completion Condition Set.
 function buildSampleStructure(editing: Certification): {
@@ -413,6 +415,31 @@ function buildSampleStructure(editing: Certification): {
 // buildSampleStructure uses), tagged with its origin. Tasks are pulled from the
 // library and REUSED — no new Tasks are created (spec 2.3.2 Reusability).
 function buildImportedCourses(cert: Certification): CertCourse[] {
+  // A Certification with a stored tree (created or saved this session) hands
+  // over its real Courses. Courses and Lessons are new nodes; the Tasks are
+  // the same Tasks under fresh tree ids, restrictions remapped to match.
+  if (cert.courses?.length) {
+    const ids = new Map<string, string>();
+    const taskId = (old: string) => {
+      if (!ids.has(old)) ids.set(old, nodeId("t"));
+      return ids.get(old)!;
+    };
+    const copyTask = (t: CertTask): CertTask => ({
+      ...t,
+      id: taskId(t.id),
+      restriction: t.restriction && { ...t.restriction, taskIds: t.restriction.taskIds.map(taskId) },
+    });
+    return cert.courses.map((co) => ({
+      ...co,
+      id: nodeId("co"),
+      sourceCertId: cert.id,
+      children: co.children.map((ch): CourseChild =>
+        ch.kind === "task"
+          ? { kind: "task", task: copyTask(ch.task) }
+          : { kind: "lesson", lesson: { ...ch.lesson, id: nodeId("le"), tasks: ch.lesson.tasks.map(copyTask) } },
+      ),
+    }));
+  }
   const associated = associatedTasks(cert);
 
   const certTasks = associated.map(libraryTaskToCertTask);
@@ -437,7 +464,6 @@ function buildImportedCourses(cert: Certification): CertCourse[] {
     expanded: true,
     hidden: false,
     sourceCertId: cert.id,
-    sourceCertName: cert.name,
     children: [
       {
         kind: "lesson",
@@ -466,7 +492,25 @@ function coursesFromImport(imported: ImportedCertCourse[]): CertCourse[] {
   const toTask = (t: ImportedCertTask): CertTask => {
     if (t.libraryTask) return libraryTaskToCertTask(t.libraryTask);
     const kind = TASK_TYPE_TO_KIND[t.type];
-    return { id: nodeId("t"), name: t.name, kind };
+    // A new Task, so it is filed in the Task library with the Certification.
+    const stamp = todayLabel();
+    return {
+      id: nodeId("t"),
+      name: t.name,
+      kind,
+      requiresSubscription: true,
+      record: {
+        name: t.name,
+        type: t.type,
+        usedIn: [],
+        createdBy: "SkillCat",
+        requiresSubscription: true,
+        hidden: false,
+        visibility: "Visible · published",
+        dateCreated: stamp,
+        dateModified: stamp,
+      },
+    };
   };
   return imported.map((co) => ({
     ...newCourse(),
@@ -499,7 +543,15 @@ function coursesFromImport(imported: ImportedCertCourse[]): CertCourse[] {
 type CompletionItem =
   | { kind: "task"; id: string; name: string; taskKind: TaskKind }
   | { kind: "quiz-section"; id: string; name: string; quizName: string }
-  | { kind: "cert"; id: string; name: string };
+  // A required Certification, by id (`certId`); `id` is the item's node id.
+  // Its name is always read off the live record (`itemName`), so a rename
+  // shows here too.
+  | { kind: "cert"; id: string; certId: string };
+
+/** A requirement's display name — a Certification's comes from the live record. */
+function itemName(item: CompletionItem): string {
+  return item.kind === "cert" ? certNameById(item.certId) : item.name;
+}
 
 type ConditionSet = {
   id: string;
@@ -536,8 +588,8 @@ type WizardData = {
 
   // Certifications merged into this one via "Create as Learning Plan", in the
   // order learners progress through them. Drives the imported Courses and the
-  // single completion Condition Set.
-  importedCerts: { id: string; name: string }[];
+  // single completion Condition Set. Certification ids.
+  importedCerts: string[];
 
   conditionSets: ConditionSet[];
 
@@ -577,27 +629,44 @@ const RESERVED_SLUGS = new Set(
 );
 
 
-// Slugs already taken by other Certifications (case-insensitive), excluding the
-// one being edited so re-saving its own slug isn't flagged as a duplicate.
-function takenSlugs(excludeName?: string): Set<string> {
+// Slugs already taken by the live Certifications (case-insensitive), excluding
+// the one being edited so re-saving its own slug isn't flagged as a duplicate.
+function takenSlugs(excludeId?: string): Set<string> {
   const taken = new Set<string>();
-  for (const c of certifications) {
-    if (excludeName && c.name === excludeName) continue;
-    taken.add(slugify(c.name).toLowerCase());
+  for (const c of getLiveCerts()) {
+    if (excludeId && c.id === excludeId) continue;
+    taken.add(certSlug(c).toLowerCase());
   }
   return taken;
 }
 
 // Validate a slug (§19.3.5). Returns an error message, or null when valid.
-function validateSlug(slug: string, excludeName?: string): string | null {
+function validateSlug(slug: string, excludeId?: string): string | null {
   if (!slug.trim()) return "Enter a slug or leave it to auto-generate.";
   if (!/^[A-Za-z0-9_-]+$/.test(slug))
     return "Only letters, numbers, dashes, and underscores are allowed.";
   if (RESERVED_SLUGS.has(slug.toLowerCase()))
     return `"${slug}" is a reserved keyword and can't be used.`;
-  if (takenSlugs(excludeName).has(slug.toLowerCase()))
+  if (takenSlugs(excludeId).has(slug.toLowerCase()))
     return "Another Certification already uses this slug.";
   return null;
+}
+
+/** The slug the wizard will save: the typed one once customised, else the
+ *  name's. */
+function effectiveSlugOf(d: Pick<WizardData, "slug" | "slugCustom" | "nameEn">): string {
+  return d.slugCustom ? d.slug : slugify(d.nameEn);
+}
+
+/** `base`, or `base-2`, `base-3`… — the first one no live Certification uses.
+ *  A restored backup takes one, since its own slug belongs to the original. */
+function uniqueSlug(base: string): string {
+  const taken = takenSlugs();
+  const root = base || "Certification";
+  if (!taken.has(root.toLowerCase())) return root;
+  let n = 2;
+  while (taken.has(`${root}-${n}`.toLowerCase())) n++;
+  return `${root}-${n}`;
 }
 
 const BLANK_DATA: WizardData = {
@@ -685,16 +754,23 @@ function todayLabel(): string {
   const d = new Date();
   return `${MONTHS_3[d.getMonth()]} ${String(d.getDate()).padStart(2, "0")}, ${d.getFullYear()}`;
 }
+/** The Audience step's fields as the record's flat tag list. */
+function recordTags(contentTags: ContentTag[]): string[] {
+  return contentTags.map((t) => (t.type === "userType" ? AUDIENCE_B2B_ONLY : t.value));
+}
 function toCertRecord(d: WizardData): Omit<Certification, "id"> {
   const today = todayLabel();
-  const tags = d.contentTags.map((t) => (t.type === "userType" ? AUDIENCE_B2B_ONLY : t.value));
-  const keywords = d.keywordsEn
-    .split(",")
-    .map((k) => k.trim())
-    .filter(Boolean);
+  const tags = recordTags(d.contentTags);
+  const splitKeywords = (s: string) =>
+    s
+      .split(",")
+      .map((k) => k.trim())
+      .filter(Boolean);
+  const keywords = splitKeywords(d.keywordsEn);
+  const keywordsEs = splitKeywords(d.keywordsEs);
   return {
     name: d.nameEn.trim(),
-    industry: d.industries[0] ?? "",
+    industries: d.industries,
     ceus: d.ceus.trim(),
     tasks: flattenTasks(d.courses).length,
     createdBy: "SkillCat",
@@ -714,12 +790,60 @@ function toCertRecord(d: WizardData): Omit<Certification, "id"> {
     resetsProgress: d.accessType === "consumable" && d.consumableProgress === "reset",
     keywords: keywords.length ? keywords : undefined,
     tags: tags.length ? tags : undefined,
+    /* Every key below is written even when blank, so a save over an existing
+       record clears what the form cleared (a removed Thumbnail stays removed)
+       instead of the old value surviving the spread. */
+    thumbnail: d.thumbnail?.url,
+    thumbnailFile: d.thumbnail
+      ? { name: d.thumbnail.name, size: d.thumbnail.size, ext: d.thumbnail.ext }
+      : undefined,
+    nameEs: d.nameEs.trim() || undefined,
+    descriptionEs: d.descEs || undefined,
+    announcement: d.announceEn || undefined,
+    announcementEs: d.announceEs || undefined,
+    keywordsEs: keywordsEs.length ? keywordsEs : undefined,
+    slug: effectiveSlugOf(d),
+    priceIds: d.accessType === "open" ? undefined : { ...d.priceIds },
+    courses: storedCourses(d.courses),
+    // An empty Condition Set would be satisfied by nothing at all, so only
+    // the ones holding a requirement are kept.
+    conditionSets: d.conditionSets.filter((cs) => cs.items.length > 0),
+    importedCerts: d.importedCerts.length ? d.importedCerts : undefined,
   };
 }
 
-// When editing, prefill the fields the Certification record actually carries.
-// Structural data (courses, completion) isn't stored on the list record, so for
-// existing Certifications we populate plausible sample data instead.
+/** The tree as the record keeps it: the same nodes, minus each new Task's
+ *  library record (filed in the Task library on save, not kept here). */
+function storedCourses(courses: CertCourse[]): CertCourse[] {
+  const strip = (t: CertTask): CertTask => {
+    if (!t.record) return t;
+    const { record: _record, ...rest } = t;
+    return rest;
+  };
+  return courses.map((co) => ({
+    ...co,
+    children: co.children.map((ch): CourseChild =>
+      ch.kind === "task"
+        ? { kind: "task", task: strip(ch.task) }
+        : { kind: "lesson", lesson: { ...ch.lesson, tasks: ch.lesson.tasks.map(strip) } },
+    ),
+  }));
+}
+
+/** The Tasks made in this wizard that aren't in the Task library yet, as
+ *  library records naming the Certification they belong to. */
+function newLibraryTasks(d: WizardData): Omit<Task, "id">[] {
+  const certName = d.nameEn.trim();
+  return flattenTasks(d.courses).flatMap((t) =>
+    t.record
+      ? [{ ...t.record, name: t.name, usedIn: certName ? [certName] : [], requiresSubscription: t.requiresSubscription ?? t.record.requiresSubscription }]
+      : [],
+  );
+}
+
+// When editing, prefill every field the Certification record carries. The seed
+// stores no structure (Courses, completion) or Product IDs, so for those
+// Certifications plausible sample data stands in.
 /** A saved image URL as the upload field's picked file: the file name off
  *  the URL (a bundled asset carries a hash, dropped here). The seed keeps no
  *  byte size, so that reads 0. */
@@ -730,23 +854,34 @@ function savedImage(url: string): PickedImage {
   return { name, size: 0, ext, url };
 }
 
-function buildInitialData(editing?: Certification): WizardData {
+function buildInitialData(editing?: Certification, restored = false): WizardData {
   // A new Certification opens on zero Courses — the Add Tasks step greets it
   // with "Create your first Course" rather than a pre-made "Untitled Course".
   // The Condition Set is still seeded, empty: the Admin fills it from
   // "+ Add Requirement".
   if (!editing) return { ...BLANK_DATA, conditionSets: [newConditionSet()] };
   const vis = editing.visibility ?? "Visible";
-  const sample = buildSampleStructure(editing);
+  // The stored tree and criteria when the record has them (created or saved
+  // this session, or a backup of one); the seed has neither, so it opens on
+  // sample structure.
+  const sample = editing.courses ? null : buildSampleStructure(editing);
+  const savedSets = editing.conditionSets ?? sample?.conditionSets ?? [];
   return {
     ...BLANK_DATA,
-    courses: sample.courses,
-    conditionSets: sample.conditionSets,
+    courses: editing.courses ?? sample!.courses,
+    // Never zero sets: an empty one is somewhere to add the first requirement.
+    conditionSets: savedSets.length ? savedSets : [newConditionSet()],
+    importedCerts: editing.importedCerts ?? [],
     nameEn: editing.name,
+    nameEs: editing.nameEs ?? "",
     descEn: editing.description ?? "",
+    descEs: editing.descriptionEs ?? "",
+    announceEn: editing.announcement ?? "",
+    announceEs: editing.announcementEs ?? "",
+    keywordsEs: (editing.keywordsEs ?? []).join(", "),
     timeValue: editing.timeToComplete ? String(editing.timeToComplete.value) : "",
     timeUnit: editing.timeToComplete?.unit ?? BLANK_DATA.timeUnit,
-    industries: editing.industry ? [editing.industry] : [],
+    industries: editing.industries,
     ceus: editing.ceus ?? "",
     careerStage: editing.careerStage
       ? (editing.careerStage.toLowerCase() as CareerStage)
@@ -755,9 +890,14 @@ function buildInitialData(editing?: Certification): WizardData {
     keywordsEn: (editing.keywords ?? []).join(", "),
     // The record's saved Thumbnail, so Edit and the preview panel's Overview
     // both see the picture its head shows.
-    thumbnail: editing.thumbnail ? savedImage(editing.thumbnail) : null,
-    // An existing Certification already has a live, persisted Deep Link slug.
-    slug: slugify(editing.name),
+    thumbnail: editing.thumbnail
+      ? { ...savedImage(editing.thumbnail), ...editing.thumbnailFile }
+      : null,
+    // An existing Certification already has a live, persisted Deep Link slug
+    // — its stored one, which a rename doesn't change. A restored backup is a
+    // new Certification, and its slug belongs to the original, so it takes the
+    // first free variant.
+    slug: restored ? uniqueSlug(certSlug(editing)) : certSlug(editing),
     slugCustom: true,
     // An archived Cert isn't publicly visible, so it maps to "hidden" on the
     // Visibility step. Retiring one is its own full-page flow off the row menu
@@ -772,7 +912,11 @@ function buildInitialData(editing?: Certification): WizardData {
           ? "non-consumable"
           : "open",
     consumableProgress: editing.resetsProgress ? "reset" : "preserve",
-    priceIds: editing.payment ? samplePriceIds(editing) : newPriceIds(),
+    priceIds: editing.priceIds
+      ? { ...editing.priceIds }
+      : editing.payment
+        ? samplePriceIds(editing)
+        : newPriceIds(),
     contentTags: recordContentTags(editing.tags),
   };
 }
@@ -802,6 +946,7 @@ const REQUIRED_FIELD_LABELS: Record<string, string> = {
   descLimit: limitLabel("Description", DESCRIPTION_MAX),
   announceLimit: limitLabel("Announcement", DESCRIPTION_MAX),
   keywordsLimit: limitLabel("Keywords", NAME_MAX),
+  slug: "Deep Link",
 };
 
 type Props = {
@@ -824,6 +969,9 @@ type Props = {
   /** A question made inside a new Quiz Task's Questions step — filed in the
    *  Question Bank (passed through to the Task wizard). */
   onQuestionCreated?: (q: Question) => void;
+  /** Tasks made inside the builder (Create New, or new CSV rows): filed in
+   *  the Task library when the Certification is created or saved. */
+  onTasksCreated?: (tasks: Omit<Task, "id">[]) => void;
 };
 
 /* The wizard's toast, reachable from the builder's nested rows and modals
@@ -831,12 +979,12 @@ type Props = {
    through every level. */
 const CertToast = createContext<(label: string) => void>(() => {});
 
-export function NewCertificationWizard({ onClose, onCreate, onSave, editingCert, imported, restored, onQuestionCreated }: Props) {
+export function NewCertificationWizard({ onClose, onCreate, onSave, editingCert, imported, restored, onQuestionCreated, onTasksCreated }: Props) {
   const isEditing = !!editingCert;
   const steps = STEPS;
   const [step, setStep] = useState(0);
   const [data, setData] = useState<WizardData>(() => {
-    const initial = buildInitialData(editingCert ?? restored);
+    const initial = buildInitialData(editingCert ?? restored, !editingCert && !!restored);
     return imported ? { ...initial, courses: coursesFromImport(imported.courses) } : initial;
   });
   // The CSV Upload's acknowledgment — the Question Bank raises the same toast
@@ -916,17 +1064,29 @@ export function NewCertificationWizard({ onClose, onCreate, onSave, editingCert,
       if (isOver(NAME_MAX, d.keywordsEn, d.keywordsEs)) {
         gaps.push({ step: stepIndex("additional"), key: "keywordsLimit" });
       }
+      /* The Deep Link slug (§19.3.5): an invalid, reserved or taken slug
+         blocks creating, like the field error says. An auto slug on an empty
+         name is the Name gap's to report. */
+      const slug = effectiveSlugOf(d);
+      if ((slug || d.slugCustom) && validateSlug(slug, editingCert?.id)) {
+        gaps.push({ step: stepIndex("additional"), key: "slug" });
+      }
       // A Condition Set with no items completes nothing, so an empty-handed
       // Completion step counts as missing either way.
       // The builder tolerates an empty Certification — you can delete your way
       // down to no Courses at all — but creating one needs at least a Course.
       if (d.courses.length === 0) gaps.push({ step: stepIndex("tasks"), key: "courses" });
-      if (!d.conditionSets.some((cs) => cs.items.length > 0)) {
+      // At least one Condition Set with a requirement, and no more than the
+      // cap (the Add Condition Set button stops there too).
+      if (
+        !d.conditionSets.some((cs) => cs.items.length > 0) ||
+        d.conditionSets.length > MAX_CONDITION_SETS
+      ) {
         gaps.push({ step: stepIndex("completion"), key: "completion" });
       }
       return gaps.sort((a, b) => a.step - b.step);
     },
-    [stepIndex],
+    [stepIndex, editingCert?.id],
   );
 
   /* Every mandatory field still empty, right now — the gate on the footer's
@@ -991,6 +1151,20 @@ export function NewCertificationWizard({ onClose, onCreate, onSave, editingCert,
     if (isEditing) {
       if (editingCert && onSave) {
         const record = toCertRecord(data);
+        /* A seed Certification stores no tree, so Edit opened on sample
+           structure. Left as it opened, that sample is not saved, and the
+           record keeps its own Task count; once the tree or the criteria are
+           changed, they're stored and the count is the tree's. */
+        const sampleKept =
+          !editingCert.courses &&
+          draftKey(data.courses) === draftKey(pristine.current.courses) &&
+          draftKey(data.conditionSets) === draftKey(pristine.current.conditionSets);
+        if (sampleKept) {
+          record.courses = undefined;
+          record.conditionSets = undefined;
+          record.tasks = editingCert.tasks;
+        }
+        onTasksCreated?.(newLibraryTasks(data));
         onSave({
           ...editingCert,
           ...record,
@@ -1139,13 +1313,16 @@ export function NewCertificationWizard({ onClose, onCreate, onSave, editingCert,
                 <AdditionalInfoStep
                   data={data}
                   update={update}
-                  editingName={editingCert?.name}
+                  editingId={editingCert?.id}
+                  slugError={missing.has("slug")}
                 />
               )}
               {step === 2 && (
                 <TasksStep
                   data={data}
                   update={update}
+                  selfId={editingCert?.id}
+                  criteriaLocked={isEditing && !completionUnlocked}
                   onCreateTask={(courseId, lessonId, taskType) => setSplitTask({ courseId, lessonId, taskType })}
                   onAddExisting={(courseId, lessonId) => setExistingPicker({ courseId, lessonId })}
                 />
@@ -1154,9 +1331,11 @@ export function NewCertificationWizard({ onClose, onCreate, onSave, editingCert,
                 <CompletionStep
                   data={data}
                   update={update}
+                  selfId={editingCert?.id}
                   criteriaLocked={isEditing && !completionUnlocked}
                   onUnlockCriteria={() => setCompletionUnlocked(true)}
-                  completions={editingCert ? sampleCompletionCount(editingCert.id) : 0}
+                  // A Certification created this session has no completions yet.
+                  completions={editingCert && isSeedCert(editingCert.id) ? sampleCompletionCount(editingCert.id) : 0}
                   missing={missing.has("completion")}
                   touch={touch}
                 />
@@ -1225,7 +1404,14 @@ export function NewCertificationWizard({ onClose, onCreate, onSave, editingCert,
           value={data.industries}
           onChange={(v) => update({ industries: v })}
           onDone={() => {
+            onTasksCreated?.(newLibraryTasks(data));
             onCreate?.(toCertRecord(data));
+            onClose();
+          }}
+          onCancel={() => {
+            // "Skip for now" creates the Certification untagged.
+            onTasksCreated?.(newLibraryTasks(data));
+            onCreate?.(toCertRecord({ ...data, industries: [] }));
             onClose();
           }}
         />
@@ -1533,11 +1719,15 @@ function DetailsStep({
 function AdditionalInfoStep({
   data,
   update,
-  editingName,
+  editingId,
+  slugError,
 }: {
   data: WizardData;
   update: (p: Partial<WizardData>) => void;
-  editingName?: string;
+  /** The Certification being edited — its own slug isn't a duplicate. */
+  editingId?: string;
+  /** A blocked create flagged the slug (shown even while the slug is empty). */
+  slugError?: boolean;
 }) {
   return (
     <>
@@ -1594,7 +1784,7 @@ function AdditionalInfoStep({
       </div>
 
       <div className="form-group">
-        <DeepLinkField data={data} update={update} editingName={editingName} />
+        <DeepLinkField data={data} update={update} editingId={editingId} flagged={slugError} />
         <p className="form-help">
           URL-safe characters only (letters, numbers, dashes, underscores). Must be unique across
           all Certifications.
@@ -1613,19 +1803,23 @@ function AdditionalInfoStep({
 function DeepLinkField({
   data,
   update,
-  editingName,
+  editingId,
+  flagged,
 }: {
   data: WizardData;
   update: (p: Partial<WizardData>) => void;
-  editingName?: string;
+  editingId?: string;
+  flagged?: boolean;
 }) {
-  const autoSlug = slugify(data.nameEn);
-  const effectiveSlug = data.slugCustom ? data.slug : autoSlug;
-  const error = effectiveSlug ? validateSlug(effectiveSlug, editingName) : null;
+  const effectiveSlug = effectiveSlugOf(data);
+  // An emptied custom slug only flags once the field has been moved past or
+  // a create was attempted — not the moment the last character goes.
+  const error =
+    effectiveSlug || flagged ? validateSlug(effectiveSlug, editingId) : null;
   const [copied, setCopied] = useState(false);
 
   const copy = () => {
-    navigator.clipboard?.writeText(`https://${DEEP_LINK_BASE}${effectiveSlug}`).then(
+    navigator.clipboard?.writeText(`${DEEP_LINK_BASE}${effectiveSlug}`).then(
       () => {
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
@@ -1705,9 +1899,9 @@ const ImportCoursesIcon = () => (
 // The Course kebab's items — shared by the Courses panel row and the Course
 // pane header, so both open the same Edit / Hide / Delete set.
 /* One menu for both a Course and a Lesson — the node draws them identically
- * (Figma 1244:1831): Edit · Hide · Delete, bare verbs, no divider. Delete is
- * blocked with its reason on a second line (the 1246:2666 pattern) when the
- * node can't go — a Certification has to keep at least one Course. */
+ * (Figma 1244:1831): Edit · Hide · Delete, bare verbs, no divider. Delete can
+ * be blocked with its reason on a second line (the 1246:2666 pattern); no
+ * caller blocks it today — every delete double-confirms instead. */
 function NodeMenuItems({
   hidden,
   blockedReason,
@@ -1755,16 +1949,33 @@ function NodeMenuItems({
 function TasksStep({
   data,
   update,
+  selfId,
+  criteriaLocked = false,
   onCreateTask,
   onAddExisting,
 }: {
   data: WizardData;
   update: (p: Partial<WizardData>) => void;
+  /** The Certification being edited — it can't import its own Courses. */
+  selfId?: string;
+  /** The Completion step's criteria lock (Edit): while it holds, Import
+   *  Courses brings Courses in but leaves the Condition Sets alone. */
+  criteriaLocked?: boolean;
   onCreateTask: (courseId: string, lessonId: string | undefined, taskType: TaskTypeKey) => void;
   onAddExisting: (courseId: string, lessonId: string | undefined) => void;
 }) {
   const toast = useContext(CertToast);
   const [importing, setImporting] = useState(false);
+  // The live list, so Certifications created this session can be imported;
+  // never the one being edited.
+  const liveCerts = useLiveCerts();
+  const importPool = useMemo(
+    () => liveCerts.filter((c) => c.id !== selfId),
+    [liveCerts, selfId],
+  );
+  // A Course with Tasks in it, waiting on the delete confirm.
+  const [deletingCourse, setDeletingCourse] = useState<CertCourse | null>(null);
+  const [deletingLesson, setDeletingLesson] = useState<{ courseId: string; lesson: CertLesson } | null>(null);
   // The open Course modal, or null. `course: null` = adding a new Course; a
   // Course = editing that one. Same model as the Lesson modal below.
   const [courseModal, setCourseModal] = useState<{ course: CertCourse | null } | null>(null);
@@ -1873,45 +2084,62 @@ function TasksStep({
 
   // Reconcile the Learning Plan with the Certifications chosen in the importer.
   // Imported Courses come first (in the chosen order), then any Courses the admin
-  // added by hand. Completion is regenerated as a single Condition Set that AND's
-  // every imported Certification together (spec 7.3.7.1).
+  // added by hand. Completion is MERGED, not regenerated: every imported
+  // Certification is required, so a newly imported one joins every Condition
+  // Set (they're OR'd — it has to be in each to be required), one dropped from
+  // the plan leaves them, and hand-made requirements stay where they are
+  // (spec 7.3.7.1). While Edit's criteria lock holds, the criteria aren't
+  // touched at all.
   function applyImport(ids: string[]) {
     setImporting(false);
     // Certifications already in the plan keep their slot; newly ticked ones
     // land after them, in the order the picker handed them back.
-    const inPlan = plan.map((c) => c.id).filter((id) => ids.includes(id));
+    const inPlan = plan.filter((id) => ids.includes(id));
     const ordered = [...inPlan, ...ids.filter((id) => !inPlan.includes(id))];
     const selected = ordered
-      .map((id) => certifications.find((c) => c.id === id))
+      .filter((id) => id !== selfId)
+      .map((id) => liveCerts.find((c) => c.id === id))
       .filter((c): c is Certification => !!c);
     const manual = data.courses.filter((c) => !c.sourceCertId);
 
-    if (selected.length === 0) {
-      // Plan cleared — drop imported Courses and the auto-generated completion.
-      // Whatever was added by hand stays; nothing is seeded to replace it.
-      update({ courses: manual, importedCerts: [], conditionSets: [] });
-      setSelectedId(manual[0]?.id ?? null);
-      if (plan.length > 0) toast("Learning Plan Updated");
-      return;
+    // Certifications already in the plan keep the Courses they brought (and
+    // any edits made to them); only newly added ones are copied in.
+    const importedCourses = selected.flatMap((c) => {
+      const kept = data.courses.filter((co) => co.sourceCertId === c.id);
+      return kept.length > 0 ? kept : buildImportedCourses(c);
+    });
+
+    // Matched by Certification id, never name, so a rename can't orphan one.
+    const prevIds = new Set(plan);
+    const nextIds = new Set(selected.map((c) => c.id));
+    const dropped = [...prevIds].filter((id) => !nextIds.has(id));
+    const added = [...nextIds].filter((id) => !prevIds.has(id));
+    const certItem = (certId: string): CompletionItem => ({ kind: "cert", id: nodeId("it"), certId });
+    let conditionSets = data.conditionSets;
+    if (!criteriaLocked) {
+      // Dropped plan Certifications leave every set; a set that held only
+      // those goes with them, the same as removing its last requirement.
+      conditionSets = conditionSets.flatMap((cs) => {
+        const items = cs.items.filter((i) => !(i.kind === "cert" && dropped.includes(i.certId)));
+        return items.length === 0 && cs.items.length > 0 ? [] : [{ ...cs, items }];
+      });
+      if (added.length > 0) {
+        if (conditionSets.length === 0) conditionSets = [newConditionSet()];
+        conditionSets = conditionSets.map((cs) => {
+          const have = new Set(cs.items.flatMap((i) => (i.kind === "cert" ? [i.certId] : [])));
+          return { ...cs, items: [...cs.items, ...added.filter((id) => !have.has(id)).map(certItem)] };
+        });
+      }
     }
 
-    const importedCourses = selected.flatMap(buildImportedCourses);
     update({
       // Hand-added Courses stay, after the imported ones.
       courses: [...importedCourses, ...manual],
-      importedCerts: selected.map((c) => ({ id: c.id, name: c.name })),
-      conditionSets: [
-        {
-          id: nodeId("cs"),
-          items: selected.map((c) => ({
-            kind: "cert" as const,
-            id: nodeId("it"),
-            name: c.name,
-          })),
-        },
-      ],
+      importedCerts: selected.map((c) => c.id),
+      conditionSets,
     });
-    setSelectedId(importedCourses[0]?.id ?? null);
+    setSelectedId(importedCourses[0]?.id ?? manual[0]?.id ?? null);
+    if (selected.length === 0 && plan.length === 0) return;
     toast(plan.length === 0 ? "Courses Imported" : "Learning Plan Updated");
   }
 
@@ -1919,6 +2147,13 @@ function TasksStep({
     update({
       courses: data.courses.map((c) => (c.id === id ? { ...c, ...patch } : c)),
     });
+  }
+
+  /* Delete from the Course menu always confirms twice, like every delete in
+     the builder. The last Course can go too: the step falls back to its
+     empty state, and the missing Course blocks publishing (`collectMissing`). */
+  function requestRemoveCourse(c: CertCourse) {
+    setDeletingCourse(c);
   }
 
   function removeCourse(id: string) {
@@ -2177,7 +2412,7 @@ function TasksStep({
                 toast(course.hidden ? "Course Visible" : "Course Hidden");
               }}
               onOpenEditor={() => setCourseModal({ course })}
-              onRemove={() => removeCourse(course.id)}
+              onRemove={() => requestRemoveCourse(course)}
               onCreateTask={(taskType) => onCreateTask(course.id, undefined, taskType)}
               onAddExistingTask={() => onAddExisting(course.id, undefined)}
               onAddLesson={() => setLessonModal({ courseId: course.id, lesson: null })}
@@ -2191,7 +2426,12 @@ function TasksStep({
                 toast(was ? "Lesson Visible" : "Lesson Hidden");
               }}
               onOpenLessonEditor={(lesson) => setLessonModal({ courseId: course.id, lesson })}
-              onRemoveLesson={(lessonId) => removeLesson(course.id, lessonId)}
+              onRemoveLesson={(lessonId) => {
+                const ch = course.children.find(
+                  (x) => x.kind === "lesson" && x.lesson.id === lessonId,
+                );
+                if (ch?.kind === "lesson") setDeletingLesson({ courseId: course.id, lesson: ch.lesson });
+              }}
             />
           )}
         </section>
@@ -2207,13 +2447,18 @@ function TasksStep({
         <SelectRequirementModal
           only="cert"
           title="Import Courses"
-          description="Pick the Certifications to merge in. Their Courses, Lessons, and Tasks are copied in (Tasks are reused, not duplicated), and completion will require every one you add."
+          description={
+            criteriaLocked
+              ? "Pick the Certifications to merge in. Their Courses, Lessons, and Tasks are copied in (Tasks are reused, not duplicated). Completion Criteria are locked, so they stay as they are."
+              : "Pick the Certifications to merge in. Their Courses, Lessons, and Tasks are copied in (Tasks are reused, not duplicated), and completion will require every one you add."
+          }
+          certPool={importPool}
           confirmLabel={plan.length > 0 ? "Update Learning Plan" : "Import Courses"}
           /* Nothing is ever un-pickable here — every Certification can join
              the plan, and the ones already in it arrive ticked (but still
              clickable), so reopening doubles as "manage the plan". */
           existingNames={[]}
-          preselectedNames={plan.map((c) => c.name)}
+          preselectedCertIds={plan}
           allowEmpty
           onCancel={() => setImporting(false)}
           onConfirm={(picks) => applyImport(picks.flatMap((p) => (p.kind === "cert" ? [p.cert.id] : [])))}
@@ -2249,8 +2494,89 @@ function TasksStep({
         />,
         document.body,
       )}
+
+      {deletingCourse &&
+        createPortal(
+          <PrmModal
+            title="Delete Course?"
+            confirmLabel="Delete Course"
+            danger
+            doubleConfirm={
+              <>
+                <strong>{deletingCourse.nameEn || "This Course"}</strong> and everything in it will be
+                removed from this Certification.
+              </>
+            }
+            onCancel={() => setDeletingCourse(null)}
+            onConfirm={() => {
+              const id = deletingCourse.id;
+              setDeletingCourse(null);
+              removeCourse(id);
+            }}
+          >
+            <p className="prm-content">
+              {courseTaskCount(deletingCourse) > 0 ? (
+                <>
+                  "{deletingCourse.nameEn || "Untitled Course"}" holds{" "}
+                  {courseTaskCount(deletingCourse)}{" "}
+                  {courseTaskCount(deletingCourse) === 1 ? "Task" : "Tasks"}. Deleting it removes its
+                  Lessons and Tasks from this Certification. Tasks already in the Task library stay
+                  there.
+                </>
+              ) : (
+                <>
+                  Deleting "{deletingCourse.nameEn || "Untitled Course"}" removes it and its Lessons
+                  from this Certification.
+                </>
+              )}
+              {data.courses.length === 1 &&
+                " It's the only Course, so the Certification can't be published until a Course is added again."}
+            </p>
+          </PrmModal>,
+          document.body,
+        )}
+
+      {deletingLesson &&
+        createPortal(
+          <PrmModal
+            title="Delete Lesson?"
+            confirmLabel="Delete Lesson"
+            danger
+            doubleConfirm={
+              <>
+                <strong>{deletingLesson.lesson.nameEn || "This Lesson"}</strong> and everything in it
+                will be removed from this Certification.
+              </>
+            }
+            onCancel={() => setDeletingLesson(null)}
+            onConfirm={() => {
+              const { courseId, lesson } = deletingLesson;
+              setDeletingLesson(null);
+              removeLesson(courseId, lesson.id);
+            }}
+          >
+            <p className="prm-content">
+              {deletingLesson.lesson.tasks.length > 0 ? (
+                <>
+                  "{deletingLesson.lesson.nameEn || "Untitled Lesson"}" holds{" "}
+                  {deletingLesson.lesson.tasks.length}{" "}
+                  {deletingLesson.lesson.tasks.length === 1 ? "Task" : "Tasks"}. Deleting it removes
+                  them from this Certification. Tasks already in the Task library stay there.
+                </>
+              ) : (
+                <>Deleting "{deletingLesson.lesson.nameEn || "Untitled Lesson"}" removes it from this Course.</>
+              )}
+            </p>
+          </PrmModal>,
+          document.body,
+        )}
     </>
   );
+}
+
+/** Every Task in one Course, its Lessons' included. */
+function courseTaskCount(c: CertCourse): number {
+  return flattenTasks([c]).length;
 }
 
 /* Course or Lesson name + description — one standard modal on the shared
@@ -2729,8 +3055,9 @@ function AddTaskRow({
 // names — a prerequisite that was since deleted simply drops out.
 function gatePrereqs(task: CertTask, allTasks: CertTask[]): string[] {
   if (!task.restriction?.enabled) return [];
+  // A prerequisite outside the tree is a library Task — the ID Upload Task.
   return task.restriction.taskIds
-    .map((id) => allTasks.find((t) => t.id === id)?.name)
+    .map((id) => allTasks.find((t) => t.id === id)?.name ?? taskById(id)?.name)
     .filter((n): n is string => !!n);
 }
 
@@ -2971,7 +3298,12 @@ function AccessRestrictionModal({
   onSave: (restriction: AccessRestriction | undefined) => void;
 }) {
   const existing = task.restriction?.enabled ? task.restriction : undefined;
-  const options = allTasks.filter((t) => t.id !== task.id);
+  /* The Certification's own Tasks, plus the library's ID Upload Task — it is
+     never added to a tree, but any Task can be gated behind it. */
+  const options: { id: string; name: string }[] = [
+    ...allTasks.filter((t) => t.id !== task.id),
+    ...getTasks().filter((t) => isIdUpload(t) && !t.hidden && !allTasks.some((a) => a.id === t.id)),
+  ];
   const [ids, setIds] = useState<string[]>(
     (existing?.taskIds ?? []).filter((id) => options.some((o) => o.id === id)),
   );
@@ -3189,6 +3521,7 @@ function CompletionStep({
   touch,
   data,
   update,
+  selfId,
   criteriaLocked = false,
   onUnlockCriteria,
   completions = 0,
@@ -3197,6 +3530,8 @@ function CompletionStep({
   touch: (key: string) => void;
   data: WizardData;
   update: (p: Partial<WizardData>) => void;
+  /** The Certification being edited — it can't require itself. */
+  selfId?: string;
   criteriaLocked?: boolean;
   onUnlockCriteria?: () => void;
   /** Learners who have completed the Certification — the lock banner's count. */
@@ -3275,6 +3610,7 @@ function CompletionStep({
                     <ConditionSetCard
                       set={set}
                       index={idx + 1}
+                      selfId={selfId}
                       flagged={missing && set.items.length === 0}
                       onRemove={criteriaLocked ? undefined : () => removeConditionSet(set.id)}
                       onAddItems={criteriaLocked ? undefined : (items) => addItems(set.id, items)}
@@ -3338,6 +3674,7 @@ function itemMeta(item: CompletionItem): string {
 function ConditionSetCard({
   set,
   index,
+  selfId,
   flagged = false,
   onRemove,
   onAddItems,
@@ -3345,6 +3682,8 @@ function ConditionSetCard({
 }: {
   set: ConditionSet;
   index: number;
+  /** The Certification being edited — left out of the picker. */
+  selfId?: string;
   /** An empty set after a blocked publish: the card-table error outline
    *  (1570:3366); the message is in the field's label row. */
   flagged?: boolean;
@@ -3355,6 +3694,8 @@ function ConditionSetCard({
   // "+ Add Requirement" opens the shared table picker (Select Tasks / Select
   // Questions chrome) rather than the 340px dropdown it used to open.
   const [picking, setPicking] = useState(false);
+  // Subscribed so a required Certification's renamed name shows at once.
+  useLiveCerts();
 
   return (
     <>
@@ -3383,14 +3724,14 @@ function ConditionSetCard({
       {set.items.map((item) => (
         <div key={item.id} className="cc-row">
           <div className="cc-row-main">
-            <span className="cc-row-name">{item.name}</span>
+            <span className="cc-row-name">{itemName(item)}</span>
             <span className="cc-row-meta">· {itemMeta(item)}</span>
           </div>
           {onRemoveItem && (
             <button
               className="cc-row-x"
               onClick={() => onRemoveItem(item.id)}
-              aria-label={`Remove ${item.name}`}
+              aria-label={`Remove ${itemName(item)}`}
             >
               <RowCloseIcon />
             </button>
@@ -3417,7 +3758,9 @@ function ConditionSetCard({
     {picking && onAddItems &&
       createPortal(
         <SelectRequirementModal
-          existingNames={set.items.map((i) => i.name)}
+          existingNames={set.items.flatMap((i) => (i.kind === "cert" ? [] : [i.name]))}
+          existingCertIds={set.items.flatMap((i) => (i.kind === "cert" ? [i.certId] : []))}
+          excludeCertIds={selfId ? [selfId] : undefined}
           lockedFlag={() => "In this Condition Set"}
           lockedTip="Already in this Condition Set — each requirement can be added once."
           onCancel={() => setPicking(false)}
@@ -3441,7 +3784,7 @@ function pickToItem(pick: RequirementPick): CompletionItem {
         name: pick.task.name,
         taskKind: TASK_TYPE_TO_KIND[pick.task.type],
       }
-    : { kind: "cert", id: nodeId("it"), name: pick.cert.name };
+    : { kind: "cert", id: nodeId("it"), certId: pick.cert.id };
 }
 
 /* ─────────────────  Step 5: Paywall  ───────────────── */
@@ -3479,13 +3822,13 @@ function PaywallStep({
             selected={data.accessType === "non-consumable"}
             onSelect={() => update({ accessType: "non-consumable" })}
             title={ACCESS_TYPE_LABEL["non-consumable"]}
-            desc="One-time purchase. Access persists as long as the user is a Subscriber."
+            desc="One-time purchase. Access is permanent once purchased."
           />
           <RadioCard
             selected={data.accessType === "consumable"}
             onSelect={() => update({ accessType: "consumable" })}
             title={ACCESS_TYPE_LABEL.consumable}
-            desc="Time-bounded access window. Used for finite-duration enrollments."
+            desc="Access lasts until an admin revokes it from Who Paid. The user can then buy it again."
           />
         </div>
       </div>
@@ -3544,6 +3887,8 @@ function AudienceStep({
   data: WizardData;
   update: (p: Partial<WizardData>) => void;
 }) {
+  // Product Config's saved B2B Management lists, live.
+  const { trades, partnerships } = useB2BConfig();
   const valuesOf = (type: ContentTagType) =>
     data.contentTags.filter((t) => t.type === type).map((t) => t.value);
 
@@ -3564,8 +3909,13 @@ function AudienceStep({
     });
   }
 
-  // The stored tag value stays "B2B Only" — the label is the display name.
-  const audience = valuesOf("userType").length > 0 ? AUDIENCE_B2B : AUDIENCE_ALL;
+  /* The field shows the DERIVED audience (`audienceOf`, as the Certifications
+     table and the Feedback trigger picker read it): any Trade or Partnership
+     makes the Certification B2B Companies Only, so while one is set the field
+     reads B2B and is locked — clearing them frees it again. The stored tag
+     value stays "B2B Only"; the label is the display name. */
+  const lockedB2B = valuesOf("trade").length > 0 || valuesOf("partnership").length > 0;
+  const audience = audienceOf(recordTags(data.contentTags)) as (typeof AUDIENCE_OPTIONS)[number];
 
   return (
     <>
@@ -3574,6 +3924,7 @@ function AudienceStep({
         <SelectField
           className="select-field--full"
           value={audience}
+          disabled={lockedB2B}
           options={AUDIENCE_OPTIONS}
           onChange={(v) =>
             setValues("userType", v === AUDIENCE_B2B ? [USER_TYPE_VALUES[0]] : [])
@@ -3589,7 +3940,7 @@ function AudienceStep({
       <div className="form-group">
         <label className="form-label">Trade</label>
         <MultiSelect
-          options={DEFAULT_TRADES}
+          options={trades}
           value={valuesOf("trade")}
           onChange={(v) => setValues("trade", v)}
           placeholder="Select Trades"
@@ -3605,7 +3956,7 @@ function AudienceStep({
       <div className="form-group">
         <label className="form-label">Partnership</label>
         <MultiSelect
-          options={DEFAULT_PARTNERSHIPS}
+          options={partnerships}
           value={valuesOf("partnership")}
           onChange={(v) => setValues("partnership", v)}
           placeholder="Select Partnerships"
@@ -3642,6 +3993,8 @@ export function CertificationSummary({
     names.length > 0 && names.map((n) => <div key={n}>{n}</div>);
   // Once per Certification: the sample structure mints fresh node ids.
   const data = useMemo(() => buildInitialData(cert), [cert]);
+  // Subscribed so a required Certification's renamed name shows at once.
+  useLiveCerts();
   const allTasks = flattenTasks(data.courses);
   const slug = data.slugCustom ? data.slug : slugify(data.nameEn);
   const deepLink = slug ? `${DEEP_LINK_BASE}${slug}` : "";
@@ -3673,7 +4026,7 @@ export function CertificationSummary({
           // The record's own state — the wizard folds Archived into Hidden.
           ["Visibility", cert.visibility ?? "Visible"],
           // One Industry per line (Figma 1517:3805).
-          ["Industries", data.industries.length > 0 && data.industries.map((i) => <div key={i}>{i}</div>)],
+          ["Industries", data.industries.length > 0 && industryTagLabels(data.industries).map((i) => <div key={i}>{i}</div>)],
           ["Career Stage", CAREER_STAGES.find((s) => s.value === data.careerStage)?.label],
           ["Type", CERT_TYPES.find((t) => t.value === data.type)?.label],
           ["Thumbnail", data.thumbnail?.name],
@@ -3692,7 +4045,7 @@ export function CertificationSummary({
             deepLink && (
               <a
                 className="rvc-headlink"
-                href={`https://${deepLink}`}
+                href={deepLink}
                 target="_blank"
                 rel="noreferrer"
               >
@@ -3722,7 +4075,7 @@ export function CertificationSummary({
                 singleRequirement ? "Required" : `Condition Set ${i + 1}`,
                 set.items.map((item) => (
                   <div key={item.id}>
-                    {item.name} <span className="cc-sum-meta">· {itemMeta(item)}</span>
+                    {itemName(item)} <span className="cc-sum-meta">· {itemMeta(item)}</span>
                   </div>
                 )),
               ])
@@ -3769,7 +4122,8 @@ export function CertificationSummary({
         title="Audience"
         fillBlanks
         rows={[
-          ["Audience", tagsOf("userType") ? AUDIENCE_B2B : AUDIENCE_ALL],
+          // Derived, as the table reads it: a Trade or Partnership is B2B too.
+          ["Audience", audienceOf(recordTags(data.contentTags))],
           ["Trade", tagsOf("trade"), true],
           ["Partnership", tagsOf("partnership"), true],
         ]}
@@ -3783,7 +4137,15 @@ export function CertificationSummary({
  *  the data the edit wizard opens with, so the panel and the editor agree. */
 export function useCertPreview(cert: Certification) {
   const data = useMemo(() => buildInitialData(cert), [cert]);
-  return useMemo(() => ({ taskCount: flattenTasks(data.courses).length }), [data]);
+  return useMemo(
+    () => ({
+      taskCount: flattenTasks(data.courses).length,
+      /** A seed Certification has (sample) enrolment history; one created
+       *  this session has none yet, so its figures are zero. */
+      hasHistory: isSeedCert(cert.id),
+    }),
+    [data, cert.id],
+  );
 }
 
 /* The Add Tasks tree, read back without its controls (Figma 1600:3476
@@ -3888,7 +4250,7 @@ function TaskSummaryRow({
 
 /* The Archive & Replace page's long explanation — the ⓘ on its description. */
 const ARCHIVE_CERT_TIP =
-  "Archiving removes this Certification from the catalog, so no one new can enroll in it. It can't be un-archived.\n\n" +
+  "Archiving removes this Certification from the catalog, so no one new can enroll in it. You can unarchive it later from this page (its row menu's Manage Archive & Replace Settings); it then returns to the visibility it had before.\n\n" +
   "Learners already enrolled keep their completion record. The Replacement Certifications you pick appear in their Path, and the Replacement Alert tells them why.";
 
 /* Archiving used to be the Cert wizard's 7th step, shown only while editing.
@@ -3900,35 +4262,92 @@ export function ArchiveCertificationPage({
   cert,
   onClose,
   onArchive,
+  onUnarchive,
 }: {
   cert: Certification;
   onClose: () => void;
-  /** Commits the archive — the caller flips the Cert's visibility to Archived. */
-  onArchive: () => void;
+  /** Archived mode's footer Unarchive, once its explanation and confirm are
+   *  through: the caller restores the visibility the Cert had before it was
+   *  archived, clears the replacement settings, and returns to the list. */
+  onUnarchive: () => void;
+  /** Commits the archive with what was picked — the caller flips the Cert's
+   *  visibility to Archived (remembering the one it had, for Unarchive) and
+   *  stores the replacements (ids) and the alert on the record. On an
+   *  already-archived Cert it just saves the edited replacements / alert. */
+  onArchive: (result: {
+    replacementIds: string[];
+    replacementAlert?: { en: string; es: string };
+  }) => void;
 }) {
-  // Replacements are a plain multi-select over Certification names — the field
-  // is the shared MultiSelect (Figma 591:1322), so the chosen Certs live as its
-  // pills rather than in a separate list. Names are unique in the catalog, so
-  // the value can stay the display string the component works in.
-  const [replacementCerts, setReplacementCerts] = useState<string[]>([]);
-  const replacementOptions = useMemo(
-    () => certifications.filter((c) => c.id !== cert.id).map((c) => c.name),
-    [cert.id],
+  const alreadyArchived = cert.visibility === "Archived";
+  // Replacements are a plain multi-select — the field is the shared
+  // MultiSelect (Figma 591:1322), so the chosen Certs live as its pills. The
+  // options are the LIVE list (Certifications created this session too),
+  // minus this one; archived, hidden and company-created ones stay listed.
+  // The component speaks labels, so a name shared by two Certifications is
+  // told apart by its id; the record stores ids.
+  const liveCerts = useLiveCerts();
+  const { labelById, idByLabel, replacementOptions } = useMemo(() => {
+    const others = liveCerts.filter((c) => c.id !== cert.id);
+    const nameCount = new Map<string, number>();
+    for (const c of others) nameCount.set(c.name, (nameCount.get(c.name) ?? 0) + 1);
+    const labelById = new Map<string, string>();
+    const idByLabel = new Map<string, string>();
+    for (const c of others) {
+      const label = (nameCount.get(c.name) ?? 0) > 1 ? `${c.name} (${c.id})` : c.name;
+      labelById.set(c.id, label);
+      idByLabel.set(label, c.id);
+    }
+    return { labelById, idByLabel, replacementOptions: [...labelById.values()] };
+  }, [liveCerts, cert.id]);
+  // Reopening an archived Cert shows what was saved (replacements that no
+  // longer exist drop out).
+  const initialIds = useMemo(
+    () =>
+      (cert.replacementIds ?? []).filter(
+        (id) => id !== cert.id && liveCerts.some((c) => c.id === id),
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
   );
-  const [alertEn, setAlertEn] = useState("");
-  const [alertEs, setAlertEs] = useState("");
+  const [replacementIds, setReplacementIds] = useState<string[]>(initialIds);
+  const replacementCerts = replacementIds
+    .map((id) => labelById.get(id))
+    .filter((l): l is string => !!l);
+  const setReplacementCerts = (labels: string[]) =>
+    setReplacementIds(
+      labels.map((l) => idByLabel.get(l)).filter((id): id is string => !!id),
+    );
+  const initialEn = cert.replacementAlert?.en ?? "";
+  const initialEs = cert.replacementAlert?.es ?? "";
+  const [alertEn, setAlertEn] = useState(initialEn);
+  const [alertEs, setAlertEs] = useState(initialEs);
   // Landing here already means "archive this Cert", so the CTA is live from the
-  // start; the permanence is acknowledged in a confirm modal instead of an
-  // on-page "Archive this Certification" toggle (removed 2026-09-24).
+  // start; it is acknowledged in a confirm modal instead of an on-page
+  // "Archive this Certification" toggle (removed 2026-09-24).
   const [confirming, setConfirming] = useState(false);
+  // Archived mode's Unarchive: the shared explanation modal, then its confirm.
+  const [unarchiving, setUnarchiving] = useState(false);
   // …except while the Replacement Alert runs past its soft character limit,
   // which holds the CTA back (with a tooltip saying why) until it's trimmed.
   const alertOver = isOver(DESCRIPTION_MAX, alertEn, alertEs);
-  // Anything picked or written asks before Cancel throws it away.
   const hasText = (html: string) => html.replace(/<[^>]*>/g, "").trim() !== "";
-  const guard = useLeaveGuard(
-    replacementCerts.length > 0 || hasText(alertEn) || hasText(alertEs),
-  );
+  // Changed from what the page opened with (the saved values on an archived
+  // Cert, nothing on a fresh one). Cancel asks before throwing it away, and an
+  // archived Cert's Save Changes waits for it.
+  const dirty =
+    replacementIds.length !== initialIds.length ||
+    replacementIds.some((id, i) => id !== initialIds[i]) ||
+    (hasText(alertEn) || hasText(initialEn) ? alertEn !== initialEn : false) ||
+    (hasText(alertEs) || hasText(initialEs) ? alertEs !== initialEs : false);
+  const guard = useLeaveGuard(dirty);
+  const ctaBlocked = alertOver || (alreadyArchived && !dirty);
+  const commit = () =>
+    onArchive({
+      replacementIds,
+      replacementAlert:
+        hasText(alertEn) || hasText(alertEs) ? { en: alertEn, es: alertEs } : undefined,
+    });
   const replacementLine =
     replacementCerts.length === 0
       ? "No replacement is selected, so enrolled learners won't be pointed to another Certification."
@@ -3944,8 +4363,17 @@ export function ArchiveCertificationPage({
             <div className="wizard-pane">
               <h1 className="tasks-title">Archive &amp; Replace</h1>
               <p className="tasks-subtitle wizard-desc">
-                Retire “{cert.name}” ({cert.id}) and point enrolled learners to a
-                replacement. Archiving is permanent.
+                {alreadyArchived ? (
+                  <>
+                    “{cert.name}” ({cert.id}) is archived. Edit the replacement enrolled
+                    learners are pointed to.
+                  </>
+                ) : (
+                  <>
+                    Retire “{cert.name}” ({cert.id}) and point enrolled learners to a
+                    replacement.
+                  </>
+                )}
                 <span
                   className="form-help-info wizard-desc-info"
                   tabIndex={0}
@@ -3961,8 +4389,12 @@ export function ArchiveCertificationPage({
                 <NoteCard
                   tone="danger"
                   icon={<WarnTriangleIcon />}
-                  title="Archiving is permanent."
-                  body="Once archived, this Certification is retired from the catalog and can't be un-archived. Enrolled learners keep their completion record and are pointed to the replacement Certification(s) below."
+                  title={alreadyArchived ? "This Certification is archived." : "Archiving retires this Certification."}
+                  body={
+                    alreadyArchived
+                      ? "It is out of the catalog, so no one new can enroll. Enrolled learners keep their completion record and are pointed to the replacement Certification(s) below. Unarchive returns it to the visibility it had before."
+                      : "It leaves the catalog, so no one new can enroll. Enrolled learners keep their completion record and are pointed to the replacement Certification(s) below. You can unarchive it later from this page; it returns to the visibility it had before."
+                  }
                 />
               </div>
 
@@ -4004,17 +4436,31 @@ export function ArchiveCertificationPage({
           <button className="wizard-cancel" onClick={() => guard(onClose)}>Cancel</button>
         </div>
         <div className="wizard-actions">
+          {/* Archived mode only: the way back out of Archived, left of the
+              primary — explained, then confirmed, before it runs. */}
+          {alreadyArchived && (
+            <button className="cta-quiet" onClick={() => setUnarchiving(true)}>
+              Unarchive
+            </button>
+          )}
           <button
-            className={`btn-publish${alertOver ? " is-disabled" : ""}`}
-            aria-disabled={alertOver}
+            className={`btn-publish${ctaBlocked ? " is-disabled" : ""}`}
+            aria-disabled={ctaBlocked}
             data-tip={
               alertOver
-                ? `Shorten this field to archive:\n• ${limitLabel("Replacement Alert", DESCRIPTION_MAX)}`
-                : undefined
+                ? `Shorten this field to ${alreadyArchived ? "save" : "archive"}:\n• ${limitLabel("Replacement Alert", DESCRIPTION_MAX)}`
+                : ctaBlocked
+                  ? "No changes to save"
+                  : undefined
             }
-            onClick={() => !alertOver && setConfirming(true)}
+            onClick={() => {
+              if (ctaBlocked) return;
+              // An archived Cert's edit is a plain save; a first archive confirms.
+              if (alreadyArchived) commit();
+              else setConfirming(true);
+            }}
           >
-            Archive Certification
+            {alreadyArchived ? "Save Changes" : "Archive Certification"}
           </button>
         </div>
       </footer>
@@ -4027,18 +4473,28 @@ export function ArchiveCertificationPage({
             danger
             doubleConfirm={
               <>
-                <strong>{cert.name}</strong> will be archived and leave the catalog. This can't
-                be undone.
+                <strong>{cert.name}</strong> will be archived and leave the catalog. You can
+                unarchive it later from its Archive &amp; Replace page.
               </>
             }
             onCancel={() => setConfirming(false)}
-            onConfirm={() => { setConfirming(false); onArchive(); }}
+            onConfirm={() => { setConfirming(false); commit(); }}
           >
             <p className="prm-content">
-              Archive <strong>{cert.name}</strong> ({cert.id})? It leaves the catalog and
-              can't be un-archived. {replacementLine}
+              Archive <strong>{cert.name}</strong> ({cert.id})? It leaves the catalog until it
+              is unarchived. {replacementLine}
             </p>
           </PrmModal>,
+          document.body,
+        )}
+
+      {unarchiving &&
+        createPortal(
+          <UnarchiveCertModal
+            cert={cert}
+            onCancel={() => setUnarchiving(false)}
+            onConfirm={() => { setUnarchiving(false); onUnarchive(); }}
+          />,
           document.body,
         )}
     </div>

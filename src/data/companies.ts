@@ -1,4 +1,6 @@
+import { useSyncExternalStore } from "react";
 import type { User } from "./users";
+import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES, getB2BConfig } from "./productConfig";
 
 /* The paid PLAN a company is on. Free Trial and Free Access are NOT tiers —
  * they are subscription STATUSES (see SubscriptionStatus), and a company in one
@@ -97,11 +99,31 @@ export type Company = {
    *  date is the source of truth for which pill shows: before it the status
    *  reads "Cancels Aug 27, 2026", on or after it just "Canceled". */
   cancelsOn?: string;
+  /** "YYYY-MM-DD" — the day a Free Trial ends, stamped by the wizard when the
+   *  trial starts (today + Product Config's B2B trial length). The preview
+   *  prints the same date, so the two can't disagree. Seed trials derive one. */
+  trialEndDate?: string;
+  /** The Stripe payment link sent to the account holder of an automatic-pay
+   *  subscription, generated ONCE when the subscription is created (or a
+   *  trial / grant converts to one) and stored — it never follows a rename or
+   *  an Account Holder change. Links expire after 24 hours; Copy Payment Link
+   *  regenerates an expired one (see freshPaymentLink). */
+  paymentLink?: string;
+  /** When `paymentLink` was generated, as epoch milliseconds. */
+  paymentLinkCreatedAt?: number;
+  /** Created straight into Pending Payment Setup (a new auto-pay company), as
+   *  opposed to a trial / grant / cancelled account that moved there. Only
+   *  these can be deleted — see canDeleteCompany. */
+  createdPending?: boolean;
+  /** The company's employee roster once someone has changed it here (Change
+   *  Account Holder). Absent, the roster is derived — see getCompanyUsers. */
+  roster?: CompanyUser[];
   /** End date for a Free Access grant (e.g. "Aug 27, 2026"). Required whenever
    *  status is "Free Access". */
   freeAccessEndDate?: string;
-  /** Why the subscription was cancelled — one of CANCELLATION_REASONS, picked
-   *  in the Cancel Subscription flow. Surfaced on the status pill's hover. */
+  /** Why the subscription was cancelled — the Cancellation Reasons picked in
+   *  the Cancel Subscription flow (Product Config's list). Optional: none
+   *  picked leaves it unset and the status pill has no hover. */
   cancellationReason?: string;
   /** Customer Success Manager assigned to this account. */
   assignedCsm?: string;
@@ -109,24 +131,54 @@ export type Company = {
   assignedSalesRep?: string;
 };
 
-/* The Stripe payment link for a company. Stand-in for the real Stripe call:
- * the same company always gets the same URL, so the wizard's success screen and
- * the row menu's "Copy Payment Link" agree. */
-export function stripePaymentLink(email: string, name: string): string {
-  let h = 0;
-  for (let i = 0; i < (email + name).length; i++) h = (h * 31 + (email + name).charCodeAt(i)) >>> 0;
-  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let code = "";
-  let seed = h;
-  for (let i = 0; i < 14; i++) { code += chars[seed % chars.length]; seed = (seed * 1664525 + 1013904223) >>> 0; }
-  return `https://buy.stripe.com/${code}`;
+/* ── The one clock ──
+ * Every date this module and the Company wizard work out — trial ends, cancel
+ * dates, billing boundaries, the preview timeline — counts from the real
+ * current day. (There used to be a fixed "today" of Jun 24, 2026 beside the
+ * real clock, and the two disagreed.) */
+export function appToday(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+/** A local date as "YYYY-MM-DD" (never toISOString — UTC can slip a day). */
+export function isoDate(d: Date): string {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
 /** Today as "YYYY-MM-DD" — the stamp the wizard writes on a new company. */
 export function todayStamp(): string {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return isoDate(appToday());
+}
+
+/** The day a trial started today ends — what the wizard previews AND stores. */
+export function trialEndFrom(start: Date, days: number): Date {
+  return new Date(start.getFullYear(), start.getMonth(), start.getDate() + days);
+}
+
+/* ── Payment links ──
+ * Stand-in for the Stripe call that creates a payment link: a random URL,
+ * generated once and stored on the company. */
+export const PAYMENT_LINK_TTL_MS = 24 * 60 * 60 * 1000;
+
+export function newPaymentLink(now = Date.now()): Pick<Company, "paymentLink" | "paymentLinkCreatedAt"> {
+  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let code = "";
+  for (let i = 0; i < 14; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return { paymentLink: `https://buy.stripe.com/${code}`, paymentLinkCreatedAt: now };
+}
+
+/** The company's link if it is still live; otherwise a new one. `renewed` says
+ *  whether `company` carries a new link the caller has to store. */
+export function freshPaymentLink(company: Company, now = Date.now()): { company: Company; url: string; renewed: boolean } {
+  const live =
+    company.paymentLink &&
+    company.paymentLinkCreatedAt !== undefined &&
+    now - company.paymentLinkCreatedAt < PAYMENT_LINK_TTL_MS;
+  if (live) return { company, url: company.paymentLink!, renewed: false };
+  const next = { ...company, ...newPaymentLink(now) };
+  return { company: next, url: next.paymentLink!, renewed: true };
 }
 
 export const TAX_STATUSES: TaxStatus[] = ["Taxable", "Tax Exempt", "Reverse Charge"];
@@ -167,6 +219,8 @@ export const SIGN_UP_CHANNELS: SignUpChannel[] = ["Self Sign-Up", "Internal Sign
 // Alphabetical, the way the pickers list them.
 export const CSM_OPTIONS = ["Corinne Hayes", "Leanna Olbinsky", "Simran Phulwani"];
 export const SALES_REP_OPTIONS = ["Brendan Arsenault", "Elliot Ling", "Ruchir Shah"];
+/** The filters' option for an account nobody has been assigned to. */
+export const UNASSIGNED = "Unassigned";
 
 export const PAYMENT_COLLECTIONS: PaymentCollection[] = ["Automatic", "Invoice"];
 
@@ -246,17 +300,6 @@ export const COMPANY_DEFAULT_COLUMNS: Record<CompanyColumn, boolean> = {
   dashboardLastAccess: true,
 };
 
-// Reasons an admin can pick when cancelling a B2B subscription. Editable under
-// Product Config → B2B Management; the Cancel Subscription flow reads the same list.
-export const CANCELLATION_REASONS = [
-  "Too expensive",
-  "Not enough content for our industry",
-  "Switching to a competitor",
-  "Company restructuring / budget cut",
-  "Low user adoption",
-  "Missing features we need",
-];
-
 export const companies: Company[] = [
   /* Created through the wizard on an automatic-payment subscription and still
      waiting for the account holder to add a card. Every plan column is filled —
@@ -270,7 +313,7 @@ export const companies: Company[] = [
     tier: "Growth",
     seats: 24,
     seatsUsed: 24,
-    industry: ["HVAC", "Plumbing"],
+    industry: ["Commercial HVAC", "Commercial Plumbing"],
     partnership: ["NexStar"],
     address: "412 SW Alder St, Portland, Oregon, 97204, United States",
     addressParts: {
@@ -284,6 +327,8 @@ export const companies: Company[] = [
     phone: "+1 (503) 555-0142",
     createdAt: todayStamp(),
     status: "Pending Payment Setup",
+    createdPending: true,
+    ...newPaymentLink(),
     billingCycle: "Monthly",
     currency: "USD",
     signUp: "Internal Sign-Up",
@@ -299,7 +344,7 @@ export const companies: Company[] = [
     email: "admin@arscooling.com",
     tier: "Professional",
     seats: 120,
-    industry: ["HVAC", "Refrigeration"],
+    industry: ["Residential HVAC", "Commercial HVAC"],
     partnership: ["Preferred Partner", "NGO Partner"],
     address: "1820 Market St, Denver, Colorado, 80202, United States",
     addressParts: {
@@ -316,7 +361,7 @@ export const companies: Company[] = [
     email: "training@brennanhvac.com",
     tier: "Growth",
     seats: 45,
-    industry: ["HVAC"],
+    industry: ["Residential HVAC"],
     partnership: [],
     address: "455 W Grand Ave, Chicago, Illinois, 60654, United States",
     addressParts: {
@@ -333,7 +378,7 @@ export const companies: Company[] = [
     email: "hr@comfortfirst.com",
     tier: "Essentials",
     seats: 18,
-    industry: ["HVAC"],
+    industry: ["Residential HVAC"],
     partnership: [],
     address: "2100 Ross Ave, Dallas, Texas, 75201, United States",
     addressParts: {
@@ -350,7 +395,7 @@ export const companies: Company[] = [
     email: "ops@deltaelectrical.com",
     tier: "Professional",
     seats: 200,
-    industry: ["Electrical", "Solar"],
+    industry: [],
     partnership: ["Elite Partner"],
     address: "88 Pine St, Seattle, Washington, 98101, United States",
     addressParts: {
@@ -367,7 +412,7 @@ export const companies: Company[] = [
     email: "admin@evercleanplumbing.com",
     tier: "Growth",
     seats: 60,
-    industry: ["Plumbing"],
+    industry: ["Residential Plumbing"],
     partnership: [],
     address: "301 Congress Ave, Austin, Texas, 78701, United States",
     addressParts: {
@@ -383,7 +428,7 @@ export const companies: Company[] = [
     name: "FastFix Appliance Repair",
     email: "team@fastfixappliance.com",
     seats: 5,
-    industry: ["Appliance Repair"],
+    industry: ["MultiFamily Maintenance"],
     partnership: [],
     address: "1500 Peachtree St NE, Atlanta, Georgia, 30309, United States",
     addressParts: {
@@ -418,7 +463,7 @@ export const companies: Company[] = [
     email: "hr@harborcitymech.com",
     tier: "Professional",
     seats: 85,
-    industry: ["HVAC", "Plumbing", "Refrigeration"],
+    industry: ["Commercial HVAC", "Commercial Plumbing", "Hotel Maintenance"],
     partnership: ["Preferred Partner"],
     address: "250 Summer St, Boston, Massachusetts, 02210, United States",
     addressParts: {
@@ -434,7 +479,7 @@ export const companies: Company[] = [
     name: "Integrity Roofing",
     email: "admin@integrityroofing.com",
     seats: 8,
-    industry: ["Roofing"],
+    industry: [],
     partnership: [],
     address: "1201 S Main St, Charlotte, North Carolina, 28203, United States",
     addressParts: {
@@ -452,7 +497,7 @@ export const companies: Company[] = [
     email: "ops@jetstreamair.com",
     tier: "Growth",
     seats: 37,
-    industry: ["HVAC", "Electrical"],
+    industry: ["Commercial HVAC"],
     partnership: [],
     address: "410 Nicollet Mall, Minneapolis, Minnesota, 55401, United States",
     addressParts: {
@@ -469,7 +514,7 @@ export const companies: Company[] = [
     email: "safety@keystoneelectrical.com",
     tier: "Essentials",
     seats: 14,
-    industry: ["Electrical"],
+    industry: [],
     partnership: [],
     address: "900 Elm St, Manchester, New Hampshire, 03101, United States",
     addressParts: {
@@ -485,7 +530,7 @@ export const companies: Company[] = [
     name: "LightPath Solar Co.",
     email: "admin@lightpathsolar.com",
     seats: 10,
-    industry: ["Solar"],
+    industry: [],
     partnership: ["NGO Partner"],
     address: "333 W Washington St, Indianapolis, Indiana, 46204, United States",
     addressParts: {
@@ -521,7 +566,7 @@ export const companies: Company[] = [
     email: "hr@northstarrefrig.com",
     tier: "Professional",
     seats: 95,
-    industry: ["Refrigeration"],
+    industry: ["Commercial HVAC"],
     partnership: ["Elite Partner"],
     address: "525 B St, San Diego, California, 92101, United States",
     addressParts: {
@@ -538,7 +583,7 @@ export const companies: Company[] = [
     email: "admin@onyxcommercial.com",
     tier: "Growth",
     seats: 42,
-    industry: ["HVAC"],
+    industry: ["Commercial HVAC", "Hotel Maintenance"],
     partnership: [],
     address: "200 E Pratt St, Baltimore, Maryland, 21202, United States",
     addressParts: {
@@ -554,7 +599,7 @@ export const companies: Company[] = [
     name: "PeakFit Construction",
     email: "learn@peakfitconstruction.com",
     seats: 3,
-    industry: ["Construction"],
+    industry: ["MultiFamily Maintenance"],
     partnership: [],
     address: "1100 Walnut St, Kansas City, Missouri, 64106, United States",
     addressParts: {
@@ -572,7 +617,7 @@ export const companies: Company[] = [
     email: "admin@quickspark.com",
     tier: "Essentials",
     seats: 28,
-    industry: ["Electrical"],
+    industry: [],
     partnership: [],
     address: "77 E Broad St, Columbus, Ohio, 43215, United States",
     addressParts: {
@@ -589,7 +634,7 @@ export const companies: Company[] = [
     email: "training@reliablefire.com",
     tier: "Professional",
     seats: 130,
-    industry: ["Fire Protection", "Electrical"],
+    industry: ["Hotel Maintenance"],
     partnership: ["Preferred Partner", "Elite Partner"],
     address: "600 Grant St, Pittsburgh, Pennsylvania, 15219, United States",
     addressParts: {
@@ -605,7 +650,7 @@ export const companies: Company[] = [
     name: "Sunridge Utilities",
     email: "ops@sunridgeutils.com",
     seats: 15,
-    industry: ["Utilities", "Solar"],
+    industry: [],
     partnership: ["NGO Partner"],
     address: "150 S State St, Salt Lake City, Utah, 84111, United States",
     addressParts: {
@@ -624,7 +669,7 @@ export const companies: Company[] = [
     email: "hr@totalcomforthvac.com",
     tier: "Growth",
     seats: 55,
-    industry: ["HVAC"],
+    industry: ["Residential HVAC"],
     partnership: [],
     address: "400 Capitol Mall, Sacramento, California, 95814, United States",
     addressParts: {
@@ -641,7 +686,7 @@ export const companies: Company[] = [
     email: "admin@unitedmechanical.com",
     tier: "Professional",
     seats: 175,
-    industry: ["HVAC", "Plumbing"],
+    industry: ["Commercial HVAC", "Residential Plumbing"],
     partnership: ["Elite Partner", "NGO Partner"],
     address: "2 S Biscayne Blvd, Miami, Florida, 33131, United States",
     addressParts: {
@@ -658,7 +703,7 @@ export const companies: Company[] = [
     email: "training@valleyviewplumbing.com",
     tier: "Essentials",
     seats: 20,
-    industry: ["Plumbing"],
+    industry: ["Residential Plumbing"],
     partnership: [],
     address: "222 W Las Colinas Blvd, Irving, Texas, 75039, United States",
     addressParts: {
@@ -692,7 +737,7 @@ export const companies: Company[] = [
     email: "admin@xcelmetal.com",
     tier: "Growth",
     seats: 33,
-    industry: ["Roofing", "Construction"],
+    industry: ["MultiFamily Maintenance"],
     partnership: [],
     address: "1 Riverfront Plaza, Newark, New Jersey, 07102, United States",
     addressParts: {
@@ -709,7 +754,7 @@ export const companies: Company[] = [
     email: "hr@zephyrclimate.com",
     tier: "Professional",
     seats: 110,
-    industry: ["HVAC"],
+    industry: ["Residential HVAC", "Commercial HVAC"],
     partnership: ["Preferred Partner"],
     address: "320 S Boston Ave, Tulsa, Oklahoma, 74103, United States",
     addressParts: {
@@ -728,7 +773,7 @@ export const companies: Company[] = [
     email: "billing@apexmech.com",
     tier: "Growth",
     seats: 40,
-    industry: ["HVAC", "Refrigeration"],
+    industry: ["Commercial HVAC"],
     partnership: [],
     address: "501 Union St, Nashville, Tennessee, 37219, United States",
     addressParts: {
@@ -738,8 +783,9 @@ export const companies: Company[] = [
       pin: "37219",
       state: "Tennessee",
     },
+    // No stored date: a seed's scheduled cancellation lands on its next
+    // cycle boundary, worked out from today (getCompanyBilling).
     status: "Canceled",
-    cancelsOn: "Aug 27, 2026",
   },
   {
     // Cancellation that has already taken effect — demonstrates the plain
@@ -749,7 +795,7 @@ export const companies: Company[] = [
     email: "accounts@bluecrestplumbing.com",
     tier: "Essentials",
     seats: 18,
-    industry: ["Plumbing"],
+    industry: ["Commercial Plumbing"],
     partnership: [],
     address: "210 N Tucker Blvd, St. Louis, Missouri, 63101, United States",
     addressParts: {
@@ -760,7 +806,8 @@ export const companies: Company[] = [
       state: "Missouri",
     },
     status: "Canceled",
-    cancelsOn: "Mar 12, 2026",
+    // A billing boundary — everyone bills on the 1st (Section 21.5).
+    cancelsOn: "Mar 1, 2026",
   },
   {
     // Free Access grant that has run past its end date — demonstrates the
@@ -769,7 +816,7 @@ export const companies: Company[] = [
     name: "Cascade Roofing Collective",
     email: "admin@cascaderoofing.com",
     seats: 8,
-    industry: ["Roofing"],
+    industry: [],
     partnership: ["NGO Partner"],
     address: "16 Court St, Brooklyn, New York, 11241, United States",
     addressParts: {
@@ -787,7 +834,7 @@ export const companies: Company[] = [
     name: "Ironclad Fire & Safety",
     email: "training@ironcladfire.com",
     seats: 12,
-    industry: ["Fire Protection", "Construction"],
+    industry: ["MultiFamily Maintenance"],
     partnership: ["Preferred Partner"],
     address: "1000 Ponce de Leon Blvd, Coral Gables, Florida, 33134, United States",
     addressParts: {
@@ -802,24 +849,45 @@ export const companies: Company[] = [
   },
 ];
 
-// Distinct industry / partnership values present in the data, used to populate
-// the Manage Companies filter pills.
-/* Both fields are multi-value, so the pickers list every value ANY company
- * carries — flattened, de-duplicated and alphabetical. */
-export const COMPANY_INDUSTRIES = Array.from(
-  new Set(companies.flatMap((c) => c.industry)),
-).sort();
+/* ── The live company list ──
+ * App owns the companies (seed + everything created this session) and mirrors
+ * them here, so pages that aren't handed the list — the Users page's Company
+ * filter, a company employee's profile link — still see every company. */
+let liveCompanies: Company[] = companies;
+const liveListeners = new Set<() => void>();
+export function setLiveCompanies(list: Company[]) {
+  if (list === liveCompanies) return;
+  liveCompanies = list;
+  liveListeners.forEach((l) => l());
+}
+export function getLiveCompanies(): Company[] {
+  return liveCompanies;
+}
+export function subscribeLiveCompanies(l: () => void): () => void {
+  liveListeners.add(l);
+  return () => {
+    liveListeners.delete(l);
+  };
+}
+export function useLiveCompanies(): Company[] {
+  return useSyncExternalStore(
+    (l) => { liveListeners.add(l); return () => liveListeners.delete(l); },
+    getLiveCompanies,
+  );
+}
 
-export const COMPANY_PARTNERSHIPS = Array.from(
-  new Set(companies.flatMap((c) => c.partnership)),
-).sort();
-
-/* "None" leads both filters — the only way to ask for companies with no
- * Industry / Partnership set (the same sentinel as Question Bank's NO_QUIZ). */
+/* Filter options for Industries / Partnership come from Product Config's
+ * Trade and Partnership lists (productConfig.ts), not from whatever the seed
+ * companies happen to carry. "None" leads both — the only way to ask for
+ * companies with no value set (the same sentinel as Question Bank's NO_QUIZ). */
 export const NO_INDUSTRY = "None";
 export const NO_PARTNERSHIP = "None";
-export const INDUSTRY_FILTER_OPTIONS = [NO_INDUSTRY, ...COMPANY_INDUSTRIES];
-export const PARTNERSHIP_FILTER_OPTIONS = [NO_PARTNERSHIP, ...COMPANY_PARTNERSHIPS];
+export function industryFilterOptions(trades: string[] = DEFAULT_TRADES): string[] {
+  return [NO_INDUSTRY, ...trades];
+}
+export function partnershipFilterOptions(partnerships: string[] = DEFAULT_PARTNERSHIPS): string[] {
+  return [NO_PARTNERSHIP, ...partnerships];
+}
 
 /** A multi-value filter matches an empty field only via its "None" option. */
 export function matchesTags(values: string[], picked: string[], none: string): boolean {
@@ -913,7 +981,8 @@ export type CompanyBilling = {
   /** True while `cancelsOn` is still in the future ("Cancels Aug 27, 2026");
    *  false once that date has passed ("Canceled"). */
   cancelScheduled: boolean;
-  /** Why the subscription was cancelled — shown on the status pill's hover. */
+  /** Why the subscription was cancelled — shown on the status pill's hover.
+   *  "" when no reason was given. */
   cancellationReason: string;
   /** How many days the latest invoice is overdue (Past Due accounts). */
   daysPastDue: number;
@@ -922,10 +991,6 @@ export type CompanyBilling = {
 };
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-// The admin tool's notion of "today" (matches APP_TODAY in NewCompanyWizard),
-// used to tell whether a Free Access grant has run past its end date.
-const APP_TODAY = new Date(2026, 5, 24);
 
 /* Every company date the UI prints carries its year — "Aug 27, 2026", not
  * "Aug 27" (Figma 652:925). One formatter/parser pair so the status pills, the
@@ -942,6 +1007,23 @@ function parseDate(s: string): Date | null {
   const mo = m ? MONTHS.indexOf(m[1]) : -1;
   return m && mo >= 0 ? new Date(Number(m[3]), mo, Number(m[2])) : null;
 }
+/** Reads a local "YYYY-MM-DD" into a Date; null if it isn't one. */
+function parseIso(s: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s.trim());
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+}
+
+/* The next billing boundary. Everyone bills on the 1st (Section 21.5): a
+ * monthly plan at the next 1st of a month, an annual plan once a year on the
+ * 1st of its renewal month — the month after the company was created, when
+ * its first full charge landed. A cycle-end cancellation takes effect here. */
+export function nextCycleBoundary(c: Company, cycle: BillingCycle): Date {
+  const today = appToday();
+  if (cycle === "Monthly") return new Date(today.getFullYear(), today.getMonth() + 1, 1);
+  const renewMonth = (companyCreatedDate(c).getMonth() + 1) % 12;
+  const thisYear = new Date(today.getFullYear(), renewMonth, 1);
+  return thisYear > today ? thisYear : new Date(today.getFullYear() + 1, renewMonth, 1);
+}
 
 export function getCompanyBilling(c: Company): CompanyBilling {
   const h = hash(c.id);
@@ -954,10 +1036,9 @@ export function getCompanyBilling(c: Company): CompanyBilling {
 
   // A Free Access grant past its end date reads "Free Access Ended" even if the
   // record still says "Free Access" — the date is the source of truth once set.
-  const freeAccessEnded =
-    declared === "Free Access" &&
-    !!c.freeAccessEndDate &&
-    new Date(c.freeAccessEndDate) < APP_TODAY;
+  const today = appToday();
+  const accessEnd = c.freeAccessEndDate ? parseIso(c.freeAccessEndDate) : null;
+  const freeAccessEnded = declared === "Free Access" && !!accessEnd && accessEnd < today;
 
   const status: SubscriptionStatus = freeAccessEnded ? "Free Access Ended" : declared;
 
@@ -986,7 +1067,8 @@ export function getCompanyBilling(c: Company): CompanyBilling {
   const monthlyTotal =
     status === "Active" ? monthlyRate(ratePerSeat, billingCycle) * seatsTotal : 0;
 
-  // Everyone bills on the 1st (Section 21.5).
+  // Everyone bills on the 1st (Section 21.5) — the next cycle boundary, in
+  // full ("Nov 1, 2026") so a cancellation can store it as its date.
   const nextBillingDate =
     status === "Free Trial"
       ? "Trial — no invoice"
@@ -1000,7 +1082,7 @@ export function getCompanyBilling(c: Company): CompanyBilling {
       ? "Canceled"
       : status === "Pending Payment Setup"
       ? "Awaiting payment method"
-      : `${MONTHS[h % 12]} 1`;
+      : fmtDate(nextCycleBoundary(c, billingCycle));
 
   // Deterministic creation date, counted back from the REAL current date so the
   // Companies page's Date Range presets (Last 7/30/90 days…) always have
@@ -1032,32 +1114,43 @@ export function getCompanyBilling(c: Company): CompanyBilling {
   // A running trial ends in the future; an expired one ended in the past. Both
   // carry a real date — "Trial Expired" is a trial that HAS an end date, not
   // one without.
-  const trialEndsOn =
-    declared === "Trial Expired"
-      ? fmtDate(addDays(APP_TODAY, -(1 + (ht % 90))))
-      : fmtDate(addDays(APP_TODAY, 1 + (ht % 75)));
-  // A cancellation set through the UI carries its own effective date; seed data
-  // alternates between the two cases. Either way the DATE decides which pill
-  // shows, so a stored cancelsOn that has since passed reads "Canceled".
+  // A trial started in the wizard stores its end date; the preview printed the
+  // same one. Seed trials end within a default trial length of today.
+  const storedTrialEnd = c.trialEndDate ? parseIso(c.trialEndDate) : null;
+  const trialEndsOn = storedTrialEnd
+    ? fmtDate(storedTrialEnd)
+    : declared === "Trial Expired"
+    ? fmtDate(addDays(today, -(1 + (ht % 90))))
+    // Within the LIVE B2B trial length (Product Config), so a shorter trial
+    // never shows a seed ending further out than a trial can run.
+    : fmtDate(addDays(today, 1 + (ht % Math.max(1, getB2BConfig().trialDays))));
+  // A cancellation set through the UI carries its own effective date. Seed data
+  // alternates between the two cases, and both sit on a cycle boundary: a
+  // scheduled one on the company's NEXT boundary, an ended one on a past 1st.
+  // Either way the DATE decides which pill shows, so a stored cancelsOn that
+  // has since passed reads "Canceled".
   const hx = hash(c.id + "cancel");
   const cancelsOn =
     c.cancelsOn ??
     // `>>>`, not `>>`: hash is unsigned, and a signed shift past 2^31 would
-    // flip the offset's sign and put a "scheduled" cancellation in the past.
-    fmtDate(addDays(APP_TODAY, hx % 2 === 0 ? 1 + ((hx >>> 3) % 60) : -(1 + ((hx >>> 3) % 400))));
-  const cancelScheduled = (parseDate(cancelsOn)?.getTime() ?? 0) > APP_TODAY.getTime();
+    // flip the offset's sign.
+    fmtDate(
+      // A seed that declares "Canceled" without a date is the scheduled case.
+      c.status === "Canceled" || hx % 2 === 0
+        ? nextCycleBoundary(c, billingCycle)
+        : new Date(today.getFullYear(), today.getMonth() - (1 + ((hx >>> 3) % 13)), 1),
+    );
+  const cancelScheduled = (parseDate(cancelsOn)?.getTime() ?? 0) > today.getTime();
 
-  // Why the subscription ended. Set explicitly by the Cancel Subscription flow;
-  // seed companies get a deterministic one so the pill's hover always has a
-  // reason to show.
-  const cancellationReason =
-    c.cancellationReason ?? CANCELLATION_REASONS[hash(c.id + "reason") % CANCELLATION_REASONS.length];
+  // Why the subscription ended — set by the Cancel Subscription flow, where it
+  // is optional. None picked is none: there is no stand-in reason.
+  const cancellationReason = c.cancellationReason ?? "";
 
   // How overdue the latest invoice is, and the date access is cut off if it
   // stays unpaid — the grace period runs PAST_DUE_GRACE_DAYS from the due date,
   // so an account 45 days down has 15 left.
   const daysPastDue = 1 + (hash(c.id + "overdue") % PAST_DUE_GRACE_DAYS);
-  const accessEndsOn = fmtDate(addDays(APP_TODAY, PAST_DUE_GRACE_DAYS - daysPastDue));
+  const accessEndsOn = fmtDate(addDays(today, PAST_DUE_GRACE_DAYS - daysPastDue));
 
   return {
     status,
@@ -1143,12 +1236,8 @@ export function getSeatEvents(company: Company): SeatEvent[] {
   if (bucket === 0) return [];
   const direction = bucket === 1 ? -1 : 1;
   const count = 2 + ((h >>> 3) % 5);
-  /* Counted back from the REAL current date, not APP_TODAY — the Date Range
-     presets are built from the real clock, so events anchored to the app's
-     fixed "today" would fall outside every window and the column would read
-     "—" for everyone. Same reasoning as createdOn in getCompanyBilling. */
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  // Counted back from today, the clock the Date Range presets use too.
+  const today = appToday();
   return Array.from({ length: count }, (_, i) => {
     const hi = hash(`${company.id}seat${i}`);
     /* The newest movement lands inside the last three weeks so the default
@@ -1177,8 +1266,9 @@ export function getStatusTip(billing: CompanyBilling): string | null {
   switch (billing.status) {
     case "Past Due":
       return `${billing.daysPastDue} ${billing.daysPastDue === 1 ? "day" : "days"} past due. Company loses access on ${billing.accessEndsOn}`;
+    // No reason given, no hover.
     case "Canceled":
-      return `Reason: ${billing.cancellationReason}`;
+      return billing.cancellationReason ? `Reason: ${billing.cancellationReason}` : null;
     default:
       return null;
   }
@@ -1194,18 +1284,12 @@ export function getCanceledOn(billing: CompanyBilling): string {
 }
 
 /* Effective date of a cancellation taken "at the end of the current billing
- * cycle" — the next occurrence of the billing day, as a full "Mon D, YYYY" so
- * the stored `cancelsOn` can be compared against today. `nextBillingDate` is
- * kept year-less for the wizard's cycle maths, hence the resolve here. */
+ * cycle" — the company's next cycle boundary (nextBillingDate), as a full
+ * "Mon D, YYYY" so the stored `cancelsOn` can be compared against today. */
 export function getCancelEffectiveDate(billing: CompanyBilling): string {
-  const mo = MONTHS.indexOf(billing.nextBillingDate.slice(0, 3));
-  if (mo < 0) return fmtDate(addDays(APP_TODAY, 30));
-  const thisYear = new Date(APP_TODAY.getFullYear(), mo, 1);
-  return fmtDate(
-    thisYear.getTime() > APP_TODAY.getTime()
-      ? thisYear
-      : new Date(APP_TODAY.getFullYear() + 1, mo, 1),
-  );
+  if (parseDate(billing.nextBillingDate)) return billing.nextBillingDate;
+  const today = appToday();
+  return fmtDate(new Date(today.getFullYear(), today.getMonth() + 1, 1));
 }
 
 /* "Trial End Date" column (Manage Companies) — only meaningful while a
@@ -1232,28 +1316,43 @@ export function companyCreatedDate(c: Company): Date {
   const bucket = hc % 4;
   const daysBack =
     bucket <= 1 ? (hc >>> 3) % 30 : bucket === 2 ? 30 + ((hc >>> 3) % 60) : 90 + ((hc >>> 3) % 1000);
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysBack);
-}
-
-/** Whole days between a past date and today, floored at 0. */
-function daysAgo(d: Date): number {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  return Math.max(0, Math.round((today.getTime() - d.getTime()) / 86400000));
+  return addDays(appToday(), -daysBack);
 }
 
 export function getDashboardLastAccessDays(company: Company): number | null {
   // An account still waiting on its payment method has never reached the
-  // dashboard — there is nothing to sign in to yet — so the day it was created
-  // is the most recent thing that happened to it.
-  if (company.status === "Pending Payment Setup") return daysAgo(companyCreatedDate(company));
+  // dashboard — there is nothing to sign in to yet — so it has no Last Access.
+  if (company.status === "Pending Payment Setup") return null;
   const h = hash(company.id + "dashboard");
   if (h % 6 === 0) return null;
-  return 1 + (h % 60);
+  const days = 1 + (h % 60);
+  // Never further back than the company has existed: one created through the
+  // wizard (a few days ago, or today) hasn't opened the dashboard since before
+  // it was made.
+  if (company.createdAt && days > daysSince(companyCreatedDate(company))) return null;
+  return days;
+}
+
+/** Whole days from a past date to today. */
+function daysSince(d: Date): number {
+  return Math.round((appToday().getTime() - d.getTime()) / 86400000);
+}
+
+/* Delete Company is for a mistake caught before anything happened: a company
+ * CREATED as Pending Payment Setup, still pending, with no employees but its
+ * (invited) account holder. A trial, grant or cancelled account that moved
+ * into Pending has a history, so it never gets Delete. */
+export function canDeleteCompany(company: Company): boolean {
+  return (
+    !!company.createdPending &&
+    getCompanyBilling(company).status === "Pending Payment Setup" &&
+    getCompanyUsers(company).every((u) => u.role === "Account Holder")
+  );
 }
 
 export function getDashboardLastAccess(company: Company): string {
+  // Not "Never": the dashboard doesn't exist for it yet, so the cell is empty.
+  if (company.status === "Pending Payment Setup") return "—";
   const days = getDashboardLastAccessDays(company);
   if (days === null) return "Never";
   if (days === 0) return "Today";
@@ -1266,6 +1365,33 @@ export function getDashboardLastAccess(company: Company): string {
 export function getCompanyPriceValue(company: Company): number | null {
   const billing = getCompanyBilling(company);
   return isBilledStatus(billing.status) ? billing.ratePerSeat : null;
+}
+
+/* Change Account Holder. The picked employee becomes the holder: the company's
+ * email, contact name and phone become theirs, and the roster lists them once,
+ * as "Account Holder". The old holder either stays on as an Admin ("change")
+ * or leaves the company's roster entirely ("replace"). */
+export function changeAccountHolder(
+  c: Company,
+  newHolderId: string,
+  mode: "change" | "replace",
+): Company {
+  const roster = getCompanyUsers(c);
+  const next = roster.find((u) => u.id === newHolderId);
+  if (!next) return c;
+  const phone = companyUserPhone(c, next);
+  const updated = roster
+    .filter((u) => !(mode === "replace" && u.role === "Account Holder"))
+    .map((u): CompanyUser =>
+      u.id === next.id
+        ? { ...u, role: "Account Holder" }
+        : u.role === "Account Holder"
+        ? { ...u, role: "Admin" }
+        : u,
+    );
+  // The holder leads the roster, the way a derived one does.
+  updated.sort((a, b) => Number(b.role === "Account Holder") - Number(a.role === "Account Holder"));
+  return { ...c, email: next.email, contactName: next.name, phone, roster: updated };
 }
 
 /* "Assigned CSM" / "Assigned Sales Rep" columns. Both are OPTIONAL: the
@@ -1333,16 +1459,11 @@ export type OutstandingBalance = {
  * sums the seat EVENTS inside the cycle instead.
  *
  * The window is the cycle's own LENGTH counted back from today: ~30 days for a
- * monthly plan, a year for an annual one. Anchoring to the stored
- * nextBillingDate is not possible here — that date runs on the app's fixed
- * APP_TODAY while seat events are dated off the real clock (see getSeatEvents),
- * so the two calendars would not line up. Counting back keeps both sides on
- * one clock and gives the cycle now running.
+ * monthly plan, a year for an annual one.
  *
  * Removals are ignored: giving up seats produces no charge to collect. */
 function seatsAddedThisCycle(company: Company, billing: CompanyBilling): number {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const today = appToday();
   const cycleDays = billing.billingCycle === "Annual" ? 365 : 30;
   const cycleStart = addDays(today, -cycleDays);
   return getSeatEvents(company).reduce((sum, e) => {
@@ -1407,42 +1528,64 @@ function companyUserId(c: Company, i: number): string {
    their profile links must still resolve. This finds the employee behind a
    companyUserId and rebuilds them as a full User record for the standalone
    `?profile=` page (deterministic, like everything else derived here). */
+/** A company employee's phone. The account holder's is the one on the
+ *  company record when it has one; everyone else's is derived. */
+export function companyUserPhone(c: Company, u: CompanyUser): string {
+  if (u.email === c.email && c.phone) return c.phone;
+  const h = hash(u.id + u.email);
+  return `+1 (${212 + (h % 700)}) 555-01${String(h % 100).padStart(2, "0")}`;
+}
+
+/** A company employee as a Users-roster user. Every B2B user is on their
+ *  company's plan; dates count back from the real today like the hand-authored
+ *  roster's. An invite nobody has accepted has no last access. */
+function companyUserAsUser(c: Company, u: CompanyUser): User {
+  const h = hash(u.id + u.email);
+  const today = appToday();
+  const daysAgo = (n: number) => isoDate(addDays(today, -n));
+  const isLead = u.role === "Account Holder" || u.role === "Admin" || u.role === "Manager";
+  const seen = /^(\d+)d ago$/.exec(u.lastActive);
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    phone: companyUserPhone(c, u),
+    emailVerified: true,
+    phoneVerified: h % 3 !== 0,
+    userType: "B2B",
+    companyName: c.name,
+    role: u.role === "Account Holder" ? "Admin" : u.role,
+    subscriptionStatus: "Company Plan",
+    joinedOn: daysAgo(120 + (h % 700)),
+    lastAccess: seen ? daysAgo(Number(seen[1])) : "",
+    ...(isLead && seen ? { dashboardLastAccess: daysAgo((h % 20) + 1) } : {}),
+  };
+}
+
+/** Every company's employees, as Users-roster users — the live roster
+ *  (users.ts) lists them beside the hand-authored learners. */
+export function companyEmployeesAsUsers(list: Company[]): User[] {
+  return list.flatMap((c) => getCompanyUsers(c).map((u) => companyUserAsUser(c, u)));
+}
+
 export function findCompanyUserProfile(id: string): User | null {
   if (!/^U-9\d{4}$/.test(id)) return null;
-  for (const c of companies) {
+  for (const c of liveCompanies) {
     const u = getCompanyUsers(c).find((x) => x.id === id);
-    if (!u) continue;
-    const h = hash(u.id + u.email);
-    const isLead = u.role === "Account Holder" || u.role === "Admin" || u.role === "Manager";
-    return {
-      id: u.id,
-      name: u.name,
-      email: u.email,
-      phone:
-        u.email === c.email && c.phone
-          ? c.phone
-          : `+1 (${212 + (h % 700)}) 555-01${String(h % 100).padStart(2, "0")}`,
-      emailVerified: true,
-      phoneVerified: h % 3 !== 0,
-      userType: "B2B",
-      companyName: c.name,
-      role: u.role === "Account Holder" ? "Admin" : u.role,
-      subscriptionStatus: "Subscriber",
-      platform: "Stripe",
-      joinedOn: `202${4 + (h % 2)}-${String((h % 12) + 1).padStart(2, "0")}-${String((h % 27) + 1).padStart(2, "0")}`,
-      lastAccess: `2026-0${5 + (h % 2)}-${String((h % 22) + 1).padStart(2, "0")}`,
-      ...(isLead
-        ? { dashboardLastAccess: `2026-06-${String((h % 20) + 1).padStart(2, "0")}` }
-        : {}),
-    };
+    if (u) return companyUserAsUser(c, u);
   }
   return null;
 }
 
 export function getCompanyUsers(c: Company): CompanyUser[] {
+  // A roster someone has edited (Change Account Holder) is stored as edited.
+  if (c.roster) return c.roster;
   const billing = getCompanyBilling(c);
+  // A company created waiting on its payment method has nobody in it yet but
+  // the account holder it was set up for (invited, not yet signed in).
+  const brandNew = c.createdPending && billing.status === "Pending Payment Setup";
   const h = hash(c.id);
-  const count = Math.max(1, Math.min(8, billing.seatsUsed));
+  const count = brandNew ? 1 : Math.max(1, Math.min(8, billing.seatsUsed));
   const domain = c.email.includes("@") ? c.email.split("@")[1] : "company.com";
   const users: CompanyUser[] = [];
   for (let i = 0; i < count; i++) {
@@ -1450,16 +1593,19 @@ export function getCompanyUsers(c: Company): CompanyUser[] {
     const ln = LAST[(h + i * 7) % LAST.length];
     const role: CompanyRole =
       i === 0 ? "Account Holder" : i <= 2 && count > 3 ? (i === 1 ? "Admin" : "Manager") : "Employee";
-    const status: CompanyUser["status"] = i === 0 ? "Active" : (h + i) % 9 === 0 ? "Invited" : (h + i) % 13 === 0 ? "Deactivated" : "Active";
+    const status: CompanyUser["status"] = i === 0 ? (brandNew ? "Invited" : "Active") : (h + i) % 9 === 0 ? "Invited" : (h + i) % 13 === 0 ? "Deactivated" : "Active";
     users.push({
       id: companyUserId(c, i),
-      name: `${fn} ${ln}`,
+      // The holder is the person the record names, when it names one.
+      name: i === 0 && c.contactName ? c.contactName : `${fn} ${ln}`,
       email: i === 0 ? c.email : `${fn.toLowerCase()}.${ln.toLowerCase()}@${domain}`,
       role,
       region: billing.regions[(h + i) % billing.regions.length]?.name ?? REGIONS[0],
       seat: "Assigned",
       status,
-      lastActive: status === "Invited" ? "—" : `${(h + i * 3) % 27 + 1}d ago`,
+      // Within the last 45 days — the same spread as the Users roster's own
+      // learners, so neither group crowds the top of a Last Access sort.
+      lastActive: status === "Invited" ? "—" : `${(h + i * 3) % 45 + 1}d ago`,
     });
   }
   return users;

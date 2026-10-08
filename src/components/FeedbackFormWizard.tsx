@@ -18,27 +18,32 @@ import { NAME_MAX, isOver } from "../data/fieldLimits";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
 
 type Props = {
+  /** The STAGED copy being edited — App holds it, so it survives the detour
+   *  to Create New Question. Nothing reaches the forms list until `onBack(true)`. */
   form: FeedbackForm;
+  /** The form as last saved — what "unchanged" is measured against. Absent
+   *  for a new form, which has never been saved. */
+  saved?: FeedbackForm;
   /** Opened straight from Create Feedback Form — only changes the head's wording. */
   creating?: boolean;
   allForms: FeedbackForm[];
   bank: Question[];
-  /** `finished` = left through Create Feedback Form / Save Changes (the page
-   *  then toasts); Cancel and the crumbs leave without it. */
+  /** `finished` = Create Feedback Form / Save Changes: App commits the staged
+   *  copy and toasts. Cancel and the crumbs leave without it, and the staged
+   *  edits are dropped. */
   onBack: (finished?: boolean) => void;
   /** The trail's first step — Feedback Forms hangs off Certifications. */
   onBackToCerts: () => void;
-  /** Throw the record away — only ever called on a form this page CREATED that
-   *  never became valid. See `leave()`. */
+  /** Drop the staged edits — for the app's exits (sidebar, browser Back),
+   *  which leave through the shared LeaveGuard rather than `onBack`. */
   onDiscard: () => void;
+  /** Stage an edit (nothing is saved until Save Changes / Create). */
   onUpdate: (form: FeedbackForm) => void;
   onCreateQuestion: () => void;
   /** A success handed back by the question editor ("Question Created"). */
   flash?: string | null;
   onFlashDone?: () => void;
 };
-
-const TODAY = "2026-07-10";
 
 /* Was step 1's description: the one rule about a form that an admin has to
    know, but far too long to sit under the page title. It hangs off the
@@ -72,6 +77,7 @@ const OPENED_AS = new Map<string, string>();
 
 export function FeedbackFormWizard({
   form,
+  saved,
   creating,
   allForms,
   bank,
@@ -91,11 +97,15 @@ export function FeedbackFormWizard({
     setToast(null);
     onFlashDone?.();
   }, [onFlashDone]);
-  // Everything saves live (the prototype holds forms in App state), so the
-  // footer buttons only handle status transitions and navigation.
+  /* Every edit is STAGED on App's copy of the form — the list, the trigger
+     locks elsewhere and the Certification setup steps keep reading the saved
+     form until Save Changes / Create commits it (App stamps Last Modified
+     then). Cancel, the crumbs and a confirmed discard drop the staged copy. */
   function saveLinks(questions: FormQuestionLink[]) {
-    onUpdate({ ...form, questions, updatedAt: TODAY });
+    onUpdate({ ...form, questions });
   }
+  // The Triggers field's picker is open — the Questions field's Q waits.
+  const [pickingTriggers, setPickingTriggers] = useState(false);
   /* Removing the last trigger flags the field at once with why (Figma list
      item 36) — not "cannot be left empty", which is for one never filled. */
   const [droppedLast, setDroppedLast] = useState(false);
@@ -106,10 +116,10 @@ export function FeedbackFormWizard({
     } else if (triggers.length > 0) {
       setDroppedLast(false);
     }
-    onUpdate({ ...form, triggers, updatedAt: TODAY });
+    onUpdate({ ...form, triggers });
   }
   function rename(name: string) {
-    onUpdate({ ...form, name, updatedAt: TODAY });
+    onUpdate({ ...form, name });
   }
 
   const isCreating = creating ?? false;
@@ -139,19 +149,26 @@ export function FeedbackFormWizard({
   const nameMissing = !named && (attempted || touched.has("name"));
   const questionsMissing = !asks && (attempted || touched.has("questions"));
   const triggersMissing = !mapped && (attempted || touched.has("triggers"));
-  /* The form as it opened (also the LeaveGuard's snapshot below). Editing an
-     existing form with nothing changed leaves Save Changes dimmed. */
-  const pristine = useRef(
-    (isCreating && OPENED_AS.get(form.id)) ||
-      draftKey({ name: form.name, questions: form.questions, triggers: form.triggers }),
-  );
+  /* What "nothing changed" is measured against (also the LeaveGuard's
+     snapshot below): an existing form's SAVED record, or a new form as it
+     first opened. Editing with nothing changed leaves Save Changes dimmed. */
+  const keyOf = (f: FeedbackForm) =>
+    draftKey({ name: f.name, questions: f.questions, triggers: f.triggers });
+  const opened = useRef(keyOf(form));
   /* A new form survives a detour to Create New Question (this page unmounts
      and comes back), so its snapshot must too — otherwise the half-made form
      reads as untouched on return, and leaving would discard it, question and
-     all, without the confirm. */
-  if (isCreating && !OPENED_AS.has(form.id)) OPENED_AS.set(form.id, pristine.current);
-  const currentKey = draftKey({ name: form.name, questions: form.questions, triggers: form.triggers });
-  const unchanged = !isCreating && currentKey === pristine.current;
+     all, without the confirm. An existing form's snapshot is its saved
+     record, which the detour doesn't touch. */
+  if (isCreating && !OPENED_AS.has(form.id)) OPENED_AS.set(form.id, opened.current);
+  const pristineKey = isCreating
+    ? OPENED_AS.get(form.id) ?? opened.current
+    : saved
+      ? keyOf(saved)
+      : opened.current;
+  const currentKey = keyOf(form);
+  const changed = currentKey !== pristineKey;
+  const unchanged = !isCreating && !changed;
   const canFinish = ready && !unchanged;
   const blockedTip = canFinish
     ? undefined
@@ -164,35 +181,26 @@ export function FeedbackFormWizard({
     else if (!ready) setAttempted(true);
   }
 
-  /* The only exit that loses anything is that discard, so it is the only one
-     that asks (the shared LeaveGuard): a new form, still not valid, that the
-     admin has put something into since it opened — a name, a question, a
-     trigger. The snapshot is the form as it opened, so a form started from a
-     Certification (its trigger pre-mapped) is not dirty for that alone, and
-     an untouched new form still leaves without asking. Edits save live, so an
-     existing or already-valid form has nothing to lose. */
-  const dirty =
-    isCreating &&
-    !ready &&
-    currentKey !== pristine.current;
-  // The sidebar and browser Back purge it too, once the discard is confirmed.
-  const guard = useLeaveGuard(dirty, { noun: "Feedback Form", creating: true, onDiscard });
+  /* Every exit but Save / Create drops the staged edits, so each one asks
+     first (the shared LeaveGuard) once anything differs from the snapshot —
+     a name typed, a question or trigger added or removed. The snapshot of a
+     new form is the form as it opened, so one started from a Certification
+     (its trigger pre-mapped) is not dirty for that alone, and an untouched
+     new form leaves without asking — and, never having been saved, leaves no
+     row behind. */
+  const dirty = changed;
+  // The sidebar and browser Back drop the staged copy too, once confirmed.
+  const guard = useLeaveGuard(dirty, { noun: "Feedback Form", creating: isCreating, onDiscard });
 
-  /* Leaving without finishing. Everything here saves live, so a brand-new form
-     abandoned half-made would otherwise sit in the list as an untitled row with
-     no trigger — exactly the state the gate above exists to prevent. So a form
-     this page created that never became valid is DISCARDED on the way out
-     (Cancel and every crumb). A form that is already valid is kept —
-     leaving is then just navigation — and an existing form is never touched.
-     `go` is where the exit lands: Feedback Forms, or a step further up the
-     trail (a discard lands on Feedback Forms first; `go` then overrides it). */
+  /* Leaving without finishing: Cancel and every crumb. App drops the staged
+     copy on `onBack(false)`; `go` is where the exit lands — Feedback Forms,
+     or a step further up the trail. */
   function leave(go?: () => void) {
-    // An existing form's edits are already saved, so leaving one that changed
-    // says so ("Feedback Form Updated") rather than reading like a cancel.
-    const edited = !isCreating && currentKey !== pristine.current;
     guard(() => {
-      if (isCreating && !ready) onDiscard();
-      (go ?? (() => onBack(edited)))();
+      if (go) {
+        onDiscard();
+        go();
+      } else onBack(false);
     });
   }
 
@@ -273,6 +281,7 @@ export function FeedbackFormWizard({
                     )}
                   </label>
                   <FeedbackFormEditor
+                    blocked={pickingTriggers}
                     flagged={questionsMissing}
                     form={form}
                     bank={bank}
@@ -325,6 +334,7 @@ export function FeedbackFormWizard({
                     allForms={allForms}
                     onSave={saveTriggers}
                     invalid={triggersMissing}
+                    onPickingChange={setPickingTriggers}
                   />
                   {/* Subtext always sits BELOW the control
                       ([[form-subtext-pattern]]), and the "How triggers behave"

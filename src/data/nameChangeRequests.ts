@@ -1,160 +1,118 @@
-export type IdDocType = "Driver License" | "Passport" | "State ID";
+import { isoDaysFromToday, sharedStore } from "./sharedStore";
 
+/** Where a request stands. "pending" waits on an admin; "awaiting-proof" waits
+ *  on the user (Request ID Proof asked them for more) until they upload a new
+ *  ID. The rest are final and leave the queue: approved, rejected, or "closed"
+ *  — its account was merged away, so there is no one left to rename. */
+export type NameChangeStatus = "pending" | "awaiting-proof" | "approved" | "rejected" | "closed";
+
+export type NameChangeEvent = {
+  status: NameChangeStatus;
+  /** ISO timestamp. */
+  at: string;
+  /** The admin who moved it; absent on the user's own submission. */
+  by?: string;
+  /** On an approval: the name the account had before, and the one it got
+   *  (the reviewer may have corrected the spelling). */
+  from?: string;
+  to?: string;
+};
+
+/* A request names its user by id only — the current name, email and phone are
+   read off the Users roster wherever it is shown, and the ID it is checked
+   against is the one on file (manageIds.idRecordForUser). */
 export type NameChangeRequest = {
   id: string;
   userId: string;
-  currentName: string;
   requestedName: string;
   /** ISO date the request was submitted. */
   submittedOn: string;
   reason: string;
-  /* ── ID document (shown on the mock ID card) ── */
-  idType: IdDocType;
-  idNumber: string;
-  dob: string; // ISO date
-  region: string; // issuing state / country
-  expires: string; // ISO date
-  /** picsum seed used for the ID portrait photo. */
-  photoSeed: string;
+  status: NameChangeStatus;
+  /** Oldest first — the submission, then every status change. */
+  history: NameChangeEvent[];
 };
 
-const RAW: Omit<NameChangeRequest, "id">[] = [
-  {
-    userId: "U-10089",
-    currentName: "Priya Venkatesan",
-    requestedName: "Priya Iyer",
-    submittedOn: "2026-06-14",
-    reason: "Marriage",
-    idType: "Driver License",
-    idNumber: "D1294-8830-4471",
-    dob: "1994-03-22",
-    region: "California",
-    expires: "2029-03-22",
-    photoSeed: "ncr-priya",
-  },
-  {
-    userId: "U-10291",
-    currentName: "Tyrese Booker",
-    requestedName: "Ty Booker",
-    submittedOn: "2026-06-12",
-    reason: "Preferred name",
-    idType: "State ID",
-    idNumber: "GA-553-901-228",
-    dob: "1990-11-08",
-    region: "Georgia",
-    expires: "2028-11-08",
-    photoSeed: "ncr-tyrese",
-  },
-  {
-    userId: "U-10491",
-    currentName: "Naomi Sato",
-    requestedName: "Naomi Tanaka",
-    submittedOn: "2026-06-11",
-    reason: "Marriage",
-    idType: "Passport",
-    idNumber: "P5582137",
-    dob: "1996-07-19",
-    region: "Oregon",
-    expires: "2031-07-19",
-    photoSeed: "ncr-naomi",
-  },
-  {
-    userId: "U-10618",
-    currentName: "Felix Becker",
-    requestedName: "Felix Beck",
-    submittedOn: "2026-06-09",
-    reason: "Legal name change",
-    idType: "Driver License",
-    idNumber: "PA-882-104-557",
-    dob: "1988-01-30",
-    region: "Pennsylvania",
-    expires: "2027-01-30",
-    photoSeed: "ncr-felix",
-  },
-  {
-    userId: "U-10903",
-    currentName: "Chloe Bennett",
-    requestedName: "Chloe Bennett-Reyes",
-    submittedOn: "2026-06-08",
-    reason: "Marriage",
-    idType: "Driver License",
-    idNumber: "TX-471-228-019",
-    dob: "1999-05-14",
-    region: "Texas",
-    expires: "2030-05-14",
-    photoSeed: "ncr-chloe",
-  },
-  {
-    userId: "U-10330",
-    currentName: "Lena Petrov",
-    requestedName: "Yelena Petrova",
-    submittedOn: "2026-06-06",
-    reason: "Correcting legal name",
-    idType: "Passport",
-    idNumber: "P4419082",
-    dob: "1992-09-02",
-    region: "Florida",
-    expires: "2032-09-02",
-    photoSeed: "ncr-lena",
-  },
-  {
-    userId: "U-10655",
-    currentName: "Olivia Tran",
-    requestedName: "Olivia Nguyen",
-    submittedOn: "2026-06-03",
-    reason: "Marriage",
-    idType: "State ID",
-    idNumber: "CA-902-554-118",
-    dob: "1997-12-11",
-    region: "California",
-    expires: "2029-12-11",
-    photoSeed: "ncr-olivia",
-  },
-  {
-    userId: "U-11224",
-    currentName: "Theo Martin",
-    requestedName: "Theodore Martin",
-    submittedOn: "2026-05-30",
-    reason: "Preferred legal name",
-    idType: "Driver License",
-    idNumber: "OR-118-770-345",
-    dob: "1991-04-26",
-    region: "Oregon",
-    expires: "2028-04-26",
-    photoSeed: "ncr-theo",
-  },
-  {
-    userId: "U-10044",
-    currentName: "Marcus Holloway",
-    requestedName: "Marc Holloway",
-    submittedOn: "2026-05-28",
-    reason: "Preferred name",
-    idType: "Driver License",
-    idNumber: "CA-330-918-662",
-    dob: "1989-08-17",
-    region: "California",
-    expires: "2027-08-17",
-    photoSeed: "ncr-marcus",
-  },
-  {
-    userId: "U-10987",
-    currentName: "Emma Schneider",
-    requestedName: "Emma Schneider-Klein",
-    submittedOn: "2026-05-25",
-    reason: "Marriage",
-    idType: "State ID",
-    idNumber: "CO-447-209-883",
-    dob: "1995-02-09",
-    region: "Colorado",
-    expires: "2030-02-09",
-    photoSeed: "ncr-emma",
-  },
+/* Only users whose ID has been reviewed and approved can file one (the page's
+   subtext says so), and each holds at most one open request. */
+const RAW: { userId: string; requestedName: string; daysAgo: number; reason: string }[] = [
+  { userId: "U-10089", requestedName: "Priya Iyer", daysAgo: 3, reason: "Marriage" },
+  { userId: "U-10291", requestedName: "Ty Booker", daysAgo: 5, reason: "Preferred name" },
+  { userId: "U-10491", requestedName: "Naomi Tanaka", daysAgo: 6, reason: "Marriage" },
+  { userId: "U-10618", requestedName: "Felix Beck", daysAgo: 8, reason: "Legal name change" },
+  { userId: "U-10903", requestedName: "Chloe Bennett-Reyes", daysAgo: 9, reason: "Marriage" },
+  { userId: "U-10655", requestedName: "Olivia Nguyen", daysAgo: 14, reason: "Marriage" },
 ];
 
-export const nameChangeRequests: NameChangeRequest[] = RAW.map((r, i) => ({
-  id: `NCR-${1840 - i * 6}`,
-  ...r,
-}));
+const SEED: NameChangeRequest[] = RAW.map((r, i) => {
+  const submittedOn = isoDaysFromToday(-r.daysAgo);
+  return {
+    id: `NCR-${1840 - i * 6}`,
+    userId: r.userId,
+    requestedName: r.requestedName,
+    submittedOn,
+    reason: r.reason,
+    status: "pending",
+    history: [{ status: "pending", at: `${submittedOn}T09:00:00` }],
+  };
+});
+
+/** Every request, decided ones included (their history stays). Shared across
+ *  tabs — the Users badge in a profile tab's sidebar reads it too. */
+export const nameChangeStore = sharedStore<NameChangeRequest[]>("nameChanges", SEED);
+export const useNameChangeRequests = nameChangeStore.use;
+
+/** Still in the queue — waiting on an admin or on the user's proof. */
+export function isOpen(r: NameChangeRequest): boolean {
+  return r.status === "pending" || r.status === "awaiting-proof";
+}
+/** Waiting on an admin — what the Users banner, title note and sidebar badge
+ *  count. One awaiting proof is waiting on the user instead. */
+export function pendingCount(list: NameChangeRequest[]): number {
+  return list.filter((r) => r.status === "pending").length;
+}
+
+/** Moves a request on and records who did it. */
+export function setNameChangeStatus(
+  id: string,
+  status: Exclude<NameChangeStatus, "pending">,
+  by: string,
+  rename?: { from: string; to: string },
+): void {
+  const at = new Date().toISOString();
+  nameChangeStore.set((list) =>
+    list.map((r) =>
+      r.id === id ? { ...r, status, history: [...r.history, { status, at, by, ...rename }] } : r,
+    ),
+  );
+}
+
+/** The user uploaded a new ID: anything waiting on their proof goes back to
+ *  the reviewers. */
+export function proofReceived(userId: string): void {
+  const at = new Date().toISOString();
+  if (!nameChangeStore.get().some((r) => r.userId === userId && r.status === "awaiting-proof")) return;
+  nameChangeStore.set((list) =>
+    list.map((r) =>
+      r.userId === userId && r.status === "awaiting-proof"
+        ? { ...r, status: "pending", history: [...r.history, { status: "pending", at }] }
+        : r,
+    ),
+  );
+}
+
+/** Closes every open request of an account that no longer exists (merged
+ *  into another one). */
+export function closeRequestsOf(userId: string, by: string): void {
+  const at = new Date().toISOString();
+  nameChangeStore.set((list) =>
+    list.map((r) =>
+      r.userId === userId && isOpen(r)
+        ? { ...r, status: "closed", history: [...r.history, { status: "closed", at, by }] }
+        : r,
+    ),
+  );
+}
 
 /** picsum portrait URL for the ID photo. */
 export function idPhotoUrl(seed: string, w = 300, h = 380): string {

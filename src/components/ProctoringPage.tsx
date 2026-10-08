@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { renameUser } from "../data/users";
 import {
-  submissions as seedSubmissions,
+  useReviewedQuizNames,
+  useSubmissions,
+  updateSubmissions,
   hasProctoringFootage,
+  displayDateTime,
   matchesQuery,
   type ProctoringKind,
   type ProctoringStatus,
@@ -160,6 +163,7 @@ let recentRunsStore: RunKey[] = [];
 export function ProctoringPage({
   onPendingIdReuploads,
   initialSubmissionId,
+  originQueueIds,
   onExitToOrigin,
   originLabel,
 }: {
@@ -167,13 +171,21 @@ export function ProctoringPage({
   /** Opens straight into a submission's console — how Pending ID Re-Uploads
    *  hands a row over, so an exam is only ever reviewed in one place. */
   initialSubmissionId?: string;
+  /** The sending page's filtered, sorted rows, in order — the console's queue
+   *  while it is working that page's list, so Skip and ←/→ step through it. */
+  originQueueIds?: string[];
   /** Where to go when the console handed over by `initialSubmissionId` is
-   *  closed: back to the page that sent us, not this page's own table. */
-  onExitToOrigin?: () => void;
+   *  closed, or a decision is made on that page's queue: back to the page that
+   *  sent us, not this page's own table. `toast` is the decision's, to show
+   *  there. */
+  onExitToOrigin?: (toast?: string) => void;
   /** That page's name, for the console's breadcrumb. */
   originLabel?: string;
 }) {
-  const [list, setList] = useState<Submission[]>(seedSubmissions);
+  /* The session's store, not local state: App remounts this page on every
+     navigation, and Pending ID Re-Uploads reads the same list. */
+  const list = useSubmissions();
+  const setList = updateSubmissions;
   /* Raised here, not in the console: a decision advances the console to the
      next submission (or closes it on the last), and the toast has to outlive
      both. Both branches below render it as the fragment's second child, so
@@ -190,10 +202,10 @@ export function ProctoringPage({
   const [dateRange, setDateRange] = useState<DateRangeState>(() => allTimeDateRange());
   const [page, setPage] = useState(1);
   const [activeId, setActiveId] = useState<string | null>(initialSubmissionId ?? null);
-  /* True while the console is still showing the row another page handed over,
-     so closing it goes back there. Cleared the moment the reviewer acts on a
-     submission: from then on they're working this page's queue, and exiting
-     belongs on this page's table. */
+  /* True while the console is working the queue another page handed over
+     (Pending ID Re-Uploads): Skip and ←/→ walk that page's list, and closing
+     the console or deciding a row goes back there. Cleared only by the
+     console's "Exam Reviews" crumb, which leaves for this page's own table. */
   const [returnToOrigin, setReturnToOrigin] = useState(!!initialSubmissionId);
   // Longest waiting first — the default review-run order, so the table reads
   // in the same order as the console's queue.
@@ -208,9 +220,8 @@ export function ProctoringPage({
   }
 
   // Once a submission is accepted/rejected it's off the review queue entirely. A
-  // requested reupload doesn't count toward the run cards' counts — only true
-  // "pending" items do — and it only surfaces when the Review Type filter asks
-  // for ID Re-uploads, never in the unfiltered list.
+  // requested reupload is off it too — only true "pending" items count toward
+  // the run cards or reach the table; it waits on Pending ID Re-Uploads.
   const pending = useMemo(() => list.filter((s) => s.status === "pending"), [list]);
 
   /** The Review Type pill's labels resolved back to kinds. */
@@ -234,11 +245,12 @@ export function ProctoringPage({
     ).slice(0, room);
   }, [liveRecents, pending]);
 
-  /** Every quiz with something pending — the Quiz pill's option list. */
-  const examNames = useMemo(
-    () => [...new Set(pending.map((s) => s.exam))].sort((a, b) => a.localeCompare(b)),
-    [pending],
-  );
+  /** Every Quiz Exam Reviews reviews (Proctoring on, or gated by the ID
+   *  Upload Task), pending or not — the Quiz pill's option list and the search
+   *  bar's Quiz scope. Read off the Quizzes, not the rows, so an applied Quiz
+   *  can't drop out of the list when its last submission is decided and leave
+   *  its tick with nothing to untick. */
+  const examNames = useReviewedQuizNames();
 
   /* All Time IS the Submission Date filter's empty state, so a set range counts
      towards Clear Filters exactly like a chosen Review Type or Quiz. */
@@ -300,9 +312,10 @@ export function ProctoringPage({
       if (s.status === "pending") {
         if (kinds.length > 0 && !kinds.includes(s.kind)) return false;
       } else if (s.status === "id-requested") {
-        /* Waiting on the candidate, not on us — never part of this table. The
-           Review Type pill used to be able to ask for these; it no longer
-           offers ID Re-uploads, and they have their own page instead. */
+        /* Waiting on the candidate, not on us — never part of this table;
+           they have their own page (Pending ID Re-Uploads). The Review Type
+           pill's "ID Re-Uploads" means the re-uploads that HAVE come back
+           (`pending` rows of kind `id-reupload`), never these. */
         return false;
       } else {
         return false;
@@ -336,8 +349,18 @@ export function ProctoringPage({
      the full list covers a row arrived at from elsewhere that the current
      filters happen to exclude — without it the console would silently refuse
      to open. */
+  const originQueue = useMemo(
+    () =>
+      returnToOrigin && originQueueIds
+        ? originQueueIds.flatMap((id) => list.find((s) => s.id === id) ?? [])
+        : null,
+    [returnToOrigin, originQueueIds, list],
+  );
+  /** What the console steps through: the sending page's list while working
+   *  it, this page's filtered + sorted table otherwise. */
+  const queue = originQueue ?? sorted;
   const active = activeId
-    ? sorted.find((s) => s.id === activeId) ?? list.find((s) => s.id === activeId) ?? null
+    ? queue.find((s) => s.id === activeId) ?? list.find((s) => s.id === activeId) ?? null
     : null;
 
   // Prior rejected attempts by this candidate, across any exam — not just the one open now.
@@ -356,8 +379,6 @@ export function ProctoringPage({
   }
 
   function openSubmission(id: string) {
-    // Moving to a different submission means they're working this page's queue.
-    if (id !== initialSubmissionId) setReturnToOrigin(false);
     setActiveId(id);
   }
 
@@ -367,6 +388,20 @@ export function ProctoringPage({
       return;
     }
     setActiveId(null);
+  }
+
+  /* After a decision: back to the sending page when working its queue (the
+     toast goes with it), else on to the next submission in line — or, on the
+     queue's last row, back to the table, as the Hands-On console does. */
+  function afterDecision(id: string, msg: string) {
+    if (returnToOrigin && onExitToOrigin) {
+      onExitToOrigin(msg);
+      return;
+    }
+    const idx = sorted.findIndex((s) => s.id === id);
+    const next = idx >= 0 ? sorted[idx + 1] ?? null : null;
+    setActiveId(next ? next.id : null);
+    toast(msg);
   }
 
   /* The console's "Exam Reviews" crumb when it was opened from elsewhere:
@@ -379,14 +414,10 @@ export function ProctoringPage({
     setActiveId(null);
   }
 
-  // Decide a submission (accept/reject): it leaves the review queue entirely and
-  // whichever submission was next in line (or previous, if this was the last one) opens.
-  // Rejection reasons are kept on the record so this candidate's later submissions
-  // can list them in the Integrity Note's "Rejected Attempts" detail.
-  function decide(id: string, status: ProctoringStatus, reasons?: string[]) {
-    setReturnToOrigin(false);
-    const idx = sorted.findIndex((s) => s.id === id);
-    const next = idx >= 0 ? sorted[idx + 1] ?? sorted[idx - 1] ?? null : null;
+  // Decide a submission (accept/reject): it leaves the review queue entirely
+  // (see `afterDecision` for where the console goes). Rejection reasons are
+  // kept on the record so this candidate's later submissions can list them.
+  function decide(id: string, status: ProctoringStatus, msg: string, reasons?: string[]) {
     setList((prev) =>
       prev.map((s) =>
         s.id === id
@@ -394,16 +425,13 @@ export function ProctoringPage({
           : s,
       ),
     );
-    setActiveId(next ? next.id : null);
+    afterDecision(id, msg);
   }
 
-  // Requesting a reupload moves the submission into the ID Re-uploads tab in a
-  // pending/secondary state — it no longer counts toward the pill counts, but stays
-  // visible in the table until it's accepted or rejected.
+  // Requesting a reupload takes the submission off the review queue: as
+  // `id-requested` it is filtered out of this table and the run counts, and is
+  // listed on Pending ID Re-Uploads until the candidate sends a new ID.
   function requestReupload(id: string) {
-    setReturnToOrigin(false);
-    const idx = sorted.findIndex((s) => s.id === id);
-    const next = idx >= 0 ? sorted[idx + 1] ?? sorted[idx - 1] ?? null : null;
     setList((prev) =>
       prev.map((s) => {
         if (s.id !== id) return s;
@@ -412,30 +440,39 @@ export function ProctoringPage({
            keeps "Re-Uploaded ID" and "Verified" mutually exclusive — a row can
            never be both. */
         const { idPreviouslyVerified: _dropped, ...rest } = s;
-        return { ...rest, status: "id-requested" as const, kind: "id-reupload" as const };
+        return {
+          ...rest,
+          status: "id-requested" as const,
+          kind: "id-reupload" as const,
+          // The date Pending ID Re-Uploads chases from.
+          reuploadRequestedAt: displayDateTime(new Date()),
+        };
       }),
     );
-    setActiveId(next ? next.id : null);
+    afterDecision(id, "Re-Upload Requested");
   }
 
-  /* The Name Mismatch banner's commit: the reviewer has decided which name to
-     keep, so the ID's detected name matches it from here on and the mismatch is
-     resolved. */
-  /* One rename, wherever it comes from — the Name Mismatch card's commit, its
-     "Use This", or the pop-up behind the candidate's name. Three things have to
-     move together or the rename only looks like it worked:
+  /* One rename, wherever it comes from — the Name Mismatch card's commit or
+     the pop-up behind the candidate's name. Two things have to move together
+     or the rename only looks like it worked:
        · the USER's profile (the shared roster), not just this submission —
          otherwise the old name is back the moment you leave the page;
-       · every submission this candidate has, not just the open one;
-       · the name read off the ID, which settles the mismatch — the admin has
-         just told us which name to keep, so the card has nothing left to ask. */
+       · every submission this candidate has, not just the open one.
+     The name read off the ID is NOT touched: a plain rename says nothing about
+     what the document reads, so the Name Mismatch card stays up. */
   function renameCandidate(userId: string, name: string) {
     renameUser(userId, name);
     setList((prev) =>
-      prev.map((s) =>
-        s.userId === userId ? { ...s, candidateName: name, idDetectedName: name } : s,
-      ),
+      prev.map((s) => (s.userId === userId ? { ...s, candidateName: name } : s)),
     );
+  }
+
+  /* The Name Mismatch card's commit: the reviewer has decided which name to
+     keep, which settles the mismatch on THIS submission — the one being
+     approved. Other open submissions keep their own check. */
+  function resolveMismatch(id: string, userId: string, name: string) {
+    renameCandidate(userId, name);
+    setList((prev) => prev.map((s) => (s.id === id ? { ...s, idDetectedName: name } : s)));
   }
 
 
@@ -444,29 +481,22 @@ export function ProctoringPage({
       <>
       <ProctoringConsole
         submission={active}
-        queue={sorted}
+        queue={queue}
         previousRejected={previousRejected}
         onGoto={openSubmission}
         onExit={closeConsole}
-        // Only while the exit still goes back there — once the reviewer joins
-        // this page's queue, the crumb has to follow them (see `returnToOrigin`).
+        // Only while the exit still goes back there (see `returnToOrigin`).
         originLabel={returnToOrigin ? originLabel : undefined}
+        hidePendingCount={returnToOrigin}
         onExitToSection={exitToSection}
-        onAccept={() => {
-          decide(active.id, "accepted");
+        onAccept={() =>
           // Same split as the confirm's copy: an exam attempt vs an ID alone.
-          toast(hasProctoringFootage(active) ? "Attempt Approved" : "ID Approved");
-        }}
-        onReject={(details) => {
-          decide(active.id, "rejected", details?.reasons);
-          toast("Attempt Rejected");
-        }}
-        onRequestId={() => {
-          requestReupload(active.id);
-          toast("Re-Upload Requested");
-        }}
+          decide(active.id, "accepted", hasProctoringFootage(active) ? "Attempt Approved" : "ID Approved")
+        }
+        onReject={(details) => decide(active.id, "rejected", "Attempt Rejected", details?.reasons)}
+        onRequestId={() => requestReupload(active.id)}
         // Approve's implicit rename — the approve toast already covers it.
-        onUpdateName={(name) => renameCandidate(active.userId, name)}
+        onUpdateName={(name) => resolveMismatch(active.id, active.userId, name)}
         // The hover card's pencil: a rename on its own, so it gets its own toast.
         onRenameUser={(userId, name) => {
           renameCandidate(userId, name);
@@ -521,6 +551,7 @@ export function ProctoringPage({
               <div className="toolbar">
                 <ProctoringSearch
                   submissions={pending}
+                  quizzes={examNames}
                   exams={examFilter}
                   onExamsChange={setExamFilter}
                   query={query}

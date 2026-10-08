@@ -1,19 +1,27 @@
 /**
- * Demo data for the Merge Accounts flow.
+ * Merge Accounts / Transfer Subscription data.
  *
- * A small pool of learner accounts plus the supporting fixtures the wizard
- * needs: sample completion records (shown when a record row is expanded) and
- * the cross-account conflicts that must be resolved before merging.
+ * Every account is a user of the live Users roster (users.ts) — name, email,
+ * phone, company and plan are read off it whenever the pickers or the
+ * comparison render, so a rename or a cancelled plan shows here at once, and a
+ * finished merge or transfer writes straight back into it. What only these
+ * flows need is derived per account: how it signs in, its learning-record
+ * counts, and the cross-account conflicts that must be resolved before
+ * merging.
  *
- * Two accounts share the name "Marcus Rivera" so the happy-path demo (a likely
- * duplicate) works out of the box. One of them is B2B (belongs to a company),
- * which lets the B2B-must-be-primary guard be demonstrated by swapping roles.
+ * The duplicate "Marcus Rivera" pair (users.ts demo accounts, one of them B2B)
+ * drives the happy path and the B2B-must-be-kept guard.
  */
 
 import { formatShortDate } from "../formatDate";
+import { mergeablePurchases } from "./userProfile";
 import {
-  users,
+  getUsers,
+  findAnyUser,
+  mergedInto,
+  planPriceLabel,
   type SubscriptionStatus,
+  type User,
   type UserRole,
   type UserType,
 } from "./users";
@@ -46,10 +54,12 @@ export function subLabel(sub: MergeSub): string {
   return sub.cycle && sub.platform ? `${sub.cycle} · ${sub.platform}` : sub.plan;
 }
 
+/** A one-time purchase that moves with a merge — a paid Certification or a
+ *  purchased attempt, off the account's profile (userProfile.ts). */
 export type MergeAddon = {
   id: string;
   name: string;
-  type: string;
+  type: "Certification" | "Quiz Attempt";
   price: string;
 };
 
@@ -109,127 +119,21 @@ export const RECORD_KEYS = [
   "Path entries",
 ] as const;
 
-const baseMergeUsers: MergeUser[] = [
-  {
-    id: "U-4821",
-    name: "Marcus Rivera",
-    email: "marcus.rivera@gmail.com",
-    phone: "+1 (415) 555-0182",
-    created: "Mar 4, 2023",
-    initials: "MR",
-    color: "#5b8def",
-    login: "Google SSO",
-    role: "Self-Learner",
-    subscription: "Subscriber",
-    company: null,
-    sub: { plan: "Pro · Annual", detail: "Active · renews annually", price: "$199/yr", active: true, cycle: "Annual", platform: "Stripe", renewsOn: renewalFor("Annual", 1630) },
-    addons: [
-      { id: "epa608t1", name: "EPA 608 Type I Certification", type: "Certification", price: "$49" },
-      { id: "quizpack", name: "12 Quiz Attempts Pack", type: "Quiz attempts", price: "$19" },
-    ],
-    data: { "Task completions": 142, "Quiz attempts": 38, "Quiz-Section completions": 64, "Hands-On Task submissions": 21, Certifications: 9, Skills: 12, Awards: 5, "Path entries": 3 },
-  },
-  {
-    id: "U-7193",
-    name: "Marcus Rivera",
-    email: "m.rivera@acmehvac.com",
-    phone: "+1 (415) 555-0147",
-    created: "Jan 18, 2024",
-    initials: "MR",
-    color: "#c98b3c",
-    login: "Email + Password",
-    role: "Employee",
-    subscription: "Subscriber",
-    company: "Acme HVAC Co.",
-    sub: { plan: "Team seat", detail: "Active · managed by Acme HVAC Co.", price: "Company-billed", active: true },
-    addons: [
-      { id: "epa608t1", name: "EPA 608 Type I Certification", type: "Certification", price: "$49" },
-      { id: "natertw", name: "NATE RTW Certification", type: "Certification", price: "$59" },
-    ],
-    data: { "Task completions": 57, "Quiz attempts": 14, "Quiz-Section completions": 22, "Hands-On Task submissions": 9, Certifications: 4, Skills: 6, Awards: 2, "Path entries": 1 },
-  },
-  {
-    id: "U-3360",
-    name: "Jordan Lee",
-    email: "jordan.lee@outlook.com",
-    phone: "+1 (503) 555-0119",
-    created: "Aug 11, 2023",
-    initials: "JL",
-    color: "#3ecf8e",
-    login: "Apple SSO",
-    role: "Self-Learner",
-    subscription: "Starter",
-    company: null,
-    sub: { plan: "Free", detail: "No active subscription", price: "", active: false },
-    addons: [],
-    data: { "Task completions": 34, "Quiz attempts": 9, "Quiz-Section completions": 15, "Hands-On Task submissions": 4, Certifications: 2, Skills: 3, Awards: 1, "Path entries": 1 },
-  },
-  {
-    id: "U-5582",
-    name: "Tanya Okafor",
-    email: "tanya.o@gmail.com",
-    phone: "+1 (312) 555-0173",
-    created: "Feb 2, 2022",
-    initials: "TO",
-    color: "#c678dd",
-    login: "Email + Password",
-    role: "Self-Learner",
-    subscription: "Subscriber",
-    company: null,
-    sub: { plan: "Pro · Monthly", detail: "Active · renews monthly", price: "$24/mo", active: true, cycle: "Monthly", platform: "Stripe", renewsOn: renewalFor("Monthly", 140) },
-    addons: [{ id: "epa608u", name: "EPA 608 Universal Certification", type: "Certification", price: "$79" }],
-    data: { "Task completions": 201, "Quiz attempts": 52, "Quiz-Section completions": 88, "Hands-On Task submissions": 31, Certifications: 13, Skills: 18, Awards: 9, "Path entries": 4 },
-  },
-  {
-    id: "U-6014",
-    name: "Devon Brooks",
-    email: "devon.brooks@yahoo.com",
-    phone: "+1 (646) 555-0150",
-    created: "Nov 23, 2023",
-    initials: "DB",
-    color: "#e0a458",
-    login: "Google SSO",
-    role: "Self-Learner",
-    subscription: "Starter",
-    company: null,
-    sub: { plan: "Free", detail: "No active subscription", price: "", active: false },
-    addons: [],
-    data: { "Task completions": 12, "Quiz attempts": 3, "Quiz-Section completions": 6, "Hands-On Task submissions": 1, Certifications: 1, Skills: 2, Awards: 0, "Path entries": 1 },
-  },
-  {
-    id: "U-2298",
-    name: "Priya Nair",
-    email: "priya.nair@acmehvac.com",
-    phone: "+1 (415) 555-0190",
-    created: "May 9, 2024",
-    initials: "PN",
-    color: "#56c2c2",
-    login: "Email + Password",
-    role: "Manager",
-    subscription: "Subscriber",
-    company: "Acme HVAC Co.",
-    sub: { plan: "Team seat", detail: "Active · managed by Acme HVAC Co.", price: "Company-billed", active: true },
-    data: { "Task completions": 78, "Quiz attempts": 19, "Quiz-Section completions": 30, "Hands-On Task submissions": 12, Certifications: 5, Skills: 8, Awards: 3, "Path entries": 2 },
-    addons: [],
-  },
-];
+/* The demo accounts' own sign-in and record counts, as the merge happy path
+   was written against them. Everyone else's are derived (see below). */
+const FIXTURES: Record<string, { login: string; data: Record<string, number> }> = {
+  "U-4821": { login: "Google SSO", data: { "Task completions": 142, "Quiz attempts": 38, "Quiz-Section completions": 64, "Hands-On Task submissions": 21, Certifications: 9, Skills: 12, Awards: 5, "Path entries": 3 } },
+  "U-7193": { login: "Email + Password", data: { "Task completions": 57, "Quiz attempts": 14, "Quiz-Section completions": 22, "Hands-On Task submissions": 9, Certifications: 4, Skills: 6, Awards: 2, "Path entries": 1 } },
+  "U-3360": { login: "Apple SSO", data: { "Task completions": 34, "Quiz attempts": 9, "Quiz-Section completions": 15, "Hands-On Task submissions": 4, Certifications: 2, Skills: 3, Awards: 1, "Path entries": 1 } },
+  "U-5582": { login: "Email + Password", data: { "Task completions": 201, "Quiz attempts": 52, "Quiz-Section completions": 88, "Hands-On Task submissions": 31, Certifications: 13, Skills: 18, Awards: 9, "Path entries": 4 } },
+  "U-6014": { login: "Google SSO", data: { "Task completions": 12, "Quiz attempts": 3, "Quiz-Section completions": 6, "Hands-On Task submissions": 1, Certifications: 1, Skills: 2, Awards: 0, "Path entries": 1 } },
+  "U-2298": { login: "Email + Password", data: { "Task completions": 78, "Quiz attempts": 19, "Quiz-Section completions": 30, "Hands-On Task submissions": 12, Certifications: 5, Skills: 8, Awards: 3, "Path entries": 2 } },
+};
 
-/* ── The rest of the pool ──
-   The six accounts above are hand-authored because the demo leans on them (the
-   duplicate "Marcus Rivera" pair, one of them B2B, drives the happy path and
-   the B2B-must-be-kept guard). The Select Users picker needs a real table's
-   worth of rows behind its User Type / Subscription / Company / Role filters,
-   though, so the remaining accounts are lifted from the Manage Users pool and
-   given merge fixtures deterministically — same person, same facets, no second
-   list of names to keep in sync. */
-
-/** A renewal inside the plan's current cycle, counted from today so it never
- *  reads as already past. */
-function renewalFor(cycle: "Monthly" | "Annual", k: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + 1 + ((k >>> 3) % (cycle === "Monthly" ? 30 : 360)));
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
+/* ── Everyone else ──
+   Accounts outside the fixtures get their sign-in method and record counts
+   deterministically from their id — same person, same facets as on Users, no
+   second list of names to keep in sync. */
 
 function mhash(s: string): number {
   let h = 2166136261;
@@ -261,43 +165,36 @@ function initialsOf(name: string): string {
     .toUpperCase();
 }
 
-/** The plan a Manage-Users subscription status means in billing terms. B2B
- *  Subscribers sit on a company-billed seat rather than their own plan. */
-function planFor(
-  status: SubscriptionStatus,
-  company: string | null,
-  k: number,
-  platform = "Stripe",
-  cancelsOn?: string,
-  cycle: "Monthly" | "Annual" = "Monthly",
-): MergeSub {
-  const term = cancelsOn ? { cancelsOn } : { renewsOn: renewalFor(cycle, k) };
-  switch (status) {
-    case "Subscriber":
-      return company
-        ? { plan: "Team seat", detail: `Active · managed by ${company}`, price: "Company-billed", active: true }
-        : cycle === "Annual"
-        ? { plan: "Pro · Annual", detail: "Active · renews annually", price: "$199/yr", active: true, cycle, platform, ...term }
-        : { plan: "Pro · Monthly", detail: "Active · renews monthly", price: "$24/mo", active: true, cycle, platform, ...term };
+/** The plan a user's subscription means in billing terms — the same plan,
+ *  price and dates the Users pill and the Full Profile show. */
+function planFor(u: User): MergeSub {
+  switch (u.subscriptionStatus) {
+    case "Subscriber": {
+      const cycle = u.cycle ?? "Monthly";
+      const term = u.cancelsOn ? { cancelsOn: u.cancelsOn } : { renewsOn: u.renewsOn };
+      return {
+        plan: `Pro · ${cycle}`,
+        detail: u.cancelsOn ? "Cancelling · runs to the end of the period" : `Active · renews ${cycle === "Annual" ? "annually" : "monthly"}`,
+        price: planPriceLabel(cycle),
+        active: true,
+        cycle,
+        platform: u.platform ?? "Stripe",
+        ...term,
+      };
+    }
     case "Free Trial":
-      return { plan: "Free trial", detail: `Trial · ${3 + (k % 11)} days left`, price: "", active: false };
+      return { plan: "Free Trial", detail: "Trial", price: "", active: false };
     case "Scholarship":
-      return { plan: "Scholarship", detail: "Active · sponsored seat", price: "$0", active: true };
+      return { plan: "Scholarship", detail: "Active · sponsored", price: "$0", active: true };
     case "Company Plan":
-      return { plan: "Team seat", detail: `Active · billed to ${company ?? "the company"}`, price: "Company-billed", active: true };
+      return { plan: "Company Plan", detail: `Active · billed to ${u.companyName ?? "the company"}`, price: "Company-billed", active: true };
     case "Cancelled":
       return { plan: "Cancelled", detail: "Subscription ended", price: "", active: false };
     case "Starter":
-      return { plan: "Free", detail: "No active subscription", price: "", active: false };
+      return { plan: "Starter", detail: "No active subscription", price: "", active: false };
   }
 }
 
-const ADDON_POOL: MergeAddon[] = [
-  { id: "epa608t1", name: "EPA 608 Type I Certification", type: "Certification", price: "$49" },
-  { id: "epa608u", name: "EPA 608 Universal Certification", type: "Certification", price: "$79" },
-  { id: "natertw", name: "NATE RTW Certification", type: "Certification", price: "$59" },
-  { id: "quizpack", name: "12 Quiz Attempts Pack", type: "Quiz attempts", price: "$19" },
-];
 
 /** Completion counts scaled off one seed, so a heavy account is heavy in every
  *  record type rather than random per row. */
@@ -318,9 +215,22 @@ function recordsFor(k: number): Record<string, number> {
   return out;
 }
 
-const derivedUsers: MergeUser[] = users.map((u) => {
+/** An account's own record counts — the fixture's, or derived. */
+function ownRecords(u: User): Record<string, number> {
+  return FIXTURES[u.id]?.data ?? recordsFor(mhash(u.id));
+}
+
+/** The account as the Merge / Transfer flows see it, read off the live user.
+ *  An account others were merged into counts their records as its own. */
+export function mergeUserOf(u: User): MergeUser {
   const k = mhash(u.id);
   const company = u.companyName ?? null;
+  const data = { ...ownRecords(u) };
+  for (const id of mergedInto(u.id)) {
+    const s = findAnyUser(id);
+    if (!s) continue;
+    for (const [key, n] of Object.entries(ownRecords(s))) data[key] = (data[key] ?? 0) + n;
+  }
   return {
     id: u.id,
     name: u.name,
@@ -329,18 +239,30 @@ const derivedUsers: MergeUser[] = users.map((u) => {
     created: formatShortDate(u.joinedOn),
     initials: initialsOf(u.name),
     color: AVATAR_COLORS[k % AVATAR_COLORS.length],
-    login: loginFor(u.email, u.phone, company, k),
+    login: FIXTURES[u.id]?.login ?? loginFor(u.email, u.phone, company, k),
     company,
     role: u.role,
     subscription: u.subscriptionStatus,
-    sub: planFor(u.subscriptionStatus, company, k, u.platform, u.cancelsOn, u.cycle),
-    // Most accounts carry no one-time purchases; a deterministic third do.
-    addons: k % 3 === 0 ? [ADDON_POOL[k % ADDON_POOL.length]] : [],
-    data: recordsFor(k),
+    sub: planFor(u),
+    addons: mergeablePurchases(u).map((p) => ({
+      id: p.key,
+      name: p.item,
+      type: p.kind as MergeAddon["type"],
+      price: `$${p.amount}`,
+    })),
+    data,
   };
-});
+}
 
-export const mergeUsers: MergeUser[] = [...baseMergeUsers, ...derivedUsers];
+/** Every account on the live roster. */
+export function getMergeUsers(): MergeUser[] {
+  return getUsers().map(mergeUserOf);
+}
+
+export function findMergeUser(id: string | null): MergeUser | null {
+  const u = id ? getUsers().find((x) => x.id === id) : undefined;
+  return u ? mergeUserOf(u) : null;
+}
 
 /* The hand-authored head of each category — real-sounding records that lead the
  * list when a category is expanded. Everything past them is generated (see

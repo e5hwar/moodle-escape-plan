@@ -2,11 +2,13 @@ import { Dropdown } from "./Dropdown";
 import { PillTrigger, summarize, SectionedMultiSelect, CascadingMultiSelect, EditColumnsButton } from "./Filters";
 import { DateRangePill, type DateRangeState } from "./DateRangeFilter";
 import { FILTER_TIPS } from "../data/filterTips";
+import { useB2BConfig } from "../data/productConfig";
 import {
   TIERS,
   SUBSCRIPTION_STATUSES,
-  INDUSTRY_FILTER_OPTIONS,
-  PARTNERSHIP_FILTER_OPTIONS,
+  industryFilterOptions,
+  partnershipFilterOptions,
+  UNASSIGNED,
   COMPANY_OPTIONAL_COLUMNS,
   COMPANY_FIXED_COLUMNS,
   SIGN_UP_CHANNELS,
@@ -195,7 +197,9 @@ function IndustryPill({
   value: string[];
   onApply: (v: string[]) => void;
 }) {
-  const summary = summarize(value, INDUSTRY_FILTER_OPTIONS);
+  // Product Config's Trade list, live — a Trade added there is offered here.
+  const options = industryFilterOptions(useB2BConfig().trades);
+  const summary = summarize(value, options);
   return (
     <Dropdown
       width={260}
@@ -212,7 +216,7 @@ function IndustryPill({
     >
       {({ close }) => (
         <SectionedMultiSelect
-          sections={[{ items: INDUSTRY_FILTER_OPTIONS }]}
+          sections={[{ items: options }]}
           value={value}
           onApply={(v) => {
             onApply(v);
@@ -233,7 +237,8 @@ function PartnershipPill({
   value: string[];
   onApply: (v: string[]) => void;
 }) {
-  const summary = summarize(value, PARTNERSHIP_FILTER_OPTIONS);
+  const options = partnershipFilterOptions(useB2BConfig().partnerships);
+  const summary = summarize(value, options);
   return (
     <Dropdown
       width={260}
@@ -250,7 +255,7 @@ function PartnershipPill({
     >
       {({ close }) => (
         <SectionedMultiSelect
-          sections={[{ items: PARTNERSHIP_FILTER_OPTIONS }]}
+          sections={[{ items: options }]}
           value={value}
           onApply={(v) => {
             onApply(v);
@@ -318,8 +323,9 @@ function MoreFiltersBody({
         { key: "signUps", label: "Sign-Up Method", groups: [{ items: [...SIGN_UP_CHANNELS] }] },
         { key: "billingCycles", label: "Billing Cycle", groups: [{ items: [...BILLING_CYCLES] }] },
         { key: "paymentMethods", label: "Payment Method", groups: [{ items: [...PAYMENT_COLLECTIONS] }] },
-        { key: "csms", label: "Assigned CSM", groups: [{ items: [...CSM_OPTIONS] }] },
-        { key: "salesReps", label: "Assigned Sales Rep", groups: [{ items: [...SALES_REP_OPTIONS] }] },
+        // The staff lists, plus "Unassigned" for accounts nobody owns yet.
+        { key: "csms", label: "Assigned CSM", groups: [{ items: [UNASSIGNED, ...CSM_OPTIONS] }] },
+        { key: "salesReps", label: "Assigned Sales Rep", groups: [{ items: [UNASSIGNED, ...SALES_REP_OPTIONS] }] },
       ]}
       value={value}
       onApply={(v) =>

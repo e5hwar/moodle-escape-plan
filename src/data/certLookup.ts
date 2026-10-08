@@ -17,20 +17,26 @@
  * fixes the state (complete, pending review, out of attempts…) and a hash of
  * the ids seeds the numbers — stable across renders and identical on every
  * load. Admin actions (mark complete / incomplete, grant an attempt, mark a
- * certification) overlay this baseline via React state.
+ * certification) overlay this baseline, and are kept in completions.ts so they
+ * outlast a visit (see `liveCells`).
  */
 
-import { users, type User } from "./users";
-import { companies as appCompanies, getCompanyUsers } from "./companies";
+import { getUsers } from "./users";
+import { getLiveCompanies } from "./companies";
+import { completionsStore, type CertOverride, type CompletionsState } from "./completions";
 import { certifications as appCerts } from "./certifications";
 import {
   handsOnGrading,
+  quizGradingOf,
+  quizPassPct,
+  taskById,
   tasks as appTasks,
   type HandsOnGrading,
   type Task,
   type TaskType,
 } from "./tasks";
 import { gradeStatus, type Attempt } from "./attempts";
+import { certIndustryText } from "./industries";
 
 /* ───────────────────────── deterministic RNG ───────────────────────── */
 
@@ -53,8 +59,10 @@ function hash(s: string): number {
   return h >>> 0;
 }
 
-/* Fixed "now" so generated timelines are deterministic (app uses fixed dates). */
-const NOW = Date.parse("2026-06-25T12:00:00");
+/* The model's "now" — the real clock, the one the Users roster's dates count
+   from, taken to the minute when the module loads. Generated timelines are
+   offsets from it, so they keep their shape. */
+const NOW = Math.floor(Date.now() / 60000) * 60000;
 const DAY = 86400000;
 
 /* ───────────────────────────── types ───────────────────────────────── */
@@ -76,6 +84,12 @@ export type Cell = {
   /** Who marked the task complete — an instructor for reviewed Hands-On work,
    *  the admin for manual overrides, null when it was earned in-product. */
   markedBy: string | null;
+  /** What a manual completion replaced, so Mark as Incomplete can put it back
+   *  exactly — the earned best grade, never the one typed for the override. */
+  beforeManual?: { grade: number | null; sectionGrades?: number[] };
+  /** A section-level Quiz's per-Section grades, in Section order, when an
+   *  admin marked it complete with them. `grade` is then their average. */
+  sectionGrades?: number[];
 };
 
 export type CertTask = {
@@ -122,9 +136,9 @@ export type Employee = {
 };
 
 export type CellMap = Record<string, Cell>;
-/** Manually awarded certifications, keyed `uid_certId`. `by` is the admin the
- *  card credits — a manual award always names who made it. */
-export type CertManual = Record<string, { at: number; by: string }>;
+/** Manual certification decisions, keyed `uid_certId` (see completions.ts).
+ *  `by` is the admin the card credits — a manual award always names who made it. */
+export type CertManual = Record<string, CertOverride>;
 
 export type CertData = {
   employees: Employee[];
@@ -318,9 +332,9 @@ function genCell(uid: string, task: CertTask, scenario: Scenario): Cell {
      whole score through `formatGrade`. */
   const onScale = (score: number) => Math.round((score / hoScale!.maxScore) * 100);
   const pass = () =>
-    hoScale ? onScale(r(hoScale.passScore, hoScale.maxScore)) : r(QUIZ_PASS_PCT, 100);
+    hoScale ? onScale(r(hoScale.passScore, hoScale.maxScore)) : r(quizPassFor(task), 100);
   const fail = () =>
-    hoScale ? onScale(r(1, hoScale.passScore - 1)) : r(15, QUIZ_PASS_PCT - 5);
+    hoScale ? onScale(r(1, hoScale.passScore - 1)) : r(15, quizPassFor(task) - 5);
 
   const base: Cell = {
     status: "incomplete",
@@ -419,46 +433,33 @@ function lastActiveTs(dayTs: number, seed: string): number {
   return Math.min(at, NOW - 5 * 60000);
 }
 
-/** The company roster carries last-active as a label ("12d ago", or "—" for an
- *  invite nobody has accepted). Read it back onto the same fixed clock the
- *  rest of this model runs on, so both rosters sort against each other. */
-function companyLastActive(label: string, seed: string): number {
-  const m = /^(\d+)d ago$/.exec(label);
-  return m ? lastActiveTs(NOW - Number(m[1]) * DAY, seed) : 0;
+/* Building the model generates a cell for every person × task (~165k with the
+   whole roster), so it is built once per roster and company list and shared by
+   every caller — Manage Completions, the deep links, Award counts. Callers
+   only read it; applied changes live in completions.ts (`liveCells`). */
+let built: { users: unknown; companies: unknown; data: CertData } | null = null;
+export function buildData(): CertData {
+  const users = getUsers();
+  const companies = getLiveCompanies();
+  if (built && built.users === users && built.companies === companies) return built.data;
+  built = { users, companies, data: computeData() };
+  return built.data;
 }
 
-export function buildData(): CertData {
-  // Employees from the Users list…
-  const employees: Employee[] = (users as User[]).map((u) => ({
+function computeData(): CertData {
+  /* Employees: the live Users roster, which lists every company's own
+     roster beside the hand-authored learners — so a company opened from the
+     Companies page resolves to a cohort with people in it. */
+  const employees: Employee[] = getUsers().map((u) => ({
     id: u.id,
     name: u.name,
     initials: initialsOf(u.name),
     contact: u.email,
-    phone: u.phone,
+    phone: u.phone || synthPhone(u.id),
     cohort: u.companyName ?? null,
     isB2B: u.userType === "B2B",
-    lastActiveAt: lastActiveTs(Date.parse(`${u.lastAccess}T00:00:00`), u.id),
+    lastActiveAt: u.lastAccess ? lastActiveTs(Date.parse(`${u.lastAccess}T00:00:00`), u.id) : 0,
   }));
-
-  /* …plus each company's own roster. Company employees are generated and live
-     outside the Manage Users list (see getCompanyUsers), but a company opened
-     from the Companies page must resolve to a cohort with people in it —
-     only 11 of the 28 companies have anyone in the Manage Users roster. Their
-     "U-9…" ids are outside the users.ts range, so the two never collide. */
-  appCompanies.forEach((c) => {
-    getCompanyUsers(c).forEach((u) => {
-      employees.push({
-        id: u.id,
-        name: u.name,
-        initials: initialsOf(u.name),
-        contact: u.email,
-        phone: synthPhone(u.id),
-        cohort: c.name,
-        isB2B: true,
-        lastActiveAt: companyLastActive(u.lastActive, u.id),
-      });
-    });
-  });
 
   const employeesById: Record<string, Employee> = {};
   employees.forEach((e) => (employeesById[e.id] = e));
@@ -466,7 +467,7 @@ export function buildData(): CertData {
   // Cohorts = one per company, ordered by name. Every company on the
   // Companies page gets an entry, even when only one roster feeds it.
   const cohortMap = new Map<string, string[]>();
-  appCompanies.forEach((c) => cohortMap.set(c.name, []));
+  getLiveCompanies().forEach((c) => cohortMap.set(c.name, []));
   employees.forEach((e) => {
     if (!e.cohort) return;
     if (!cohortMap.has(e.cohort)) cohortMap.set(e.cohort, []);
@@ -491,7 +492,7 @@ export function buildData(): CertData {
     certifications.push({
       id: c.id,
       name: c.name,
-      industry: c.industry,
+      industry: certIndustryText(c.industries),
       taskIds: planned.map((p) => p.task.id),
     });
     planned.forEach(({ task: t, scenario }) => {
@@ -604,11 +605,17 @@ export function progress(
   let manual = false;
   let certBy: string | null = null;
   const ov = certManual[uid + "_" + certId];
-  if (ov) {
+  if (ov?.state === "complete") {
     certified = true;
     manual = true;
     certAt = ov.at;
     certBy = ov.by;
+  } else if (ov?.state === "incomplete" && last <= ov.at) {
+    /* Withdrawn by an admin: it stays Incomplete until the person meets the
+       criteria again — every task complete, at least one of them AFTER the
+       withdrawal. */
+    certified = false;
+    certAt = null;
   }
   return {
     c,
@@ -754,12 +761,13 @@ export function attemptsForTask(
         : Math.max(35, Math.min(100, Math.round(30 + rng() * 55)));
     out.push({
       id: uid + "_" + task.id + "_" + i,
+      taskId: task.id,
       name: employeeName,
       email: employeeEmail,
       phone,
       quizName: task.name,
       attemptNumber: i,
-      status: gradeStatus(grade),
+      status: gradeStatus(grade, taskById(task.id)),
       startedAt: fmtDT(startedAtTs),
       completedAt: fmtDT(completedAtTs),
       grade,
@@ -805,9 +813,40 @@ export function tracksAttempts(t: CertTask): boolean {
   return t.type === "Quiz" || t.type === "Hands-On Task";
 }
 
-/** A quiz's pass mark. Quizzes are all graded on the same percentage scale;
- *  only Hands-On tasks carry their own (see {@link HandsOnGrading}). */
+/** The pass mark for a Quiz outside the library. Library Quizzes carry their
+ *  own mark and grading model — see {@link quizPassFor}. */
 export const QUIZ_PASS_PCT = 70;
+
+/** A Quiz's own pass mark, as one overall percentage: its Quiz-level mark, or
+ *  — graded Section by Section — the mark that clears every Section that
+ *  decides it (data/tasks `quizPassPct`). Read from the live library, so an
+ *  edited pass mark applies here at once. */
+export function quizPassFor(t: Pick<CertTask, "id">): number {
+  const lib = taskById(t.id);
+  return lib ? quizPassPct(lib) : QUIZ_PASS_PCT;
+}
+
+/** A Quiz graded Section by Section: each Section's name and pass mark, and
+ *  whether it decides the pass — the Must Pass ones, or every Section when
+ *  none is marked. null for any other task, which takes one overall grade. */
+export function sectionMarks(
+  t: Pick<CertTask, "id" | "type">,
+): { name: string; pass: number; decides: boolean }[] | null {
+  if (t.type !== "Quiz") return null;
+  const lib = taskById(t.id);
+  if (!lib?.quizSections?.length || quizGradingOf(lib).model !== "section_level") return null;
+  const anyMust = lib.quizSections.some((s) => s.requiredToPass);
+  return lib.quizSections.map((s) => ({
+    name: s.name,
+    pass: s.passingPct,
+    decides: !anyMust || s.requiredToPass,
+  }));
+}
+
+/** xAPI Tasks whose package reports a score the Task keeps. */
+function capturesScore(t: Pick<CertTask, "id" | "type">): boolean {
+  return t.type === "xAPI" && !!taskById(t.id)?.scoreCapture;
+}
 
 /** Grades are STORED as a 0–100 percentage whatever the task type, so one
  *  field serves a quiz's 72% and a Hands-On task's 18-out-of-25. These two
@@ -819,7 +858,7 @@ export const QUIZ_PASS_PCT = 70;
  *  Resource task. */
 export function formatGrade(t: CertTask, grade: number | null): string {
   if (grade == null) return "";
-  if (t.type === "Quiz") return `${grade}%`;
+  if (t.type === "Quiz" || capturesScore(t)) return `${grade}%`;
   if (t.type === "Hands-On Task") {
     const g = t.handsOn;
     if (!g?.graded) return "";
@@ -837,7 +876,7 @@ export function gradePasses(t: CertTask, grade: number | null): boolean {
   if (grade == null) return false;
   const g = t.handsOn;
   if (g?.graded) return Math.round((grade / 100) * g.maxScore) >= g.passScore;
-  return grade >= QUIZ_PASS_PCT;
+  return grade >= quizPassFor(t);
 }
 
 /** The pass mark, phrased for a tooltip — "Passes at 7 out of 10". Empty when
@@ -845,7 +884,7 @@ export function gradePasses(t: CertTask, grade: number | null): boolean {
 export function passMarkLabel(t: CertTask): string {
   const g = t.handsOn;
   if (g) return g.graded ? `Passes at ${g.passScore} out of ${g.maxScore}.` : "";
-  if (t.type === "Quiz") return `Passes at ${QUIZ_PASS_PCT}%.`;
+  if (t.type === "Quiz") return `Passes at ${quizPassFor(t)}%.`;
   return "";
 }
 
@@ -855,6 +894,7 @@ export const TYPE_SHORT: Record<TaskType, string> = {
   Quiz: "Quiz",
   "Hands-On Task": "Hands-On",
   Resource: "Resource",
+  "ID Upload": "ID Upload",
 };
 export function fmtDT(ts: number | null): string {
   if (!ts) return "";
@@ -1016,9 +1056,12 @@ export function buildDetail(
 }
 
 /** Only graded tasks ask for a grade when marked complete by hand — every
- *  Quiz, and the Hands-On tasks a reviewer actually scores. */
+ *  Quiz, the Hands-On tasks a reviewer actually scores, and xAPI tasks with
+ *  Score Capture on. One overall grade either way: a sectioned Quiz is never
+ *  completed Section by Section here. */
 export function needsGradePrompt(task: CertTask): boolean {
   if (task.type === "Quiz") return true;
+  if (capturesScore(task)) return true;
   return !!task.handsOn?.graded;
 }
 
@@ -1029,9 +1072,12 @@ export function gradeScale(task: CertTask): number {
 }
 
 /** The lowest grade, on {@link gradeScale}, that passes this task: the
- *  Hands-On task's own pass score, or the Quiz pass percentage. */
+ *  Hands-On task's own pass score, the Quiz's own pass mark — or, for an xAPI
+ *  score, nothing: any reported score completes it. */
 export function passMark(task: CertTask): number {
-  return task.handsOn?.graded ? task.handsOn.passScore : QUIZ_PASS_PCT;
+  if (task.handsOn?.graded) return task.handsOn.passScore;
+  if (task.type === "xAPI") return 0;
+  return quizPassFor(task);
 }
 
 /* ──────────────────── mutations (return new state) ───────────────────── */
@@ -1039,14 +1085,21 @@ export function passMark(task: CertTask): number {
 /** The admin every manual change is logged as, and the fixed-clock stamp the
  *  audit line shows (the app runs on the deterministic NOW above). */
 export const ADMIN_ACTOR = "A. Rivera (CS)";
-export const ADMIN_STAMP = fmtDT(NOW);
+export function adminStamp(): string {
+  return fmtDT(Date.now());
+}
 
+/** Marks a task complete by hand. Only the completion is recorded — no
+ *  attempt, time or submission is invented, so nothing counts against an
+ *  attempt limit. A typed grade (optional) is recorded on the task's
+ *  percentage scale; left blank, the user's existing best grade stands. */
 export function applyMarkComplete(
   cells: CellMap,
   uid: string,
   tid: string,
   grade: number | null,
   markedBy: string | null = null,
+  sectionGrades?: number[],
 ): CellMap {
   const key = uid + "_" + tid;
   const c = cells[key];
@@ -1054,24 +1107,22 @@ export function applyMarkComplete(
   const next: Cell = {
     ...c,
     status: "complete",
-    startedAt: c.startedAt ?? c.assignedAt + DAY,
-    submittedAt: c.submittedAt ?? NOW - 3600000,
-    completedAt: NOW,
+    completedAt: stampNow(),
     manual: true,
     markedBy: markedBy ?? c.markedBy,
-    attempts: c.attempts || 1,
-    timeSpent: c.timeSpent || 30,
     grade:
       grade != null && !Number.isNaN(grade)
         ? Math.max(0, Math.min(100, Math.round(grade)))
-        : null,
+        : c.grade,
+    beforeManual: { grade: c.grade, sectionGrades: c.sectionGrades },
+    sectionGrades,
   };
   return { ...cells, [key]: next };
 }
 
-/** Reopens a completed task — the reverse of applyMarkComplete. The earned
- *  record (attempts, time, quiz grade) stays; only the completion goes, so a
- *  quiz's attempt history still reads the same afterwards. */
+/** Reopens a completed task — the reverse of applyMarkComplete. What the
+ *  learner earned (attempts, time, their own best grade) stays; a manual
+ *  completion leaves nothing behind, its typed grade included. */
 export function applyMarkIncomplete(
   cells: CellMap,
   uid: string,
@@ -1086,8 +1137,10 @@ export function applyMarkIncomplete(
     completedAt: null,
     manual: false,
     markedBy: null,
-    grade: c.attempts > 0 ? c.grade : null,
+    grade: c.beforeManual ? c.beforeManual.grade : c.attempts > 0 ? c.grade : null,
+    sectionGrades: c.beforeManual?.sectionGrades,
   };
+  delete next.beforeManual;
   return { ...cells, [key]: next };
 }
 
@@ -1106,23 +1159,54 @@ export function applyGrantAttempt(
   };
 }
 
+/** A stamp for a change applied now — the real time, and strictly after the
+ *  previous one, so a withdrawal and a completion in the same minute still
+ *  order (see `progress`). */
+let lastStamp = 0;
+function stampNow(): number {
+  lastStamp = Math.max(Date.now(), lastStamp + 1);
+  return lastStamp;
+}
+
 export function applyMarkCert(
   certManual: CertManual,
   uid: string,
   certId: string,
+  certName: string,
   by: string = ADMIN_ACTOR,
 ): CertManual {
-  return { ...certManual, [uid + "_" + certId]: { at: NOW, by } };
+  return { ...certManual, [uid + "_" + certId]: { state: "complete", at: stampNow(), by, certName, on: todayIsoLocal() } };
 }
 
+/** Withdraws a Certification: recorded as its own override, so an earned one
+ *  stays Incomplete until the criteria are met again (see `progress`). */
 export function applyClearCert(
   certManual: CertManual,
   uid: string,
   certId: string,
+  certName: string,
+  by: string = ADMIN_ACTOR,
 ): CertManual {
-  const next = { ...certManual };
-  delete next[uid + "_" + certId];
-  return next;
+  return { ...certManual, [uid + "_" + certId]: { state: "incomplete", at: stampNow(), by, certName, on: todayIsoLocal() } };
+}
+
+function todayIsoLocal(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** The task cells as an admin last left them: the seeded model with every
+ *  applied change laid over it. */
+export function liveCells(data: CertData, state: CompletionsState = completionsStore.get()): CellMap {
+  return Object.keys(state.cells).length ? { ...data.cells, ...state.cells } : data.cells;
+}
+
+/** Saves applied changes: the cells that differ from the seed, and the
+ *  certification overrides. */
+export function saveCompletions(data: CertData, cells: CellMap, certs: CertManual): void {
+  const changed: CellMap = {};
+  for (const [k, c] of Object.entries(cells)) if (c !== data.cells[k]) changed[k] = c;
+  completionsStore.set({ cells: changed, certs });
 }
 
 /* ──────────────── Proctoring exam ⇄ quiz attempt ────────────────

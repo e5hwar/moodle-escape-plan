@@ -137,6 +137,7 @@ const prefersReducedMotion = () =>
 
 export function FullscreenViewer({
   initialRotation = 0,
+  viewKey,
   controls = true,
   hint,
   onPrev,
@@ -145,6 +146,10 @@ export function FullscreenViewer({
   children,
 }: {
   initialRotation?: number;
+  /** Identifies the image on show when stepping through a set. A new key
+   *  starts that image fresh — `initialRotation`, at the fit, centred — rather
+   *  than inheriting the last one's rotation and zoom. */
+  viewKey?: string | number;
   /** Zoom, rotate and pan. Off leaves a plain lightbox — see the note above. */
   controls?: boolean;
   /** Replaces the default hint line, for a viewer whose gestures differ. */
@@ -164,6 +169,13 @@ export function FullscreenViewer({
      spin the content the long way round. Callers apply it as `rotate(Ndeg)`,
      which is happy with 450, and reduce it themselves where they need to. */
   const [rotation, setRotation] = useState(initialRotation);
+  /* Reset during render, not in an effect, so the new image's first paint is
+     already upright — an effect would paint it at the old angle first. */
+  const [shownKey, setShownKey] = useState(viewKey);
+  if (shownKey !== viewKey) {
+    setShownKey(viewKey);
+    setRotation(initialRotation);
+  }
   const stageRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   /** The content's size at zoom 1 — the basis for how far it may be panned. */
@@ -339,6 +351,13 @@ export function FullscreenViewer({
 
   /* ── Measurement ── */
 
+  /* A new image in the set is fitted afresh: the measure below re-runs on the
+     key and, with this cleared, jumps to the new fit at the centre. Declared
+     first so it runs first in the same commit. */
+  useLayoutEffect(() => {
+    fittedRef.current = false;
+  }, [viewKey]);
+
   useLayoutEffect(() => {
     const el = stageRef.current;
     if (!el) return;
@@ -398,7 +417,7 @@ export function FullscreenViewer({
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [rotation, controls, jumpTo, zoomTo]);
+  }, [rotation, viewKey, controls, jumpTo, zoomTo]);
 
   /* A narrower window shrinks the stage, which can leave an existing pan past
      the new limit — pull it back in. */
@@ -428,19 +447,28 @@ export function FullscreenViewer({
   }, [onClose]);
 
   /* The overlay owns the keyboard while it's open — the console's own handler
-     early-returns for as long as it is — so R is free here for Rotate. */
+     early-returns for as long as it is — so R is free here for Rotate.
+     Window CAPTURE, and Escape goes no further (as in PrmModal): opened from
+     inside a modal, the page's own Escape handler would otherwise run first
+     and close the modal under the viewer, taking its unsaved input with it. */
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") requestClose();
-      else if (e.key === "ArrowLeft" && onPrev) { e.preventDefault(); onPrev(); }
+      if (e.key === "Escape") {
+        e.stopImmediatePropagation();
+        requestClose();
+        return;
+      }
+      // A held modifier is the browser's (⌘R reloads, ⌘± zooms the page).
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "ArrowLeft" && onPrev) { e.preventDefault(); onPrev(); }
       else if (e.key === "ArrowRight" && onNext) { e.preventDefault(); onNext(); }
       else if (controls && (e.key === "r" || e.key === "R")) rotate();
       else if (controls && (e.key === "+" || e.key === "=")) zoomTo(targetRef.current.zoom * ZOOM_STEP);
       else if (controls && (e.key === "-" || e.key === "_")) zoomTo(targetRef.current.zoom / ZOOM_STEP);
       else if (controls && e.key === "0") zoomTo(fitRef.current);
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
   }, [requestClose, controls, zoomTo, onPrev, onNext]);
 
   /* ── Gestures ── */

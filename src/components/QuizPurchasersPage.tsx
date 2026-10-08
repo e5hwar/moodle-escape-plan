@@ -8,12 +8,13 @@ import {
 } from "../data/users";
 import {
   buildAllQuizPurchases,
-  buildGrantedAttempt,
-  nextAttemptNumber,
+  priceTier,
+  PURCHASE_PLATFORMS,
   type QuizPurchase,
 } from "../data/quizPurchases";
+import { attemptsTaken, grantAttempts, revokePurchase, useAttemptStore } from "../data/attempts";
 import { todayIso, CURRENT_ADMIN } from "../data/certPurchases";
-import { tasks as allTasks, isPaid, type Task } from "../data/tasks";
+import { isPaid, taskById, useLiveTasks, type Task } from "../data/tasks";
 import {
   UsersFilters,
   UsersEditColumns,
@@ -48,10 +49,15 @@ type QuizColumnKey =
   | "grantDate"
   | "attemptStatus"
   | "score"
-  | "result";
+  | "result"
+  | "purchaser"
+  | "platform"
+  | "refunded";
 
 /** Access-type filter options for paid vs. admin-comped attempts. */
 const ACCESS_OPTIONS = ["Free", "Paid"];
+/** Refunded filter options. */
+const REFUND_OPTIONS = ["Refunded", "Not Refunded"];
 
 type QuizColumnState = Record<QuizColumnKey, boolean>;
 
@@ -68,6 +74,9 @@ const DEFAULT_COLUMNS: QuizColumnState = {
   attemptStatus: true,
   score: true,
   result: true,
+  purchaser: true,
+  platform: true,
+  refunded: true,
   userType: false,
   company: false,
   role: false,
@@ -137,19 +146,31 @@ const COLS: ColMeta[] = [
   { key: "email", label: "Email", copyable: true, className: "col-u-email", width: 190, render: ({ u }) => u.email, sortValue: ({ u }) => u.email.toLowerCase() },
   { key: "phone", label: "Phone", copyable: true, className: "col-u-phone", width: 165, render: ({ u }) => u.phone, sortValue: ({ u }) => u.phone },
   { key: "quizName", label: "Quiz Name", className: "col-qp-quiz", width: 230, tip: ({ p }) => p.quizName, render: ({ p }) => p.quizName, sortValue: ({ p }) => p.quizName.toLowerCase() },
-  { key: "attemptNumber", label: "Attempt", className: "col-qp-attempt", width: 120, render: ({ p }) => `#${p.attemptNumber}`, sortValue: ({ p }) => p.attemptNumber },
+  /* The tip says which price in the Quiz's matrix the attempt was charged at —
+     every attempt on a paid Quiz is bought, from #1 on. */
+  { key: "attemptNumber", label: "Attempt", className: "col-qp-attempt", width: 120, tip: ({ p }) => (p.granted ? undefined : priceTierOf(p)), render: ({ p }) => `#${p.attemptNumber}`, sortValue: ({ p }) => p.attemptNumber },
   { key: "access", label: "Access", className: "col-cp-access", width: 110, tip: ({ p }) => (p.granted ? `Free attempt granted by ${p.grantedBy ?? "an admin"}` : undefined), render: ({ p }) => (p.granted ? "Free" : "Paid"), sortValue: ({ p }) => (p.granted ? 0 : 1) },
   { key: "purchaseDate", label: "Purchase Date", className: "col-u-date", width: 160, render: ({ p }) => formatDate(p.purchaseDate), sortValue: ({ p }) => p.purchaseDate ?? "" },
   { key: "grantDate", label: "Grant Date", className: "col-u-date", width: 145, tip: ({ p }) => (p.grantDate && p.grantedBy ? `Granted by ${p.grantedBy}` : undefined), render: ({ p }) => formatDate(p.grantDate), sortValue: ({ p }) => p.grantDate ?? "" },
   { key: "attemptStatus", label: "Attempt Status", className: "col-qp-status", width: 170, render: ({ p }) => p.status, sortValue: ({ p }) => STATUS_ORDER[p.status] },
   { key: "score", label: "Score", className: "col-qp-score", width: 100, render: ({ p }) => (p.score == null ? "" : `${p.score}%`), sortValue: ({ p }) => (p.score ?? -1) },
   { key: "result", label: "Result", className: "col-qp-result", width: 110, render: ({ p }) => (p.passed == null ? "" : p.passed ? "Pass" : "Fail"), sortValue: ({ p }) => (p.passed == null ? -1 : p.passed ? 1 : 0) },
+  /* "Self" when the learner bought it, else the company that did. A comped
+     attempt has no purchaser, platform or refund — the cells dash. */
+  { key: "purchaser", label: "Purchaser", className: "col-u-company", width: 190, tip: ({ p }) => p.purchaser ?? undefined, render: ({ p }) => p.purchaser ?? "", sortValue: ({ p }) => (p.purchaser ?? "").toLowerCase() },
+  { key: "platform", label: "Platform", className: "col-cp-access", width: 120, render: ({ p }) => p.platform ?? "", sortValue: ({ p }) => p.platform ?? "" },
+  { key: "refunded", label: "Refunded", className: "col-u-date", width: 145, render: ({ p }) => formatDate(p.refundedDate), sortValue: ({ p }) => p.refundedDate ?? "" },
   { key: "userType", label: "User Type", className: "col-u-type", width: 120, render: ({ u }) => u.userType, sortValue: ({ u }) => u.userType },
   { key: "company", label: "Company", className: "col-u-company", width: 175, render: ({ u }) => (u.userType === "B2B" && u.companyName ? u.companyName : ""), sortValue: ({ u }) => (u.companyName ?? "").toLowerCase() },
   { key: "role", label: "Role", className: "col-u-role", width: 130, render: ({ u }) => u.role, sortValue: ({ u }) => ROLE_ORDER[u.role] },
   { key: "subscription", label: "Subscription", className: "col-u-sub col-status", width: 240, render: ({ u }) => <SubscriptionPill user={u} />, sortValue: ({ u }) => SUB_ORDER[subscriptionFilterStatus(u)] },
 ];
 const COL_BY_KEY = new Map(COLS.map((c) => [c.key, c]));
+
+function priceTierOf(p: QuizPurchase): string | undefined {
+  const t = taskById(p.taskId);
+  return t ? priceTier(t, p.attemptNumber) : undefined;
+}
 
 // Columns where sorting is not meaningful (free-text, contact info, tags)
 const NON_SORTABLE_KEYS = new Set<QuizColumnKey>(["email", "phone", "company"]);
@@ -176,33 +197,36 @@ export function QuizPurchasersPage({
   const [toast, toastNode] = useToast();
   const userById = useMemo(() => new Map(allUsers.map((u) => [u.id, u])), []);
 
-  /* The Task this page was opened from may sit outside the seeded paid-Quiz
-     set (a Quiz created in this session), so union it in — otherwise the
-     pre-applied Quiz pill would offer no way back to its own value. */
+  /* Every paid Quiz in the live library (a Quiz created this session
+     included), with the Task this page opened from always among them. Keyed by
+     id: a renamed Quiz keeps its rows, under its new name. */
+  const library = useLiveTasks();
+  const self = library.find((t) => t.id === task.id) ?? task;
   const paidQuizzes = useMemo(() => {
-    const seeded = allTasks.filter(isPaid);
-    return seeded.some((t) => t.id === task.id) ? seeded : [task, ...seeded];
-  }, [task]);
+    const paid = library.filter(isPaid);
+    return paid.some((t) => t.id === self.id) ? paid : [self, ...paid];
+  }, [library, self]);
   const quizOptions = useMemo(
     () => [...new Set(paidQuizzes.map((t) => t.name))].sort(),
     [paidQuizzes],
   );
 
-  /* Every paid Quiz's purchasers, pre-filtered to the Task clicked on Tasks —
-     same shape as Quiz Attempts, so the Quiz pill can widen to the rest. */
-  const [purchases, setPurchases] = useState<QuizPurchase[]>(() =>
-    buildAllQuizPurchases(paidQuizzes),
-  );
+  /* Built from the one attempts store Quiz Attempts reads, so the two pages
+     describe the same attempts — a "Completed 84%" row here is an 84% attempt
+     there, and a deleted attempt comes back here unused. */
+  const store = useAttemptStore();
+  const purchases = useMemo(() => buildAllQuizPurchases(paidQuizzes, store), [paidQuizzes, store]);
   const [columns, setColumns] = useState<QuizColumnState>(DEFAULT_COLUMNS);
   // Column display order — reordered by dragging in the Edit Columns menu.
   const [order, setOrder] = useColumnOrder(COLS);
   const [filters, setFilters] = useState<UserFilterState>(EMPTY_FILTERS);
-  const [quizzes, setQuizzes] = useState<string[]>([task.name]);
+  const [quizzes, setQuizzes] = useState<string[]>([self.name]);
   const [accessTypes, setAccessTypes] = useState<string[]>([]);
+  const [platforms, setPlatforms] = useState<string[]>([]);
+  const [refunds, setRefunds] = useState<string[]>([]);
   const [committedQuery, setCommittedQuery] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "purchaseDate", dir: "desc" });
   const [page, setPage] = useState(1);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [granting, setGranting] = useState(false);
   // The row awaiting the Revoke Access confirm, if any.
   const [revoking, setRevoking] = useState<Row | null>(null);
@@ -264,6 +288,8 @@ export function QuizPurchasersPage({
     return rows.filter(({ u, p }) => {
       if (quizzes.length && !quizzes.includes(p.quizName)) return false;
       if (accessTypes.length && !accessTypes.includes(p.granted ? "Free" : "Paid")) return false;
+      if (platforms.length && !(p.platform && platforms.includes(p.platform))) return false;
+      if (refunds.length && !refunds.includes(p.refundedDate ? "Refunded" : "Not Refunded")) return false;
       if (filters.companies.length && !(u.companyName && filters.companies.includes(u.companyName))) return false;
       if (filters.types.length && !filters.types.includes(u.userType)) return false;
       if (filters.subscriptions.length && !filters.subscriptions.includes(subscriptionFilterStatus(u))) return false;
@@ -276,7 +302,7 @@ export function QuizPurchasersPage({
         p.quizName.toLowerCase().includes(q)
       );
     });
-  }, [rows, committedQuery, filters, quizzes, accessTypes]);
+  }, [rows, committedQuery, filters, quizzes, accessTypes, platforms, refunds]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered].sort((a, b) => compareRows(a, b, sort.key));
@@ -287,7 +313,7 @@ export function QuizPurchasersPage({
 
   useEffect(() => {
     setPage(1);
-  }, [committedQuery, filters, quizzes, accessTypes, sort]);
+  }, [committedQuery, filters, quizzes, accessTypes, platforms, refunds, sort]);
 
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
@@ -302,56 +328,27 @@ export function QuizPurchasersPage({
     );
   }
 
-  /* What the picker shows in its Attempts column — live attempts this user
-     already holds on the Quiz being comped, so an admin can see who is out of
-     attempts before granting. Revoked rows don't count. */
-  const attemptCounts = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const p of purchases) {
-      if (p.quizName !== task.name || p.revokedDate) continue;
-      m.set(p.userId, (m.get(p.userId) ?? 0) + 1);
-    }
-    return m;
-  }, [purchases, task.name]);
+  /* What the picker shows in its Attempts column — attempts this user has
+     taken on the Quiz being granted on, from the same store Quiz Attempts
+     reads. */
   const attemptsOf = useCallback(
-    (userId: string) => attemptCounts.get(userId) ?? 0,
-    [attemptCounts],
+    (userId: string) => attemptsTaken(store, self.id, userId),
+    [store, self.id],
   );
 
-  /* One grant can cover any number of users; each gets `count` fresh attempt
-     rows, numbered on from whatever they already have on this Quiz. */
-  function grantAttempts(picked: User[], count: number) {
-    setPurchases((prev) => {
-      const today = todayIso();
-      const additions: QuizPurchase[] = [];
-      for (const user of picked) {
-        let next = nextAttemptNumber(prev, user.id, task.name);
-        for (let i = 0; i < count; i++) {
-          additions.push(
-            buildGrantedAttempt(user.id, task.name, next, today, CURRENT_ADMIN),
-          );
-          next += 1;
-        }
-      }
-      return [...additions, ...prev];
-    });
+  /* One grant can cover any number of users; each gets `count` fresh attempts,
+     numbered on from whatever they already have on this Quiz. */
+  function grantAdditional(picked: User[], count: number) {
+    grantAttempts(self.id, picked.map((u) => u.id), count, todayIso(), CURRENT_ADMIN);
     setGranting(false);
-    toast("Free Attempts Granted");
+    toast("Additional Attempts Granted");
   }
 
   /* A purchased/comped attempt can be revoked only before it's started. The
      confirm is the app's own modal (PrmModal, danger CTA) — a browser
      window.confirm can't be styled and reads as a different product. */
   function revokeAttempt(row: Row) {
-    setPurchases((prev) =>
-      prev.map((p) =>
-        p.userId === row.u.id &&
-        p.quizName === row.p.quizName &&
-        p.attemptNumber === row.p.attemptNumber
-          ? { ...p, revokedDate: todayIso() }
-          : p,
-      ),
-    );
+    revokePurchase(row.p.id, todayIso());
     setRevoking(null);
     toast("Access Revoked");
   }
@@ -375,7 +372,7 @@ export function QuizPurchasersPage({
             <div className="tasks-header-actions">
               <button className="new-task" onClick={() => setGranting(true)}>
                 <AddIcon />
-                Grant Free Attempts
+                Additional Attempts
               </button>
             </div>
           </header>
@@ -409,19 +406,35 @@ export function QuizPurchasersPage({
                   />
                 }
                 extra={
-                  <MultiPill
-                    label="Access"
-                    all={ACCESS_OPTIONS}
-                    value={accessTypes}
-                    onApply={setAccessTypes}
-                    tip={FILTER_TIPS.whoPaid.access}
-                  />
+                  <>
+                    <MultiPill
+                      label="Access"
+                      all={ACCESS_OPTIONS}
+                      value={accessTypes}
+                      onApply={setAccessTypes}
+                      tip={FILTER_TIPS.whoPaid.access}
+                    />
+                    <MultiPill
+                      label="Platform"
+                      all={PURCHASE_PLATFORMS}
+                      value={platforms}
+                      onApply={setPlatforms}
+                    />
+                    <MultiPill
+                      label="Refunded"
+                      all={REFUND_OPTIONS}
+                      value={refunds}
+                      onApply={setRefunds}
+                    />
+                  </>
                 }
                 more={[]}
-                extraActive={quizzes.length > 0 || accessTypes.length > 0}
+                extraActive={quizzes.length > 0 || accessTypes.length > 0 || platforms.length > 0 || refunds.length > 0}
                 onClearExtra={() => {
                   setQuizzes([]);
                   setAccessTypes([]);
+                  setPlatforms([]);
+                  setRefunds([]);
                 }}
               />
 
@@ -454,17 +467,11 @@ export function QuizPurchasersPage({
                     <tbody>
                       {paged.map((row) => (
                         <PurchaserRow
-                          key={`${row.u.id}-${row.p.quizName}-${row.p.attemptNumber}`}
+                          key={row.p.id}
                           row={row}
                           cols={visibleCols}
-                          selected={row.u.id === selectedId}
-                          onClick={() => setSelectedId(row.u.id === selectedId ? null : row.u.id)}
                           onOpenMenu={(rect) => setMenu({ row, rect })}
-                          menuOpen={
-                            menu?.row.p.userId === row.p.userId &&
-                            menu.row.p.quizName === row.p.quizName &&
-                            menu.row.p.attemptNumber === row.p.attemptNumber
-                          }
+                          menuOpen={menu?.row.p.id === row.p.id}
                         />
                       ))}
                     </tbody>
@@ -489,10 +496,10 @@ export function QuizPurchasersPage({
 
       {granting && (
         <GrantAttemptsModal
-          quizName={task.name}
+          quizName={self.name}
           candidates={allUsers}
           attemptsOf={attemptsOf}
-          onGrant={grantAttempts}
+          onGrant={grantAdditional}
           onClose={() => setGranting(false)}
         />
       )}
@@ -541,28 +548,33 @@ export function QuizPurchasersPage({
 function PurchaserRow({
   row,
   cols,
-  selected,
-  onClick,
   onOpenMenu,
   menuOpen,
 }: {
   row: Row;
   cols: ColMeta[];
-  selected: boolean;
-  onClick: () => void;
   onOpenMenu: (rect: DOMRect) => void;
   /** This row's 3-dot menu is open — hold the hover treatment. */
   menuOpen: boolean;
 }) {
   const { u, p } = row;
   return (
-    <tr className={`${selected ? "selected" : ""} ${p.revokedDate ? "task-dim" : ""} ${menuOpen ? "menu-open" : ""}`.trim()} onClick={onClick}>
+    <tr className={`${p.revokedDate ? "task-dim" : ""} ${menuOpen ? "menu-open" : ""}`.trim()}>
       {/* Plain name. "Granted" used to sit here as a badge, but the plain-text
           column convention strips it to bare text, where it read as part of
           the name — and the Access column already says Free vs Paid. Revoked
           keeps its marker: nothing else on the row carries it, and the row
           reads exactly as a Hidden Task (`.task-dim` + grey name flag). */}
-      <td className="col-name" data-tip={p.revokedDate ? `Attempt revoked ${formatDate(p.revokedDate)}` : u.name}>
+      <td
+        className="col-name"
+        data-tip={
+          p.refundedDate
+            ? `Refunded ${formatDate(p.refundedDate)} — the attempt was revoked`
+            : p.revokedDate
+              ? `Attempt revoked ${formatDate(p.revokedDate)}`
+              : u.name
+        }
+      >
         <span className="tsk-name">{u.name}</span>
         {p.revokedDate && <span className="pr-name-flag pr-name-flag--grey">Revoked</span>}
       </td>

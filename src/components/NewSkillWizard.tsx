@@ -5,7 +5,7 @@ import { NoteCard } from "./NoteCard";
 import { leave, useTouchedKeys } from "./fieldFlags";
 import { MultiSelectTags } from "./MultiSelectTags";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
-import { ImagePicker } from "./ImageUploadField";
+import { ImageUploadField, type PickedImage } from "./ImageUploadField";
 import { SelectTasksModal } from "./SelectTasksModal";
 import { SelectSkillsModal } from "./SelectSkillsModal";
 import { RichTextField } from "./RichTextField";
@@ -14,6 +14,10 @@ import { DESCRIPTION_MAX, NAME_MAX, isOver, limitClass, limitLabel } from "../da
 import { draftKey, useLeaveGuard } from "./LeaveGuard";
 import { tasks, type Task } from "../data/tasks";
 import {
+  nextRecordId,
+  qualifyingMasteryHolders,
+  qualifyingSkillHolders,
+  skillDateToday,
   type AwardRule,
   type MasterySkill,
   type Skill,
@@ -85,7 +89,8 @@ type Data = {
   nameEs: string;
   descEn: string;
   descEs: string;
-  image: string;
+  /** Required — a new record opens with none. */
+  image: PickedImage | null;
   status: SkillStatus;
   // Skill criteria
   taskIds: string[];
@@ -115,7 +120,7 @@ function initialData(p: Props): Data {
   }
   return {
     nameEn: "", nameEs: "", descEn: "", descEs: "",
-    image: p.kind === "mastery" ? "🏅" : "🔥",
+    image: null,
     status: "Active", taskIds: [], rule: "all", skillIds: [],
   };
 }
@@ -143,10 +148,11 @@ export function NewSkillWizard(props: Props) {
 
   const nameValid = data.nameEn.trim().length > 0;
   const criteriaValid = isMastery ? data.skillIds.length > 0 : data.taskIds.length > 0;
+  const imageValid = data.image !== null;
   // Soft character limits (data/fieldLimits.ts) block the save while over.
   const nameOver = isOver(NAME_MAX, data.nameEn, data.nameEs);
   const descOver = isOver(DESCRIPTION_MAX, data.descEn, data.descEs);
-  const fieldsValid = nameValid && criteriaValid && !nameOver && !descOver;
+  const fieldsValid = nameValid && criteriaValid && imageValid && !nameOver && !descOver;
   /* Editing with nothing changed: there is nothing to save, so Save Changes
      stays dimmed (and ⌘↵ does nothing) until a field actually differs. */
   const unchanged = isEditing && !dirty;
@@ -159,6 +165,8 @@ export function NewSkillWizard(props: Props) {
   const { touched, touch } = useTouchedKeys();
   const nameMissing = !nameValid && (attempted || touched.has("name"));
   const criteriaMissing = !criteriaValid && (attempted || touched.has("criteria"));
+  // The drop zone has no blur of its own, so only a blocked save flags it.
+  const imageMissing = !imageValid && attempted;
 
   /* ⌘/Ctrl+Enter is the footer's only button, and waits on the same fields. */
   useWizardEnterShortcut(() => {
@@ -167,40 +175,47 @@ export function NewSkillWizard(props: Props) {
   });
 
   function handleSave() {
-    const now = "Apr 28, 2026";
+    const image = data.image;
+    if (!image) return;
+    const now = skillDateToday();
+    /* Anyone who already meets the criteria gets the record on save (the
+       Applies to Existing Users note) — and an edit never takes it away from
+       someone who holds it. */
     if (isMastery) {
       const base = props.editingMastery;
+      const qualifying = qualifyingMasteryHolders(data.skillIds, props.allSkills);
       props.onSaveMastery({
-        id: base?.id ?? `MS-${String(props.allMastery.length + 1).padStart(2, "0")}`,
+        id: base?.id ?? nextRecordId("MS", props.allMastery.map((m) => m.id), 2),
         name: data.nameEn.trim(),
         nameEs: data.nameEs.trim() || undefined,
         description: data.descEn.trim() || undefined,
         descriptionEs: data.descEs.trim() || undefined,
         status: data.status,
-        image: data.image,
+        image,
         skillIds: data.skillIds,
         createdBy: base?.createdBy ?? "SkillCat",
-        holders: base?.holders ?? 0,
+        holders: Math.max(base?.holders ?? 0, qualifying),
         dateCreated: base?.dateCreated ?? now,
         dateModified: now,
       });
     } else {
       const base = props.editingSkill;
+      const qualifying = qualifyingSkillHolders(data.taskIds, data.rule);
       props.onSaveSkill({
-        id: base?.id ?? `SK-${props.allSkills.length + 113}`,
+        id: base?.id ?? nextRecordId("SK", props.allSkills.map((s) => s.id), 3),
         name: data.nameEn.trim(),
         nameEs: data.nameEs.trim() || undefined,
         description: data.descEn.trim() || undefined,
         descriptionEs: data.descEs.trim() || undefined,
         status: data.status,
-        image: data.image,
+        image,
         taskIds: data.taskIds,
         // The control is always on screen now, so the picked rule is always a
         // deliberate choice — no need to normalise a single-Task Skill to
         // "all", which used to silently undo the choice on the next edit.
         rule: data.rule,
         createdBy: base?.createdBy ?? "SkillCat",
-        holders: base?.holders ?? 0,
+        holders: Math.max(base?.holders ?? 0, qualifying),
         dateCreated: base?.dateCreated ?? now,
         dateModified: now,
       });
@@ -219,6 +234,7 @@ export function NewSkillWizard(props: Props) {
         "Fill in every required field to save:",
         ...[
           !nameValid && "• Name",
+          !imageValid && `• ${noun} Icon`,
           !criteriaValid && (isMastery ? "• Linked Skills" : "• Awarding Tasks"),
           nameOver && `• ${limitLabel("Name", NAME_MAX)}`,
           descOver && `• ${limitLabel("Description", DESCRIPTION_MAX)}`,
@@ -249,7 +265,7 @@ export function NewSkillWizard(props: Props) {
                 </div>
                 <p className="tasks-subtitle wizard-desc">{COPY[props.kind].pageSub}</p>
 
-                <DetailsStep data={data} update={update} isMastery={isMastery} nameMissing={nameMissing} touch={touch} />
+                <DetailsStep data={data} update={update} isMastery={isMastery} nameMissing={nameMissing} imageMissing={imageMissing} touch={touch} />
 
                 {isMastery ? (
                   <LinkedSkillsStep data={data} update={update} allSkills={props.allSkills} missing={criteriaMissing} touch={touch} />
@@ -294,6 +310,7 @@ function DetailsStep({
   update,
   isMastery,
   nameMissing = false,
+  imageMissing = false,
 }: {
   touch: (key: string) => void;
   data: Data;
@@ -301,6 +318,8 @@ function DetailsStep({
   isMastery: boolean;
   /** A blocked save found the name empty. */
   nameMissing?: boolean;
+  /** A blocked save found no icon. */
+  imageMissing?: boolean;
 }) {
   const noun = isMastery ? "Mastery Skill" : "Skill";
   const copy = COPY[isMastery ? "mastery" : "skill"];
@@ -344,8 +363,11 @@ function DetailsStep({
       </div>
 
       <div className="form-group">
-        <label className="form-label">{noun} Icon<span className="req">*</span></label>
-        <ImagePicker />
+        <label className="form-label">
+          {noun} Icon<span className="req">*</span>
+          {imageMissing && <span className="form-label-error">{noun} Icon cannot be left empty</span>}
+        </label>
+        <ImageUploadField value={data.image} onChange={(image) => update({ image })} error={imageMissing} />
         <p className="form-help">{copy.icon}</p>
       </div>
     </>

@@ -42,6 +42,7 @@ import {
   type DateRangeState,
 } from "./DateRangeFilter";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
+import { todayStamp } from "../data/companies";
 import { TableCols } from "./TableCols";
 import { TableEmpty } from "./TableEmpty";
 
@@ -200,6 +201,8 @@ type Props = {
   forms: FeedbackForm[];
   onOpen: (id: string, creating?: boolean) => void;
   onExportResponses: (id: string) => void;
+  /** Open the editor on a new, not-yet-saved form (a blank one, or a
+   *  Duplicate's copy). Nothing is stored until the editor's Create. */
   onCreate: (form: FeedbackForm) => void;
   onUpdate: (form: FeedbackForm) => void;
   onDelete: (id: string) => void;
@@ -268,7 +271,8 @@ export function FeedbackFormsPage({
   // Column display order — reordered by dragging in the Edit Columns menu.
   const [order, setOrder] = useColumnOrder(FB_COLS);
   const visibleCols = useMemo(() => orderedColumns(FB_COLS, order, columns), [columns, order]);
-  useCreateShortcut(() => createBlank());
+  // C stands down while the row menu or either confirm owns the keyboard.
+  useCreateShortcut(() => createBlank(), !menu && !toggling && !deleting);
 
   const creators = useMemo(
     () => [...new Set(forms.map((f) => f.createdBy))].sort((a, b) => a.localeCompare(b)),
@@ -317,17 +321,16 @@ export function FeedbackFormsPage({
     );
   }
 
-  /* Create goes straight into the wizard — no starting-point pop-up, and no
-     draft state: the form is live from the moment it exists, named in the
-     wizard's Details step. Duplicating an existing form lives in that form's
-     row menu. */
+  /* Create goes straight into the editor — no starting-point pop-up. The new
+     form is only STAGED there: nothing joins this list until the editor's
+     Create Feedback Form, so leaving it unfinished leaves no row behind.
+     Duplicating an existing form lives in that form's row menu. */
   function handleCreated(form: FeedbackForm) {
     onCreate(form);
-    onOpen(form.id, true);
   }
 
   function createBlank() {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayStamp();
     handleCreated({
       id: nextFormId(forms),
       name: "",
@@ -346,7 +349,7 @@ export function FeedbackFormsPage({
   }
 
   function setStatus(form: FeedbackForm, status: FormStatus) {
-    onUpdate({ ...form, status, updatedAt: new Date().toISOString().slice(0, 10) });
+    onUpdate({ ...form, status, updatedAt: todayStamp() });
   }
 
   return (

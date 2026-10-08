@@ -1,5 +1,17 @@
 import { companies } from "./companies";
-import type { Platform, SubscriptionStatus, User } from "./users";
+import { certOverridesOf } from "./completions";
+import { activeScholarshipOf } from "./scholarships";
+import { isoAddMonths, isoOf, sharedStore, todayDate } from "./sharedStore";
+import {
+  findAnyUser,
+  mergedInto,
+  PLAN_PRICE,
+  planPriceLabel,
+  type BillingCycle,
+  type Platform,
+  type SubscriptionStatus,
+  type User,
+} from "./users";
 
 export type Language = "English" | "Spanish";
 // Goal selected during onboarding ("Which best describes you?").
@@ -37,11 +49,21 @@ export type AwardRecord = {
   hasCertificate: boolean;
 };
 
+/** The profile's Subscription card — every date and figure read off the
+ *  user record, so it says what the Users pill says. */
 export type SubscriptionDetail = {
   status: SubscriptionStatus;
   platform?: Platform;
+  cycle?: BillingCycle;
+  /** "$24/mo" / "$199/yr" — personal plans only. */
+  price?: string;
   startedOn?: string;
+  /** A personal plan's next renewal. */
   renewsOn?: string;
+  /** Set once the plan has been cancelled — it runs until this date. */
+  cancelsOn?: string;
+  /** When a Free Trial or a Scholarship ends, or a Cancelled plan ended. */
+  endsOn?: string;
   offerCode?: string;
 };
 
@@ -51,8 +73,9 @@ export type PurchaseKind =
   | "Quiz Attempt"
   | "EPA Card";
 
-/** Consumable certifications expire or can be revoked; non-consumables are lifetime. */
-export type CertAccess = "Active" | "Expired" | "Revoked";
+/** Consumable certifications never expire (V1): access lasts until an admin
+ *  revokes it from Who Paid. Non-consumables are lifetime. */
+export type CertAccess = "Active" | "Revoked";
 /** A purchased quiz attempt is either unused, mid-attempt, or used up. */
 export type AttemptState = "Available" | "In Progress" | "Completed";
 
@@ -63,17 +86,38 @@ export type Purchase = {
   amount: number;
   platform: string;
   receiptId: string;
-  /** Certification purchases — whether the cert is consumable (expires/revocable) or lifetime. */
+  /** Certification purchases — whether the cert is consumable (revocable) or lifetime. */
   consumable?: boolean;
   /** Consumable certifications only — current access state. */
   certAccess?: CertAccess;
-  /** Consumable certifications only — when access lapsed or will lapse. */
-  expiresOn?: string;
+  /** Consumable certifications only — when an admin revoked access. */
+  revokedOn?: string;
   /** Quiz Attempt purchases — whether the attempt is still available, in progress, or used. */
   attemptState?: AttemptState;
   /** Stripe/Google certs & quiz attempts that have already been refunded. */
   refunded?: boolean;
+  /** Bought by the user's company rather than the user (B2B only) — the
+   *  table flags it "Company Paid" beside the item (Figma 1290:2943). */
+  companyPaid?: boolean;
+  /** Stable id for this purchase — what a refund is recorded against
+   *  (receipt ids aren't unique on their own). */
+  key: string;
 };
+
+/* Refunds an admin issued from the Full Profile, by purchase key. Shared, like
+   every other edit to a user, and the one thing that revokes an Award: a
+   refunded Certification takes its Award with it. */
+const refundStore = sharedStore<Record<string, true>>("refunds", {});
+export const useRefunds = refundStore.use;
+export function refundPurchase(key: string): void {
+  refundStore.set((prev) => ({ ...prev, [key]: true }));
+}
+
+/** The Certification a purchase bought — "EPA 608 Universal (Certification)"
+ *  → "EPA 608 Universal". */
+function certOfPurchase(p: Purchase): string | null {
+  return p.kind === "Certification" ? p.item.replace(/\s*\(Certification\)$/, "") : null;
+}
 
 export type EpaCardOrder = {
   certification: string;
@@ -118,18 +162,15 @@ function hash(s: string): number {
 }
 const pick = <T,>(arr: T[], n: number): T => arr[n % arr.length];
 
-const TODAY = new Date("2026-06-17");
-/** Reference "today" for the generated data — recency checks must use this, not the wall clock. */
+/* The real today — the same clock the Users roster's renewals, trial ends and
+   scholarship expiries count from, so the profile and the pill agree. */
+const TODAY = todayDate();
+/** Reference "today" for the generated data. */
 export const PROFILE_TODAY = TODAY;
 function daysAgo(n: number): string {
   const d = new Date(TODAY);
   d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
-}
-function daysAhead(n: number): string {
-  const d = new Date(TODAY);
-  d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0, 10);
+  return isoOf(d);
 }
 
 /* A company can carry several trades; a user profile shows ONE industry, so
@@ -214,7 +255,7 @@ function awardNumber(seed: number): string {
   );
 }
 
-export function buildUserProfile(user: User): UserProfile {
+function ownProfile(user: User): UserProfile {
   const h = hash(user.id);
   const industry = industryOf(user);
   const skillPool = SKILLS[industry] ?? GENERIC_SKILLS;
@@ -260,29 +301,11 @@ export function buildUserProfile(user: User): UserProfile {
     });
   }
 
-  // Subscription details.
-  const usesOffer = (h % 4) === 0;
-  const subscription: SubscriptionDetail = {
-    status: user.subscriptionStatus,
-    platform: user.platform,
-    startedOn:
-      user.subscriptionStatus === "Free Trial"
-        ? daysAgo(h % 7)
-        : daysAgo(60 + (h % 300)),
-    renewsOn:
-      user.subscriptionStatus === "Subscriber"
-        ? daysAhead(30 - (h % 28))
-        : user.subscriptionStatus === "Free Trial"
-        ? daysAhead(14 - (h % 7))
-        : undefined,
-    offerCode:
-      usesOffer && user.subscriptionStatus !== "Scholarship"
-        ? pick(["WELCOME50", "TRADE20", "SPRING2026", "PARTNER15"], h)
-        : undefined,
-  };
+  // Subscription details — off the user record (the Users pill's source).
+  const subscription = subscriptionOf(user, h);
 
-  // EPA card — HVAC/Refrigeration users who aren't on Free Trial, sometimes.
-  const epaEligible = (industry === "HVAC" || industry === "Refrigeration") && user.subscriptionStatus !== "Free Trial";
+  // EPA card — HVAC/Refrigeration users, sometimes.
+  const epaEligible = industry === "HVAC" || industry === "Refrigeration";
   const epaStatuses: EpaStatus[] = ["Order received", "Accepted", "In production", "Shipped", "Delivered", "Action needed", "Canceled", "Refunded"];
   let epaCard: EpaCardOrder | undefined;
   if (epaEligible && h % 3 !== 2) {
@@ -320,32 +343,13 @@ export function buildUserProfile(user: User): UserProfile {
       : undefined;
 
   // Purchases / bills — subscription receipts + paid certs + quiz attempts + EPA card.
-  const purchases: Purchase[] = [];
-  const platform = user.platform ?? "Stripe";
-  if (user.subscriptionStatus === "Subscriber") {
-    const price = 29;
-    for (let m = 0; m < 3; m++) {
-      purchases.push({
-        date: daysAgo(m * 30 + (h % 5)),
-        item: "Pro Monthly Subscription",
-        kind: "Subscription",
-        amount: price,
-        platform,
-        receiptId: `RC-${(h + m).toString(36).toUpperCase().slice(0, 6)}`,
-      });
-    }
-  } else if (user.subscriptionStatus === "Starter") {
-    purchases.push({
-      date: daysAgo(40 + (h % 60)),
-      item: "Starter Monthly Subscription",
-      kind: "Subscription",
-      amount: 12,
-      platform,
-      receiptId: `RC-${h.toString(36).toUpperCase().slice(0, 6)}`,
-    });
-  }
-  if (awards.some((a) => /Job-Ready/.test(a.certification))) {
-    // Job-Ready credential — a lifetime (non-consumable) certification.
+  // A company seat has no personal receipts (the company is billed), and a
+  // Free Trial or Starter learner has bought nothing — only a physical EPA
+  // card order, which anyone can place.
+  const purchases: Purchase[] = subscriptionReceipts(user, subscription, h);
+  const buys = user.subscriptionStatus !== "Free Trial" && user.subscriptionStatus !== "Starter";
+  if (buys && awards.some((a) => /Job-Ready/.test(a.certification))) {
+    // Job-Ready credential — purchased Certifications are permanent.
     purchases.push({
       date: daysAgo(90 + (h % 120)),
       item: `${awards.find((a) => /Job-Ready/.test(a.certification))!.certification} (Certification)`,
@@ -353,29 +357,26 @@ export function buildUserProfile(user: User): UserProfile {
       amount: 180,
       platform: pick(["Stripe", "Google"], h + 4),
       receiptId: `RC-${(h + 7).toString(36).toUpperCase().slice(0, 6)}`,
+      key: "", // set once the list is complete
       consumable: false,
       refunded: false,
     });
   }
-  if (industry === "HVAC" || industry === "Refrigeration") {
-    // EPA 608 — a consumable certification (renews; can lapse or be revoked).
-    const access = pick<CertAccess>(["Active", "Active", "Expired", "Revoked"], h + 3);
-    const bought = 120 + (h % 200);
+  if (buys && (industry === "HVAC" || industry === "Refrigeration")) {
+    // EPA 608 — a one-time purchase like any other Certification: it doesn't expire.
     purchases.push({
-      date: daysAgo(bought),
+      date: daysAgo(120 + (h % 200)),
       item: `${pick(["EPA 608 Universal", "EPA 608 Type II"], h)} (Certification)`,
       kind: "Certification",
       amount: 45,
       platform: pick(["Stripe", "Google"], h + 2),
       receiptId: `RC-${(h + 17).toString(36).toUpperCase().slice(0, 6)}`,
-      consumable: true,
-      certAccess: access,
-      // Active certs expire in the future; lapsed/revoked ones already passed.
-      expiresOn: access === "Active" ? daysAhead(120 + (h % 400)) : daysAgo(h % 90),
+      key: "", // set once the list is complete
+      consumable: false,
       refunded: false,
     });
   }
-  if (nate) {
+  if (buys && nate) {
     const attempt = 1 + (h % 3);
     purchases.push({
       date: daysAgo(20 + (h % 40)),
@@ -384,11 +385,12 @@ export function buildUserProfile(user: User): UserProfile {
       amount: attempt === 1 ? 60 : attempt === 2 ? 50 : 45,
       platform: pick(["Stripe", "Google"], h + 6),
       receiptId: `RC-${(h + 11).toString(36).toUpperCase().slice(0, 6)}`,
+      key: "", // set once the list is complete
       attemptState: pick<AttemptState>(["Available", "In Progress", "Completed"], h + 1),
       refunded: false,
     });
   }
-  if (awards.some((a) => /Job-Ready/.test(a.certification))) {
+  if (buys && awards.some((a) => /Job-Ready/.test(a.certification))) {
     // A purchased certification-exam attempt tied to the Job-Ready track.
     purchases.push({
       date: daysAgo(15 + (h % 30)),
@@ -397,6 +399,7 @@ export function buildUserProfile(user: User): UserProfile {
       amount: 25,
       platform: pick(["Stripe", "Google"], h + 8),
       receiptId: `RC-${(h + 19).toString(36).toUpperCase().slice(0, 6)}`,
+      key: "", // set once the list is complete
       attemptState: pick<AttemptState>(["Available", "In Progress", "Completed"], h + 5),
       refunded: false,
     });
@@ -409,9 +412,45 @@ export function buildUserProfile(user: User): UserProfile {
       amount: 60,
       platform: "Stripe",
       receiptId: `RC-${(h + 13).toString(36).toUpperCase().slice(0, 6)}`,
+      key: "", // set once the list is complete
     });
   }
   purchases.sort((a, b) => b.date.localeCompare(a.date));
+
+  // Certifications an admin awarded (or withdrew) in Manage Completions.
+  for (const ov of certOverridesOf(user.id)) {
+    if (ov.state === "complete") {
+      if (!awards.some((a) => a.certification === ov.certName)) {
+        const k = hash(user.id + ov.certName);
+        awards.push({
+          id: `${user.id}-M-${k.toString(36)}`,
+          certification: ov.certName,
+          meritTier: pick(MERIT_TIERS, k),
+          awardNumber: awardNumber(k),
+          dateAwarded: ov.on,
+          hasCertificate: !/EPA/.test(ov.certName) && k % 2 === 0,
+        });
+      }
+    }
+    /* Marking a Certification incomplete never takes its Award away — the
+       Award was earned when it was issued. Only a refund revokes one. */
+  }
+
+  /* Every purchase gets its key; a company's own purchases for a B2B user are
+     flagged as Company Paid (deterministic, like the rest). Refunds recorded
+     this session apply, and a refunded Certification revokes its Award. */
+  const refunds = refundStore.get();
+  purchases.forEach((p) => {
+    p.key = `${user.id}|${p.date}|${p.item}|${p.receiptId}`;
+    if (user.userType === "B2B" && p.kind !== "Subscription") p.companyPaid = hash(p.key) % 3 !== 0;
+    if (refunds[p.key]) p.refunded = true;
+  });
+  for (const p of purchases) {
+    const cert = p.refunded ? certOfPurchase(p) : null;
+    if (!cert) continue;
+    const i = awards.findIndex((a) => a.certification === cert);
+    if (i >= 0) awards.splice(i, 1);
+  }
 
   return {
     fields: {
@@ -431,4 +470,103 @@ export function buildUserProfile(user: User): UserProfile {
     epaCard,
     nate,
   };
+}
+
+/** A user's full profile. An account others were merged into also carries
+ *  what came across with them — their Skills, Awards and purchases (one-time
+ *  Certifications, attempts, physical cards), each listed once. */
+export function buildUserProfile(user: User): UserProfile {
+  const own = ownProfile(user);
+  const secondaries = mergedInto(user.id)
+    .map((id) => findAnyUser(id))
+    .filter((u): u is User => !!u);
+  if (!secondaries.length) return own;
+  const skills = [...own.skills];
+  const awards = [...own.awards];
+  const purchases = [...own.purchases];
+  for (const s of secondaries) {
+    const p = ownProfile(s);
+    p.skills.forEach((x) => skills.some((y) => y.name === x.name) || skills.push(x));
+    p.awards.forEach((x) => awards.some((y) => y.certification === x.certification) || awards.push(x));
+    // Every purchase moves — two of the same item are two purchases.
+    purchases.push(...p.purchases.filter((x) => x.kind !== "Subscription"));
+  }
+  purchases.sort((a, b) => b.date.localeCompare(a.date));
+  return { ...own, skills, awards, purchases };
+}
+
+/** One-time purchases a merge would move: paid Certifications and purchased
+ *  attempts (Merge Accounts' Review step lists them). */
+export function mergeablePurchases(user: User): Purchase[] {
+  return buildUserProfile(user).purchases.filter(
+    (p) => (p.kind === "Certification" || p.kind === "Quiz Attempt") && !p.refunded,
+  );
+}
+
+function subscriptionOf(user: User, h: number): SubscriptionDetail {
+  const status = user.subscriptionStatus;
+  const personal = user.userType === "B2C" && (status === "Subscriber" || status === "Cancelled");
+  const offerCode =
+    personal && h % 4 === 0 ? pick(["WELCOME50", "TRADE20", "SPRING2026", "PARTNER15"], h) : undefined;
+  switch (status) {
+    case "Subscriber": {
+      const cycle = user.cycle ?? "Monthly";
+      const renews = user.renewsOn ?? isoAddMonths(isoOf(TODAY), 1);
+      return {
+        status,
+        platform: user.platform,
+        cycle,
+        price: planPriceLabel(cycle),
+        // A few cycles back from the renewal the plan is paid up to.
+        startedOn: cycle === "Annual" ? isoAddMonths(renews, -12 * (1 + (h % 2))) : isoAddMonths(renews, -(2 + (h % 10))),
+        renewsOn: user.cancelsOn ? undefined : renews,
+        cancelsOn: user.cancelsOn,
+        offerCode,
+      };
+    }
+    case "Free Trial":
+      return {
+        status,
+        startedOn: user.trialEndsOn ? isoAddDays(user.trialEndsOn, -14) : undefined,
+        endsOn: user.trialEndsOn,
+      };
+    case "Scholarship": {
+      const sch = activeScholarshipOf(user.id);
+      return { status, startedOn: sch?.assignedOn, endsOn: sch?.expiresOn ?? user.scholarshipEndsOn };
+    }
+    case "Company Plan":
+      return { status, startedOn: user.joinedOn };
+    case "Cancelled":
+      return { status, endsOn: user.cancelledOn, offerCode };
+    case "Starter":
+      return { status };
+  }
+}
+
+function isoAddDays(iso: string, n: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return isoOf(new Date(y, m - 1, d + n));
+}
+
+/** A personal plan's receipts — one per cycle already paid, at the plan's own
+ *  price, back to when it started (the last three). */
+function subscriptionReceipts(user: User, sub: SubscriptionDetail, h: number): Purchase[] {
+  if (user.subscriptionStatus !== "Subscriber" || user.userType !== "B2C" || !sub.cycle) return [];
+  const months = sub.cycle === "Annual" ? 12 : 1;
+  const end = sub.cancelsOn ?? sub.renewsOn!;
+  const out: Purchase[] = [];
+  for (let m = 1; m <= 3; m++) {
+    const date = isoAddMonths(end, -months * m);
+    if (sub.startedOn && date < sub.startedOn) break;
+    out.push({
+      date,
+      item: `Pro ${sub.cycle} Subscription`,
+      kind: "Subscription",
+      amount: PLAN_PRICE[sub.cycle],
+      platform: user.platform ?? "Stripe",
+      receiptId: `RC-${(h + m).toString(36).toUpperCase().slice(0, 6)}`,
+      key: "", // set once the list is complete
+    });
+  }
+  return out;
 }

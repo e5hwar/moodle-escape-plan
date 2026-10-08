@@ -1,12 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { tasks as allTasks, discoverableLabel, subscriptionLabel, isPaid, type Task, type TaskType } from "../data/tasks";
+import { ACCESS_CHAIN_REASON, accessChainLines, discoverableLabel, isIdUpload, subscriptionLabel, isPaid, taskCertifications, taskInCertifications, type Task, type TaskType } from "../data/tasks";
 // ARCHIVED: RotaryDialPreview side panel — kept for future use; re-enable by uncommenting
 // the import below and the <RotaryDialPreview /> render at the bottom of <div className="tasks-row">.
 // import { RotaryDialPreview } from "./RotaryDialPreview";
 import {
   Filters,
   EditColumnsButton,
-  useColumnOrder,
   orderedColumns,
   type FilterState,
   type ColumnState,
@@ -19,7 +18,6 @@ import { PrmModal } from "./PrmModal";
 import { TasksSearch } from "./TasksSearch";
 import type { TaskTypeKey } from "./Footer";
 import { useCollapsingHeader } from "../hooks/useCollapsingHeader";
-import { CERT_BY_USEDIN } from "../data/certifications";
 import { TaskSummary } from "./NewTaskWizard";
 import { PreviewPanel, formatCount, seededInt, type PreviewStat } from "./PreviewPanel";
 import { ListCard } from "./ConfirmCard";
@@ -38,8 +36,9 @@ const TASK_TYPE_OPTIONS: { key: TaskTypeKey; label: string; shortcut: string }[]
 
 const PAGE_SIZE = 50;
 
-/** View Attempts is only meaningful for graded/launchable Task types. */
-const ATTEMPTS_TYPES: TaskType[] = ["Quiz", "Hands-On Task", "xAPI"];
+/** View All Attempts: a Quiz's attempts, or a Hands-On Task's submissions.
+ *  xAPI packages report completion, not attempts anyone reviews. */
+const ATTEMPTS_TYPES: TaskType[] = ["Quiz", "Hands-On Task"];
 
 type SortKey =
   | "id"
@@ -99,7 +98,6 @@ type TaskColMeta = {
 };
 
 const TASK_COLS: TaskColMeta[] = [
-  { key: "id", label: "Task ID", className: "col-id", width: 100, render: (t) => t.id },
   { key: "type", label: "Type", className: "col-type", width: 160, render: (t) => t.type },
   {
     key: "paid", label: "Paid", className: "col-type", width: 110,
@@ -112,16 +110,23 @@ const TASK_COLS: TaskColMeta[] = [
   },
   {
     key: "usedIn", label: "Certifications", className: "col-used", width: 180, sortable: false,
-    tip: (t) => (t.usedIn.length ? t.usedIn.join("\n") : undefined),
-    render: (t) =>
-      t.usedIn.length === 0 ? (
+    // Canonical, current names (see taskCertifications) — never the "NATE RTW"
+    // style aliases `usedIn` carries.
+    tip: (t) => {
+      const names = taskCertifications(t).map((c) => c.name);
+      return names.length ? names.join("\n") : undefined;
+    },
+    render: (t) => {
+      const names = taskCertifications(t).map((c) => c.name);
+      return names.length === 0 ? (
         "—"
       ) : (
         <>
-          {t.usedIn[0]}
-          {t.usedIn.length > 1 && <>{" "}<span className="used-extra">+{t.usedIn.length - 1}</span></>}
+          {names[0]}
+          {names.length > 1 && <>{" "}<span className="used-extra">+{names.length - 1}</span></>}
         </>
-      ),
+      );
+    },
   },
   {
     key: "createdBy", label: "Created By", className: "col-creator", width: 200, sortable: false,
@@ -129,20 +134,27 @@ const TASK_COLS: TaskColMeta[] = [
   },
   {
     key: "tradeTag", label: "Trade Tag", className: "col-tags", width: 210, sortable: false,
-    tip: (t) => tagTip(pickTags(t.tags, TRADE_TAGS)), render: (t) => <TagText tags={pickTags(t.tags, TRADE_TAGS)} />,
+    tip: (t) => (handsOnOnly(t) ? tagTip(pickTags(t.tags, TRADE_TAGS)) : undefined),
+    render: (t) => (handsOnOnly(t) ? <TagText tags={pickTags(t.tags, TRADE_TAGS)} /> : "—"),
   },
   {
     key: "partnershipTag", label: "Partnership Tag", className: "col-tags", width: 160, sortable: false,
-    tip: (t) => tagTip(pickTags(t.tags, PARTNERSHIP_TAGS)),
-    render: (t) => <TagText tags={pickTags(t.tags, PARTNERSHIP_TAGS)} />,
+    tip: (t) => (handsOnOnly(t) ? tagTip(pickTags(t.tags, PARTNERSHIP_TAGS)) : undefined),
+    render: (t) => (handsOnOnly(t) ? <TagText tags={pickTags(t.tags, PARTNERSHIP_TAGS)} /> : "—"),
   },
   {
     key: "audience", label: "Audience", className: "col-tags", width: 150, sortable: false,
-    render: (t) => audienceOf(t.tags),
+    render: (t) => (handsOnOnly(t) ? audienceOf(t.tags) : "—"),
   },
   { key: "dateCreated", label: "Date Created", className: "col-date", width: 130, render: (t) => t.dateCreated ?? "" },
   { key: "dateModified", label: "Date Modified", className: "col-date", width: 130, render: (t) => t.dateModified ?? "" },
 ];
+
+/** Audience, Trade and Partnership exist on Hands-On Tasks only; every other
+ *  type reads "—" in those columns and never matches their filter. */
+function handsOnOnly(t: Task): boolean {
+  return t.type === "Hands-On Task";
+}
 
 function tagTip(tags: string[]): string | undefined {
   return tags.length ? tags.join("\n") : undefined;
@@ -158,7 +170,24 @@ function TagText({ tags }: { tags: string[] }) {
   );
 }
 
+/** Everything a reader set up on the list. App keeps the last one while Quiz
+ *  Attempts or Who Paid is open and hands it back on Back, so the list comes
+ *  back exactly as it was left — Certification deep link included. */
+export type TasksListState = {
+  query: string;
+  filters: FilterState;
+  columns: ColumnState;
+  order: OptionalColumn[];
+  sort: { key: SortKey; dir: SortDir };
+  page: number;
+};
+
 export function TasksPage({
+  tasks: taskList,
+  onSetHidden,
+  onDeleteTask,
+  restore,
+  onSaveState,
   initialCertificationFilter,
   onNewTask,
   onEditTask,
@@ -168,11 +197,19 @@ export function TasksPage({
   onManageProgress,
   onOpenQuestionBank,
   onOpenSkills,
-  extraTasks,
-  taskEdits,
   flash,
   onFlashDone,
 }: {
+  /** The working Task list — seed Tasks with their saved edits, Tasks created
+   *  this session, deleted ones gone. Owned by App, so a hide or delete
+   *  survives leaving the page. */
+  tasks: Task[];
+  onSetHidden: (task: Task, hidden: boolean) => void;
+  onDeleteTask: (task: Task) => void;
+  /** The list as it was left — restored on mount instead of the defaults. */
+  restore?: TasksListState | null;
+  /** Called as the page unmounts with the state to restore next time. */
+  onSaveState?: (state: TasksListState) => void;
   /** Deep link from a Certification's "View All Tasks" — seeds the
    *  Certifications filter and opens straight on the table. */
   initialCertificationFilter?: string;
@@ -184,21 +221,12 @@ export function TasksPage({
   onManageProgress: (task: Task) => void;
   onOpenQuestionBank?: () => void;
   onOpenSkills?: () => void;
-  /** Tasks published from the wizard this session, newest first. */
-  extraTasks?: Task[];
-  /** Saved edits to library Tasks, by id — laid over the list. */
-  taskEdits?: Record<string, Task>;
   /** A toast handed back by a flow that finished and navigated here —
    *  "Task Created", "Task Updated". */
   flash?: string | null;
   onFlashDone?: () => void;
 }) {
   const [toast, toastNode] = useToast(flash, onFlashDone);
-  // Local working copy so visibility toggles and deletes persist in-session.
-  const [taskList, setTaskList] = useState<Task[]>(() => [
-    ...(extraTasks ?? []),
-    ...allTasks.map((t) => taskEdits?.[t.id] ?? t),
-  ]);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [menu, setMenu] = useState<{ task: Task; rect: DOMRect } | null>(null);
   // Set when someone tries to edit a Task owned by a company — company Tasks are
@@ -207,9 +235,9 @@ export function TasksPage({
   // The Task awaiting a Hide confirmation (Figma 667:884). Unhiding is instant;
   // only hiding routes through the modal.
   const [hideTarget, setHideTarget] = useState<Task | null>(null);
-  // Set when the Task can't be hidden at all — it still gates other content
-  // through an Access Restriction chain.
-  const [blockedHide, setBlockedHide] = useState<Task | null>(null);
+  // Set when the Task can't be hidden or deleted at all — it sits in an
+  // Access Restriction chain, as the gate or behind one.
+  const [blockedHide, setBlockedHide] = useState<{ task: Task; action: "hide" | "delete" } | null>(null);
   // The Task awaiting a Delete confirmation — the same 667:884 shell as Hide,
   // in its destructive variant.
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
@@ -220,11 +248,11 @@ export function TasksPage({
   const drawerTask = drawerId ? taskList.find((t) => t.id === drawerId) : undefined;
   // Search bar: committedQuery only changes on Enter. The certification filter is
   // shared with the Filters row (filters.certifications) and applies on Enter.
-  const [committedQuery, setCommittedQuery] = useState("");
+  const [committedQuery, setCommittedQuery] = useState(restore?.query ?? "");
   // Arriving from a Certification's "View All Tasks" applies that Certification
   // and NOTHING else — not even the page's usual "Created By: SkillCat"
   // default, which would hide the Cert's company-authored Tasks.
-  const [filters, setFilters] = useState<FilterState>({
+  const [filters, setFilters] = useState<FilterState>(() => restore?.filters ?? {
     creators: initialCertificationFilter ? [] : ["SkillCat"],
     certifications: initialCertificationFilter ? [initialCertificationFilter] : [],
     discoverable: [],
@@ -233,8 +261,7 @@ export function TasksPage({
     visibilities: [],
     tags: [],
   });
-  const [columns, setColumns] = useState<ColumnState>({
-    id: false,
+  const [columns, setColumns] = useState<ColumnState>(() => restore?.columns ?? {
     type: true,
     paid: false,
     usedIn: true,
@@ -246,13 +273,22 @@ export function TasksPage({
     dateModified: true,
   });
   // Column display order — reordered by dragging in the Edit Columns menu.
-  const [order, setOrder] = useColumnOrder(TASK_COLS);
+  const [order, setOrder] = useState<OptionalColumn[]>(
+    () => restore?.order ?? TASK_COLS.map((c) => c.key),
+  );
   // Default sort: most recently edited first.
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>(() => restore?.sort ?? {
     key: "dateModified",
     dir: "desc",
   });
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(restore?.page ?? 1);
+
+  // Hand the list's state back to App as the page unmounts.
+  const snapshot = useRef<TasksListState | null>(null);
+  snapshot.current = { query: committedQuery, filters, columns, order, sort, page };
+  useEffect(() => () => {
+    if (snapshot.current) onSaveState?.(snapshot.current);
+  }, []);
 
   const filtered = useMemo(() => {
     const q = committedQuery.trim().toLowerCase();
@@ -263,11 +299,12 @@ export function TasksPage({
         t.type.toLowerCase().includes(q)
       )) return false;
       if (filters.creators.length && !filters.creators.includes(t.createdBy)) return false;
-      if (filters.certifications.length && !t.usedIn.some((c) => filters.certifications.includes(c))) return false;
+      if (filters.certifications.length && !taskInCertifications(t, filters.certifications)) return false;
       if (filters.discoverable.length && !filters.discoverable.includes(discoverableLabel(t))) return false;
       if (filters.subscription.length && !filters.subscription.includes(subscriptionLabel(t))) return false;
       if (filters.types.length && !filters.types.includes(t.type)) return false;
-      if (filters.tags.length && !matchesTagFilter(t.tags, filters.tags)) return false;
+      if (filters.visibilities.length && !filters.visibilities.includes(t.hidden ? "Hidden" : "Visible")) return false;
+      if (filters.tags.length && !(handsOnOnly(t) && matchesTagFilter(t.tags, filters.tags))) return false;
       return true;
     });
   }, [committedQuery, filters, taskList]);
@@ -279,7 +316,14 @@ export function TasksPage({
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
 
+  // A new query, filter or sort starts on page 1 — but not the mount itself,
+  // which may be putting a restored page back.
+  const mounted = useRef(false);
   useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
     setPage(1);
   }, [committedQuery, filters, sort]);
 
@@ -289,8 +333,9 @@ export function TasksPage({
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      // The Create menu (z 500) would open above the drawer's scrim.
-      if (drawerId) return;
+      // The Create menu (z 500) would open above the drawer's scrim, and over
+      // any modal or row menu that is up.
+      if (drawerId || menu || blockedEdit || hideTarget || blockedHide || deleteTarget) return;
       const target = e.target as HTMLElement | null;
       if (
         target &&
@@ -322,7 +367,7 @@ export function TasksPage({
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [createMenuOpen, drawerId, onNewTask]);
+  }, [createMenuOpen, drawerId, menu, blockedEdit, hideTarget, blockedHide, deleteTarget, onNewTask]);
 
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
@@ -348,9 +393,7 @@ export function TasksPage({
   const catalog = useMemo(
     () => ({
       tasks: taskList.length,
-      certifications: new Set(
-        taskList.flatMap((t) => t.usedIn.map((name) => CERT_BY_USEDIN.get(name)?.id ?? name)),
-      ).size,
+      certifications: new Set(taskList.flatMap((t) => taskCertifications(t).map((c) => c.name))).size,
     }),
     [taskList],
   );
@@ -374,21 +417,9 @@ export function TasksPage({
     );
   }
 
-  /* Hiding or unhiding is an edit: it stamps Date Modified with today (the
-     wizard's save stamp format) and drops the seed's free-text `updated` line
-     so the preview reads the new date instead of the old one. */
-  function setHidden(task: Task, hidden: boolean) {
-    const dateModified = new Date().toLocaleDateString("en-US", {
-      month: "short",
-      day: "2-digit",
-      year: "numeric",
-    });
-    setTaskList((prev) =>
-      prev.map((t) =>
-        t.id === task.id ? { ...t, hidden, dateModified, updated: undefined } : t,
-      ),
-    );
-  }
+  /* Hiding or unhiding is an edit (App stamps Date Modified); it lives on
+     App's list so it outlasts this page. */
+  const setHidden = onSetHidden;
 
   function toggleVisibility(task: Task) {
     // Unhiding restores the Task straight away — only hiding needs confirming.
@@ -400,7 +431,7 @@ export function TasksPage({
     // Access Restriction chains gate other content, so the Task can't be hidden
     // while it's still part of one.
     if (task.accessRestricted) {
-      setBlockedHide(task);
+      setBlockedHide({ task, action: "hide" });
       return;
     }
     // Hiding pulls the Task out of every Certification carrying it, so the full
@@ -416,6 +447,8 @@ export function TasksPage({
   }
 
   function editTask(task: Task) {
+    // The ID Upload Task isn't editable (its menu row says why).
+    if (isIdUpload(task)) return;
     // Tasks created by a company are owned by that company's B2B account and can
     // only be edited from the B2B Dashboard. Everything else is SkillCat-owned.
     if (task.createdBy !== "SkillCat") {
@@ -426,13 +459,19 @@ export function TasksPage({
   }
 
   function deleteTask(task: Task) {
+    // The same Access Restriction check Hide makes: a Task in a chain can't
+    // be deleted out from under it either.
+    if (task.accessRestricted) {
+      setBlockedHide({ task, action: "delete" });
+      return;
+    }
     // Deleting routes through the shared confirm modal (Figma 667:884), not the
     // browser's own dialog.
     setDeleteTarget(task);
   }
 
   function confirmDelete(task: Task) {
-    setTaskList((prev) => prev.filter((t) => t.id !== task.id));
+    onDeleteTask(task);
     setDeleteTarget(null);
     toast("Task Deleted");
   }
@@ -640,7 +679,11 @@ export function TasksPage({
       )}
 
       {blockedHide && (
-        <HideBlockedModal task={blockedHide} onClose={() => setBlockedHide(null)} />
+        <HideBlockedModal
+          task={blockedHide.task}
+          action={blockedHide.action}
+          onClose={() => setBlockedHide(null)}
+        />
       )}
 
       {deleteTarget && (
@@ -678,15 +721,8 @@ function TaskDrawer({
   onMore: (rect: DOMRect) => void;
 }) {
   // The Certifications carrying it, by their canonical names (usedIn holds
-  // aliases such as "NATE RTW").
-  const certs = useMemo(
-    () =>
-      [...new Set(task.usedIn)].map((u) => {
-        const c = CERT_BY_USEDIN.get(u);
-        return { name: c?.name ?? u, industry: c?.industry };
-      }),
-    [task.usedIn],
-  );
+  // aliases such as "NATE RTW"). The wizard's save confirm lists the same.
+  const certs = useMemo(() => taskCertifications(task), [task]);
   const graded = task.type === "Quiz" || task.type === "Hands-On Task";
   const attempts = seededInt(task.id, "attempts", 90, 5200);
   const rate = seededInt(task.id, "rate", graded ? 58 : 70, graded ? 92 : 97);
@@ -755,8 +791,8 @@ function HideTaskModal({
             temporarily from here.
           </p>
           <ul>
-            {task.usedIn.map((c) => (
-              <li key={c}>{c}</li>
+            {taskCertifications(task).map((c) => (
+              <li key={c.name}>{c.name}</li>
             ))}
           </ul>
         </div>
@@ -794,8 +830,8 @@ function DeleteTaskModal({
       doubleConfirm={
         <>
           <strong>{task.name}</strong> will be permanently deleted
-          {task.usedIn.length > 0
-            ? ` and removed from ${task.usedIn.length} Certification${task.usedIn.length === 1 ? "" : "s"}`
+          {taskCertifications(task).length > 0
+            ? ` and removed from ${taskCertifications(task).length} Certification${taskCertifications(task).length === 1 ? "" : "s"}`
             : ""}
           . This can't be undone.
         </>
@@ -804,7 +840,7 @@ function DeleteTaskModal({
       onConfirm={onConfirm}
     >
       <p className="prm-content">
-        Deleting the Task ({task.id}) removes it permanently. This can't be undone.
+        Deleting the Task removes it permanently. This can't be undone.
       </p>
       {task.usedIn.length > 0 && (
         <div className="prm-content">
@@ -813,8 +849,8 @@ function DeleteTaskModal({
             it from every one of them.
           </p>
           <ul>
-            {task.usedIn.map((c) => (
-              <li key={c}>{c}</li>
+            {taskCertifications(task).map((c) => (
+              <li key={c.name}>{c.name}</li>
             ))}
           </ul>
         </div>
@@ -823,9 +859,19 @@ function DeleteTaskModal({
   );
 }
 
-/** Access Restriction chains gate other content, so a Task inside one can't be
- *  hidden until it leaves the chain — acknowledgment only, no CTA to confirm. */
-function HideBlockedModal({ task, onClose }: { task: Task; onClose: () => void }) {
+/** Access Restriction chains gate other content, so a Task inside one — the
+ *  gate or a Task behind it — can't be hidden or deleted until it leaves the
+ *  chain. Acknowledgment only, no CTA to confirm; the chain is named. */
+function HideBlockedModal({
+  task,
+  action,
+  onClose,
+}: {
+  task: Task;
+  action: "hide" | "delete";
+  onClose: () => void;
+}) {
+  const chains = accessChainLines(task);
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -836,16 +882,24 @@ function HideBlockedModal({ task, onClose }: { task: Task; onClose: () => void }
 
   return (
     <PrmModal
-      title={`Can't hide “${task.name}”`}
+      title={`Can't ${action} “${task.name}”`}
       confirmLabel="Okay"
       hideCancel
       onCancel={onClose}
       onConfirm={onClose}
     >
-      <p className="prm-content">
-        This Task is part of an Access Restriction chain. Hiding it would break the
-        content it gates. Remove the Task from that chain first, then hide it.
-      </p>
+      <div className="prm-content">
+        <p>
+          This Task is part of an Access Restriction chain.{" "}
+          {action === "hide" ? "Hiding" : "Deleting"} it would break the chain:
+        </p>
+        <ul>
+          {chains.map((c) => (
+            <li key={c}>{c}</li>
+          ))}
+        </ul>
+        <p>Remove the Task from the chain first, then {action} it.</p>
+      </div>
     </PrmModal>
   );
 }
@@ -963,22 +1017,28 @@ function TableRow({
           <RowKebabIcon />
         </button>
         <div className="row-action-bar">
-          <button
-            className="row-action-btn"
-            aria-label="Edit"
-            title="Edit task"
-            onClick={(e) => { e.stopPropagation(); onEdit(); }}
-          >
-            <RowEditIcon />
-          </button>
-          <button
-            className="row-action-btn"
-            aria-label={task.hidden ? "Make visible" : "Hide task"}
-            title={task.hidden ? "Make visible" : "Hide task"}
-            onClick={(e) => { e.stopPropagation(); onToggleVisibility(); }}
-          >
-            {task.hidden ? <RowEyeOffIcon /> : <RowEyeIcon />}
-          </button>
+          {/* The ID Upload Task can't be edited, hidden or deleted, so its bar
+              is just the menu — which says why on each disabled row. */}
+          {!isIdUpload(task) && (
+            <>
+              <button
+                className="row-action-btn"
+                aria-label="Edit"
+                title="Edit task"
+                onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              >
+                <RowEditIcon />
+              </button>
+              <button
+                className="row-action-btn"
+                aria-label={task.hidden ? "Make visible" : "Hide task"}
+                title={task.hidden ? "Make visible" : "Hide task"}
+                onClick={(e) => { e.stopPropagation(); onToggleVisibility(); }}
+              >
+                {task.hidden ? <RowEyeOffIcon /> : <RowEyeIcon />}
+              </button>
+            </>
+          )}
           <button
             className="row-action-btn"
             aria-label="More"
@@ -1055,24 +1115,43 @@ function TaskActionsMenu({
 
   const showAttempts = ATTEMPTS_TYPES.includes(task.type);
 
+  /* `reason` disables the row and says why on a second line (Figma 1629:1420),
+     the way Who Paid's Revoke Access does. */
   const item = (
     icon: JSX.Element,
     label: string,
     onPick: () => void,
     danger = false,
+    reason?: string,
   ) => (
     <button
       className={`u-menu-item ${danger ? "u-menu-item--danger" : ""}`}
+      disabled={!!reason}
       onClick={(e) => {
         e.stopPropagation();
+        if (reason) return;
         onPick();
         onClose();
       }}
     >
       <span className="u-menu-item-icon">{icon}</span>
-      {label}
+      {reason ? (
+        <span className="u-menu-item-text">
+          <span>{label}</span>
+          <span className="u-menu-item-sub">{reason}</span>
+        </span>
+      ) : (
+        label
+      )}
     </button>
   );
+  /* The ID Upload Task: no edits, and — as the gate of the exam chains — never
+     hidden or deleted. */
+  const idUpload = isIdUpload(task);
+  const editReason = idUpload
+    ? "This Task is used for accepting ID Uploads. Edits are not allowed."
+    : undefined;
+  const chainReason = idUpload ? ACCESS_CHAIN_REASON : undefined;
 
   return (
     <div
@@ -1085,17 +1164,19 @@ function TaskActionsMenu({
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      {item(<RowEditIcon />, "Edit Task", onEdit)}
+      {item(<RowEditIcon />, "Edit Task", onEdit, false, editReason)}
       {item(
         task.hidden ? <RowEyeIcon /> : <RowEyeOffIcon />,
         task.hidden ? "Make Visible" : "Make Hidden",
         onToggleVisibility,
+        false,
+        chainReason,
       )}
       {/* Only paid Tasks have payers to view. */}
       {isPaid(task) && item(<MenuPaidIcon />, "View Who Paid", onViewPayers)}
       {showAttempts && item(<MenuAttemptsIcon />, "View All Attempts", onViewAttempts)}
       {item(<MenuProgressIcon />, "Manage User Progress", onManageProgress)}
-      {item(<RowDeleteIcon />, "Delete Task", onDelete, true)}
+      {item(<RowDeleteIcon />, "Delete Task", onDelete, true, chainReason)}
     </div>
   );
 }

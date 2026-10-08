@@ -2,6 +2,8 @@ import { UserAvatar } from "./UserAvatar";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
   buildUserProfile,
+  refundPurchase,
+  useRefunds,
   PROFILE_TODAY,
   ZIP_LOCATIONS,
   type AwardRecord,
@@ -13,8 +15,23 @@ import {
   type PurchaseKind,
   type SkillBadge,
 } from "../data/userProfile";
-import type { User } from "../data/users";
-import { idRecordForUser, nowIdStamp, type IdRecord, type IdStatus } from "../data/manageIds";
+import {
+  canCancelSubscription,
+  cancelSubscription,
+  updateUserContact,
+  useUser,
+  type User,
+} from "../data/users";
+import {
+  approveIdRecord,
+  idRecordForUser,
+  replaceIdRecord,
+  useIdDecisions,
+} from "../data/manageIds";
+import { useCompletions } from "../data/completions";
+import { useScholarships } from "../data/scholarships";
+import { SubscriptionPill } from "./SubscriptionPill";
+import type { ConfirmField } from "./ConfirmCard";
 import { loginAs } from "./loginAs";
 import { leave, useTouchedKeys } from "./fieldFlags";
 import { ConfirmCard } from "./ConfirmCard";
@@ -154,18 +171,17 @@ const EPA_TONE: Record<EpaStatus, string> = {
 };
 
 export function UserProfilePage({ user: seedUser }: { user: User }) {
-  const base = useMemo(() => buildUserProfile(seedUser), [seedUser]);
+  /* The live record (users.ts): this tab and the Users page read and write the
+     same one, so an edit, a cancellation or a merge here shows there and back. */
+  const user: User = useUser(seedUser.id) ?? seedUser;
+  // Manual awards (Manage Completions) and scholarships feed the profile too.
+  const completions = useCompletions();
+  const scholarships = useScholarships();
+  // Refunds revoke Awards, so they feed the profile build too.
+  const refunds = useRefunds();
+  const base = useMemo(() => buildUserProfile(user), [user, completions, scholarships, refunds]);
 
-  // Admin edits are session-local overrides on top of the seeded record.
-  const [identity, setIdentity] = useState({
-    name: seedUser.name,
-    email: seedUser.email,
-    phone: seedUser.phone,
-    emailVerified: seedUser.emailVerified,
-    phoneVerified: seedUser.phoneVerified,
-  });
   const [nate, setNate] = useState<NateDetail | undefined>(base.nate);
-  const [subCanceled, setSubCanceled] = useState(false);
   const [epaCanceled, setEpaCanceled] = useState(false);
   const [modal, setModal] = useState<ModalKind>(null);
   /** The page's success toast — "Profile Updated" after an edit (the user,
@@ -176,11 +192,14 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
   const [idOpen, setIdOpen] = useState(false);
   // Page-level 3-dot menu, anchored to the header kebab.
   const [pageMenu, setPageMenu] = useState<DOMRect | null>(null);
-  const [idRecord, setIdRecord] = useState<IdRecord>(() => idRecordForUser(seedUser));
+  // The shared ID record (manageIds.ts) — approving or replacing it here is
+  // what Manage IDs sees too.
+  const idDecisions = useIdDecisions();
+  const idRecord = idRecordForUser(user, idDecisions);
+  const hasId = idRecord.status !== "not-started";
 
   useEscape(modal !== null, () => setModal(null));
 
-  const user: User = { ...seedUser, ...identity };
   const epaCard: EpaCardOrder | undefined =
     epaCanceled && base.epaCard ? { ...base.epaCard, status: "Canceled" } : base.epaCard;
   const p = { ...base, nate, epaCard };
@@ -188,45 +207,61 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
   const canCancelEpa = !epaCanceled && !!base.epaCard && isEpaOrderCancelable(base.epaCard);
   const epaPurchase = base.purchases.find((pu) => pu.kind === "EPA Card");
 
-  // Cancellation applies only to subscriptions we bill directly (Stripe) or
-  // that expose a cancel API (Google); Apple subs are managed by Apple.
-  const canCancelSub =
-    !subCanceled &&
-    user.subscriptionStatus === "Subscriber" &&
-    (p.subscription.platform === "Stripe" || p.subscription.platform === "Google");
+  // Only a personal Stripe / Google plan that isn't already cancelling, never
+  // a company seat — the same rule the Users row menu applies.
+  const canCancelSub = canCancelSubscription(user);
 
+  /* Edit User writes to the shared roster — the Users table, the EPA card's
+     recipient and everything else that names this user follow. */
   function saveIdentity(v: { name: string; email: string; phone: string }) {
-    setIdentity((prev) => ({
-      name: v.name,
-      email: v.email,
-      phone: v.phone,
-      // Changing a contact field invalidates its verified status.
-      emailVerified: prev.emailVerified && v.email === prev.email,
-      phoneVerified: prev.phoneVerified && v.phone === prev.phone,
-    }));
+    updateUserContact(user.id, v);
     setModal(null);
     toast("Profile Updated");
   }
 
-  /* Same two transitions the Manage IDs table applies: a replacement re-takes
-     the upload stamp (and the approval stamp, or drops it — it described the
-     document that was just replaced); an approval only records the decision. */
-  function replaceId(status: IdStatus) {
-    const now = nowIdStamp();
-    setIdRecord((r) => ({
-      ...r,
-      status,
-      uploadedAt: now,
-      approvedAt: status === "approved" ? now : undefined,
-    }));
+  /* Same two transitions the Manage IDs table applies (manageIds.ts): a
+     replacement re-takes the upload stamp; an approval only records the
+     decision. */
+  function replaceId(status: "approved" | "in-review") {
+    replaceIdRecord(idRecord, status);
     toast(status === "approved" ? "ID Replaced & Approved" : "ID Replaced");
   }
 
   /* Approving leaves the popup open on the document it just decided — the
      Approve button drops out of the footer, same as on the Manage IDs table. */
   function approveId() {
-    setIdRecord((r) => ({ ...r, status: "approved", approvedAt: nowIdStamp() }));
+    approveIdRecord(idRecord);
     toast("ID Approved");
+  }
+
+  /* The Subscription card says what the Users pill says — the pill itself,
+     then the rows that plan has. */
+  const sub = p.subscription;
+  const subRows: ConfirmField[] = [["Status", <SubscriptionPill user={user} />]];
+  switch (sub.status) {
+    case "Subscriber":
+      subRows.push(
+        ["Plan", `Pro ${sub.cycle} · ${sub.price}`],
+        ["Platform", sub.platform],
+        ["Started", formatDate(sub.startedOn)],
+        sub.cancelsOn ? ["Access Until", formatDate(sub.cancelsOn)] : ["Renews", formatDate(sub.renewsOn)],
+        ["Offer Code", sub.offerCode ?? "None"],
+      );
+      break;
+    case "Free Trial":
+      subRows.push(["Started", formatDate(sub.startedOn)], ["Trial Ends", formatDate(sub.endsOn)]);
+      break;
+    case "Scholarship":
+      subRows.push(["Started", formatDate(sub.startedOn)], ["Expires", formatDate(sub.endsOn)]);
+      break;
+    case "Company Plan":
+      subRows.push(["Company", user.companyName], ["Billed To", "Company"]);
+      break;
+    case "Cancelled":
+      subRows.push(["Ended", formatDate(sub.endsOn)], ["Offer Code", sub.offerCode ?? "None"]);
+      break;
+    case "Starter":
+      break;
   }
 
   /* The Portfolio Link field points at the standalone portfolio page, in
@@ -374,20 +409,7 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
                   )
                 }
                 fillBlanks
-                rows={[
-                  [
-                    "Status",
-                    subCanceled ? (
-                      <span className="co-status-pill co-status-pill--grey">Canceled</span>
-                    ) : (
-                      p.subscription.status
-                    ),
-                  ],
-                  ["Platform", p.subscription.platform],
-                  ["Started", formatDate(p.subscription.startedOn)],
-                  [subCanceled ? "Access Until" : "Renews", formatDate(p.subscription.renewsOn)],
-                  ["Offer Code", p.subscription.offerCode ?? "None"],
-                ]}
+                rows={subRows}
               />
 
               {/* Purchases / bills */}
@@ -467,13 +489,12 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
           rect={pageMenu}
           onClose={() => setPageMenu(null)}
           items={[
-            {
-              /* The Manage IDs popup, opened on this user's own document —
-                 same modal, same Replace / Approve flows. */
-              label: "View ID",
-              icon: <IdCardIcon />,
-              onPick: () => setIdOpen(true),
-            },
+            /* The Manage IDs popup, opened on this user's own document — same
+               modal, same Replace / Approve flows. Nothing to view for a user
+               who has never uploaded one. */
+            ...(hasId
+              ? [{ label: "View ID", icon: <IdCardIcon />, onPick: () => setIdOpen(true) }]
+              : []),
             {
               label: "Edit User Details",
               icon: <RowEditIcon />,
@@ -529,11 +550,9 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
       {modal === "cancel-sub" && (
         <CancelSubscriptionModal
           user={user}
-          platform={p.subscription.platform!}
-          renewsOn={p.subscription.renewsOn}
           onClose={() => setModal(null)}
           onConfirm={() => {
-            setSubCanceled(true);
+            cancelSubscription(user.id);
             setModal(null);
             toast("Subscription Canceled");
           }}
@@ -541,9 +560,9 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
       )}
       {idOpen && (
         <IdModal
-          /* The identity fields come off the (possibly edited) profile so the
-             popup never shows a name the page has already renamed. */
-          record={{ ...idRecord, name: user.name, email: user.email, phone: user.phone }}
+          /* The record carries the live user's name for the header and the
+             document's own name for the card (manageIds.ts). */
+          record={idRecord}
           onClose={() => setIdOpen(false)}
           onReplace={replaceId}
           onApprove={() => approveId()}
@@ -1021,20 +1040,20 @@ function EditNateModal({
 }
 
 /* Also used by Manage Users' row-menu Cancel Subscription action. */
+/* The one Cancel Subscription confirm — the Full Profile's Subscription card
+   and the Users row menu both open it. */
 export function CancelSubscriptionModal({
   user,
-  platform,
-  renewsOn,
   onClose,
   onConfirm,
 }: {
   user: User;
-  platform: string;
-  renewsOn?: string;
   onClose: () => void;
   onConfirm: () => void;
 }) {
   useEscape(true, onClose);
+  const platform = user.platform ?? "Stripe";
+  const renewsOn = user.renewsOn;
   return (
     <PrmModal
       title="Cancel Subscription?"
@@ -1115,9 +1134,6 @@ function PurchasesSection({
   onToast: (label: string) => void;
 }) {
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
-  // Track refunds applied in this session. Keyed by the purchase's index in the
-  // original array — receiptIds aren't unique across purchases, so they can't key this.
-  const [refunded, setRefunded] = useState<Record<number, boolean>>({});
   const [refundTarget, setRefundTarget] = useState<(Purchase & { idx: number }) | null>(null);
   const [rowMenu, setRowMenu] = useState<{ idx: number; rect: DOMRect } | null>(null);
 
@@ -1125,14 +1141,14 @@ function PurchasesSection({
 
   // Tag each purchase with its stable index, narrow to the picked types, and
   // show the newest first — with every kind in one list, date is the only order
-  // that means anything.
+  // that means anything. Refunds come in on the purchases themselves.
   const rows = useMemo(
     () =>
       purchases
-        .map((pu, idx) => ({ ...pu, idx, refunded: refunded[idx] || pu.refunded }))
+        .map((pu, idx) => ({ ...pu, idx }))
         .filter((pu) => typeFilter.length === 0 || typeFilter.includes(KIND_LABEL[pu.kind]))
         .sort((a, b) => b.date.localeCompare(a.date)),
-    [purchases, typeFilter, refunded],
+    [purchases, typeFilter],
   );
 
   /* Status carries what the old per-tab action cell used to say in words — a
@@ -1267,9 +1283,13 @@ function PurchasesSection({
           </thead>
           <tbody>
             {rows.map((pu) => (
-              <tr key={pu.idx}>
+              <tr key={pu.key || pu.idx}>
                 <td className="col-date">{formatDate(pu.date)}</td>
-                <td className="col-name">{pu.item}</td>
+                {/* The flag stays whole; the item name truncates before it. */}
+                <td className={`col-name${pu.companyPaid ? " has-flag" : ""}`} data-tip={pu.item}>
+                  <span className="tsk-name">{pu.item}</span>
+                  {pu.companyPaid && <span className="pr-name-flag">Company Paid</span>}
+                </td>
                 <td>{KIND_LABEL[pu.kind]}</td>
                 <td className="col-status">{statusCell(pu)}</td>
                 <td>{pu.platform}</td>
@@ -1302,7 +1322,8 @@ function PurchasesSection({
           confirmLabel={`Refund ${money(refundTarget.amount)}`}
           onCancel={() => setRefundTarget(null)}
           onConfirm={() => {
-            setRefunded((r) => ({ ...r, [refundTarget.idx]: true }));
+            // Shared with every tab; a refunded Certification takes its Award.
+            refundPurchase(refundTarget.key);
             setRefundTarget(null);
             onToast("Purchase Refunded");
           }}
@@ -1326,19 +1347,10 @@ function PurchasesSection({
 function certStatusPill(pu: Purchase) {
   if (!pu.consumable)
     return <span className="co-status-pill co-status-pill--green">Lifetime Access</span>;
-  const when = pu.expiresOn ? formatDate(pu.expiresOn) : "";
+  // Consumables never expire: access is Active until an admin revokes it.
+  const when = pu.revokedOn ? formatDate(pu.revokedOn) : "";
   if (pu.certAccess === "Active")
-    return (
-      <span className="co-status-pill co-status-pill--green">
-        {when ? `Active · Expires ${when}` : "Active"}
-      </span>
-    );
-  if (pu.certAccess === "Expired")
-    return (
-      <span className="co-status-pill co-status-pill--yellow">
-        {when ? `Expired · ${when}` : "Expired"}
-      </span>
-    );
+    return <span className="co-status-pill co-status-pill--green">Active</span>;
   if (pu.certAccess === "Revoked")
     return (
       <span className="co-status-pill co-status-pill--red">

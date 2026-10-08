@@ -1,15 +1,21 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
-  attempts as seed,
   attemptDuration,
   attemptReviewedOn,
   attemptCertifications,
-  ATTEMPT_QUIZ_NAMES,
-  ATTEMPT_CERTIFICATION_NAMES,
+  attemptQuizName,
+  attemptsTaken,
+  deleteAttempt as deleteStoredAttempt,
+  grantAttempts,
+  useAttemptStore,
   ATTEMPT_STATUSES,
   type Attempt,
   type AttemptStatus,
 } from "../data/attempts";
+import { taskById, useLiveTasks } from "../data/tasks";
+import { users as allUsers, type User } from "../data/users";
+import { todayIso, CURRENT_ADMIN } from "../data/certPurchases";
+import { GrantAttemptsModal } from "./GrantAttemptsModal";
 import { MultiPill } from "./UsersFilters";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, CascadingMultiSelect } from "./Filters";
@@ -17,7 +23,7 @@ import { dateRangeIncludes, type DateRangeState } from "./DateRangeFilter";
 import { FILTER_TIPS } from "../data/filterTips";
 import { PrmModal } from "./PrmModal";
 import { EntitySearch, type SearchScope } from "./UsersSearch";
-import { SortIcon, RowKebabIcon, RowExternalLinkIcon, RowDeleteIcon, PagePrevIcon, PageNextIcon } from "./icons";
+import { AddIcon, SortIcon, RowKebabIcon, RowExternalLinkIcon, RowDeleteIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { TableCols } from "./TableCols";
 import { TableEmpty } from "./TableEmpty";
 import { useToast } from "./useToast";
@@ -106,7 +112,7 @@ const COLS: ColMeta[] = [
   { key: "name", label: "Name", className: "col-name", width: 190, render: (a) => a.name },
   { key: "email", label: "Email", className: "att-col-email", width: 220, sortable: false, copyable: true, render: (a) => a.email },
   { key: "phone", label: "Phone Number", className: "att-col-phone", width: 170, sortable: false, copyable: true, render: (a) => a.phone },
-  { key: "quizName", label: "Quiz Name", className: "att-col-quiz", width: 230, render: (a) => a.quizName },
+  { key: "quizName", label: "Quiz Name", className: "att-col-quiz", width: 230, render: (a) => attemptQuizName(a) },
   { key: "attemptNumber", label: "Attempt", className: "att-col-attempt", width: 110, render: (a) => `#${a.attemptNumber}` },
   {
     /* `col-status` is what re-enables the pill chrome past the table's
@@ -148,14 +154,16 @@ type Filters = {
 };
 
 export function AttemptsPage({
-  quizName,
+  taskId,
   onBack,
   initialNameFilter,
   extraAttempts,
   initialStatusFilter,
 }: {
-  /** The Task selected on the Tasks page — pre-fills the Quiz filter. */
-  quizName: string;
+  /** The Quiz selected on the Tasks page — pre-fills the Quiz filter, and is
+   *  the Quiz Additional Attempts grants on. Keyed by id, so a renamed Quiz
+   *  keeps its attempts. */
+  taskId: string;
   /** Omit when opened as a standalone tab (e.g. from Manage Completions) — the
    *  Tasks crumb then stops being a link. */
   onBack?: () => void;
@@ -167,7 +175,18 @@ export function AttemptsPage({
   initialStatusFilter?: AttemptStatus;
 }) {
   const [toast, toastNode] = useToast();
-  const [list, setList] = useState<Attempt[]>(() => [...(extraAttempts ?? []), ...seed]);
+  /* The one attempts store Who Paid reads too, so a delete here shows there.
+     A deep link's own rows (built from Manage User Progress data) ride on
+     top; deleting one of those only drops it from this page. */
+  const store = useAttemptStore();
+  const library = useLiveTasks();
+  const [droppedExtra, setDroppedExtra] = useState<ReadonlySet<string>>(() => new Set());
+  const list = useMemo(
+    () => [...(extraAttempts ?? []).filter((a) => !droppedExtra.has(a.id)), ...store.attempts],
+    [extraAttempts, droppedExtra, store.attempts],
+  );
+  const quizName = taskById(taskId)?.name ?? extraAttempts?.[0]?.quizName ?? "";
+  const [granting, setGranting] = useState(false);
   const [filters, setFilters] = useState<Filters>({
     quizzes: [quizName],
     certifications: [],
@@ -205,21 +224,36 @@ export function AttemptsPage({
      union it (and its certifications) into the filter options — otherwise the
      applied pill offers no way back to its own value. */
   const quizOptions = useMemo(
-    () => [...new Set([quizName, ...ATTEMPT_QUIZ_NAMES])].sort(),
-    [quizName],
+    () =>
+      [...new Set([quizName, ...library.filter((t) => t.type === "Quiz").map((t) => t.name)])]
+        .filter(Boolean)
+        .sort(),
+    [quizName, library],
   );
-  /* Every attempt number the current set actually reaches, so the checklist
-     never offers a "#4" nobody has. */
+  /* Every attempt number the selected Quiz(zes) actually reach, so the
+     checklist never offers a "#4" nobody has on them. */
   const attemptOptions = useMemo(
     () =>
-      [...new Set(list.map((a) => a.attemptNumber))]
+      [
+        ...new Set(
+          list
+            .filter((a) => !filters.quizzes.length || filters.quizzes.includes(attemptQuizName(a)))
+            .map((a) => a.attemptNumber),
+        ),
+      ]
         .sort((a, b) => a - b)
         .map((n) => `#${n}`),
-    [list],
+    [list, filters.quizzes],
   );
   const certOptions = useMemo(
-    () => [...new Set([...attemptCertifications(quizName), ...ATTEMPT_CERTIFICATION_NAMES])].sort(),
-    [quizName],
+    () =>
+      [
+        ...new Set([
+          ...attemptCertifications(taskId),
+          ...list.flatMap((a) => attemptCertifications(a.taskId)),
+        ]),
+      ].sort(),
+    [taskId, list],
   );
 
   const scopes: SearchScope[] = [
@@ -249,10 +283,10 @@ export function AttemptsPage({
     // "includes" the empty string, so a name query would match every row.
     const qDigits = q.replace(/\D/g, "");
     return list.filter((a) => {
-      if (filters.quizzes.length && !filters.quizzes.includes(a.quizName)) return false;
+      if (filters.quizzes.length && !filters.quizzes.includes(attemptQuizName(a))) return false;
       if (filters.statuses.length && !filters.statuses.includes(a.status)) return false;
       if (filters.certifications.length) {
-        const certs = attemptCertifications(a.quizName);
+        const certs = attemptCertifications(a.taskId);
         if (!filters.certifications.some((c) => certs.includes(c))) return false;
       }
       if (filters.attemptNumbers.length && !filters.attemptNumbers.includes(`#${a.attemptNumber}`))
@@ -265,7 +299,7 @@ export function AttemptsPage({
         a.name.toLowerCase().includes(q) ||
         a.email.toLowerCase().includes(q) ||
         (!!qDigits && a.phone.replace(/\D/g, "").includes(qDigits)) ||
-        a.quizName.toLowerCase().includes(q)
+        attemptQuizName(a).toLowerCase().includes(q)
       )) return false;
       return true;
     });
@@ -277,7 +311,7 @@ export function AttemptsPage({
         case "name": return a.name.localeCompare(b.name);
         case "email": return a.email.localeCompare(b.email);
         case "phone": return a.phone.localeCompare(b.phone);
-        case "quizName": return a.quizName.localeCompare(b.quizName);
+        case "quizName": return attemptQuizName(a).localeCompare(attemptQuizName(b));
         case "attemptNumber": return a.attemptNumber - b.attemptNumber;
         case "status": return a.status.localeCompare(b.status);
         case "startedAt": return stampTime(a.startedAt) - stampTime(b.startedAt);
@@ -303,9 +337,21 @@ export function AttemptsPage({
   }
 
   function deleteAttempt(a: Attempt) {
-    setList((prev) => prev.filter((x) => x.id !== a.id));
+    if (extraAttempts?.some((x) => x.id === a.id)) {
+      setDroppedExtra((prev) => new Set(prev).add(a.id));
+    } else {
+      deleteStoredAttempt(a);
+    }
     setDeleting(null);
     toast("Attempt Deleted");
+  }
+
+  /* Additional Attempts: the same two-stage flow as Who Paid's — pick users,
+     then how many — on the Quiz this page opened on. */
+  function grantAdditional(picked: User[], count: number) {
+    grantAttempts(taskId, picked.map((u) => u.id), count, todayIso(), CURRENT_ADMIN);
+    setGranting(false);
+    toast("Additional Attempts Granted");
   }
 
   const moreCount =
@@ -349,6 +395,14 @@ export function AttemptsPage({
             <div className="rvc-pagehead">
               <h1 className="tasks-title">Quiz Attempts</h1>
             </div>
+            {taskById(taskId) && (
+              <div className="tasks-header-actions">
+                <button className="new-task" onClick={() => setGranting(true)}>
+                  <AddIcon />
+                  Additional Attempts
+                </button>
+              </div>
+            )}
           </header>
 
           <div className="tasks-row">
@@ -473,6 +527,16 @@ export function AttemptsPage({
         />
       )}
 
+      {granting && (
+        <GrantAttemptsModal
+          quizName={quizName}
+          candidates={allUsers}
+          attemptsOf={(userId) => attemptsTaken(store, taskId, userId)}
+          onGrant={grantAdditional}
+          onClose={() => setGranting(false)}
+        />
+      )}
+
       {deleting && (
         <PrmModal
           title="Delete Attempt"
@@ -481,7 +545,7 @@ export function AttemptsPage({
           doubleConfirm={
             <>
               {deleting.name}'s attempt #{deleting.attemptNumber}, with its answers and grade,
-              will be permanently deleted. This can't be undone.
+              will be permanently deleted and their cooldown reset. This can't be undone.
             </>
           }
           onCancel={() => setDeleting(null)}
@@ -490,8 +554,10 @@ export function AttemptsPage({
           {/* Body copy is children, not `description` — the shell's own
               convention for a confirm (Figma 483:588). */}
           <p className="prm-content">
-            {deleting.name}'s attempt #{deleting.attemptNumber} on “{deleting.quizName}”
-            is removed, along with its answers and grade. This can't be undone.
+            {deleting.name}'s attempt #{deleting.attemptNumber} on “{attemptQuizName(deleting)}”
+            is removed, along with its answers and grade, and their cooldown resets so they
+            can start the next attempt straight away. Any later attempts move up a number.
+            This can't be undone.
           </p>
         </PrmModal>
       )}
@@ -722,6 +788,7 @@ function AttemptActionsMenu({
         <span className="u-menu-item-icon"><RowExternalLinkIcon /></span>
         View Attempt
       </button>
+      {/* Any attempt can be deleted — running, passed or failed. */}
       <button
         className="u-menu-item u-menu-item--danger"
         onClick={(e) => { e.stopPropagation(); onDelete(); onClose(); }}

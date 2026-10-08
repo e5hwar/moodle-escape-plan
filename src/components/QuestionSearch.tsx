@@ -79,6 +79,7 @@ const SUGGESTION_TOKEN: Record<string, Token["kind"]> = {
 export function QuestionSearch({
   categoryOptions,
   questions,
+  countIn,
   selection,
   onSelectionChange,
   types,
@@ -94,6 +95,10 @@ export function QuestionSearch({
 }: {
   categoryOptions: string[];
   questions: Question[];
+  /** What the "N questions" counts beside Type: / Quizzes: / Feedback Form:
+   *  values run over — the caller's scope and Status filter. Defaults to
+   *  `questions`; the lists of names always come from `questions`. */
+  countIn?: Question[];
   /** Empty-bar prompt — the landing asks for "a Question or Category". */
   placeholder?: string;
   /** Filters currently applied to the table — all four are shared with the Filters row. */
@@ -134,26 +139,33 @@ export function QuestionSearch({
 
   useEffect(() => setText(query), [query]);
 
+  const counted = countIn ?? questions;
+
   const typeCounts = useMemo(() => {
     const m = new Map<string, number>();
-    questions.forEach((q) => {
+    counted.forEach((q) => {
       const t = longQuestionType(q.type);
       m.set(t, (m.get(t) ?? 0) + 1);
     });
     return m;
-  }, [questions]);
+  }, [counted]);
 
+  /* Every name on any question is offered (keys), counted only over `counted`
+     — a Quiz whose questions are all out of scope still reads "0 questions"
+     rather than vanishing. */
   const quizCounts = useMemo(() => {
     const m = new Map<string, number>();
-    questions.forEach((q) => q.quizzes.forEach((name) => m.set(name, (m.get(name) ?? 0) + 1)));
+    questions.forEach((q) => q.quizzes.forEach((name) => m.set(name, 0)));
+    counted.forEach((q) => q.quizzes.forEach((name) => m.set(name, (m.get(name) ?? 0) + 1)));
     return m;
-  }, [questions]);
+  }, [questions, counted]);
 
   const formCounts = useMemo(() => {
     const m = new Map<string, number>();
-    questions.forEach((q) => q.forms.forEach((name) => m.set(name, (m.get(name) ?? 0) + 1)));
+    questions.forEach((q) => q.forms.forEach((name) => m.set(name, 0)));
+    counted.forEach((q) => q.forms.forEach((name) => m.set(name, (m.get(name) ?? 0) + 1)));
     return m;
-  }, [questions]);
+  }, [questions, counted]);
 
   const drafted = (kind: Token["kind"]) => draft.find((t) => t.kind === kind)?.name ?? null;
   const scoped = draft.length > 0;

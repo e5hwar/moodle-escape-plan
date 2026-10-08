@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { tasks as taskLibrary, subscriptionLabel, type Task } from "../data/tasks";
-import { certifications, CERT_VISIBILITIES, type Certification } from "../data/certifications";
+import { useLiveTasks, subscriptionLabel, taskInCertifications, type Task } from "../data/tasks";
+import { useLiveCerts, CERT_VISIBILITIES, type Certification } from "../data/certifications";
 import { AUDIENCE_ALL_USERS, SUBSCRIPTION_OPTIONS, VISIBILITIES, audienceOf } from "../data/filters";
 import { TableCols } from "./TableCols";
 import { TableEmpty } from "./TableEmpty";
@@ -30,6 +30,7 @@ import {
 } from "./icons";
 import { TasksSearch } from "./TasksSearch";
 import { CertificationsSearch } from "./CertificationsSearch";
+import { certIndustryText } from "../data/industries";
 
 /* Add Requirement — the Certification wizard's Completion Criteria picker.
  *
@@ -118,7 +119,7 @@ function compareCert(a: Certification, b: Certification, key: CertSortKey): numb
     case "name":
       return a.name.localeCompare(b.name);
     case "industry":
-      return a.industry.localeCompare(b.industry);
+      return certIndustryText(a.industries).localeCompare(certIndustryText(b.industries));
     case "careerStage":
       return (a.careerStage ?? "").localeCompare(b.careerStage ?? "");
     case "dateModified":
@@ -128,8 +129,10 @@ function compareCert(a: Certification, b: Certification, key: CertSortKey): numb
 
 export function SelectRequirementModal({
   existingNames,
-  preselectedNames,
+  existingCertIds,
+  preselectedCertIds,
   certPool: certPoolProp,
+  excludeCertIds,
   only,
   title = "Add Requirement",
   description = "Pick what a learner must complete for this Condition Set. Everything added to one set is required.",
@@ -139,6 +142,7 @@ export function SelectRequirementModal({
   header,
   confirmLabel,
   allowEmpty = false,
+  maxPicks,
   lockedTip = "Already in this Condition Set",
   lockedFlag,
   allCreators,
@@ -150,13 +154,19 @@ export function SelectRequirementModal({
 }: {
   /** Names already in this Condition Set — those rows open ticked and locked. */
   existingNames: string[];
-  /** Certifications ticked when the modal opens but still clickable — so
+  /** Certification ids already in this Condition Set — locked like
+   *  `existingNames`, but matched by id so a renamed one still matches. */
+  existingCertIds?: string[];
+  /** Certification ids ticked when the modal opens but still clickable — so
    *  reopening the picker doubles as "manage what's already picked" (the
    *  Certification builder's Import Courses). Nothing on the Tasks tab. */
-  preselectedNames?: string[];
+  preselectedCertIds?: string[];
   /** Catalog for the Certifications tab. Defaults to every Certification;
    *  Content Links passes only the ones its graph can link. */
   certPool?: Certification[];
+  /** Certifications never listed — the one being edited, which can't be its
+   *  own requirement. */
+  excludeCertIds?: string[];
   /** Restrict the modal to one kind: the tab row is hidden and only that
    *  catalog is listed. */
   only?: Tab;
@@ -176,6 +186,9 @@ export function SelectRequirementModal({
   /** Lets confirm go through with nothing ticked — for a picker that also
    *  clears an existing selection. */
   allowEmpty?: boolean;
+  /** At most this many new picks (Content Links' 10-link cap): once reached,
+   *  unticked rows don't tick. The caller's `header` says why. */
+  maxPicks?: number;
   /** Hover line on a locked row — one sentence, or one per row name. */
   lockedTip?: string | ((name: string) => string);
   /** A locked row names what holds it in a grey flag beside its name and
@@ -197,14 +210,18 @@ export function SelectRequirementModal({
   onCancel: () => void;
   onConfirm: (picks: RequirementPick[]) => void;
 }) {
+  /* The live lists (data/tasks, data/certifications), so Tasks and
+     Certifications created this session can be picked. */
+  const taskLibrary = useLiveTasks();
+  const certifications = useLiveCerts();
   const [tab, setTab] = useState<Tab>(only ?? (certFirst ? "cert" : "task"));
   const [query, setQuery] = useState("");
   const [taskFilters, setTaskFilters] = useState<TaskFilterState>(NO_TASK_FILTERS);
   const [certFilters, setCertFilters] = useState<CertFilterState>(NO_CERT_FILTERS);
   const [pickedTasks, setPickedTasks] = useState<string[]>([]);
   const [pickedCerts, setPickedCerts] = useState<string[]>(() =>
-    preselectedNames?.length
-      ? certifications.filter((c) => preselectedNames.includes(c.name)).map((c) => c.id)
+    preselectedCertIds?.length
+      ? certifications.filter((c) => preselectedCertIds.includes(c.id)).map((c) => c.id)
       : [],
   );
   const [page, setPage] = useState(1);
@@ -231,6 +248,7 @@ export function SelectRequirementModal({
   }, [onCancel]);
 
   const taken = useMemo(() => new Set(existingNames), [existingNames]);
+  const takenCerts = useMemo(() => new Set(existingCertIds), [existingCertIds]);
 
   /* A locked row's look and words. Without `lockedFlag` it stays the plain
      ticked + locked row (no caller does that now); with it, the row dims (`.task-dim`, the shared
@@ -261,12 +279,15 @@ export function SelectRequirementModal({
         : allCreators
           ? taskLibrary
           : taskLibrary.filter(bySkillCat),
-    [allCreators, allUsersOnly],
+    [taskLibrary, allCreators, allUsersOnly],
   );
   const certPool = useMemo(() => {
-    const base = certPoolProp ?? certifications;
+    const listed = certPoolProp ?? certifications;
+    const base = excludeCertIds?.length
+      ? listed.filter((c) => !excludeCertIds.includes(c.id))
+      : listed;
     return allUsersOnly ? base.filter(forAllUsers) : base;
-  }, [certPoolProp, allUsersOnly]);
+  }, [certPoolProp, certifications, excludeCertIds, allUsersOnly]);
 
   const q = query.trim().toLowerCase();
 
@@ -277,7 +298,7 @@ export function SelectRequirementModal({
       if (q && !(t.id.toLowerCase().includes(q) || t.name.toLowerCase().includes(q) || t.type.toLowerCase().includes(q)))
         return false;
       if (f.types.length && !f.types.includes(t.type)) return false;
-      if (f.certifications.length && !t.usedIn.some((c) => f.certifications.includes(c))) return false;
+      if (f.certifications.length && !taskInCertifications(t, f.certifications)) return false;
       if (f.visibilities.length && !f.visibilities.includes(taskVisibility(t))) return false;
       if (f.subscription.length && !f.subscription.includes(subscriptionLabel(t))) return false;
       return true;
@@ -317,7 +338,13 @@ export function SelectRequirementModal({
   }
 
   function toggleCert(id: string) {
-    setPickedCerts((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+    setPickedCerts((p) =>
+      p.includes(id)
+        ? p.filter((x) => x !== id)
+        : maxPicks != null && pickedTasks.length + p.length >= maxPicks
+          ? p
+          : [...p, id],
+    );
   }
 
   /** Any filter change can shrink the list under the current page. */
@@ -602,7 +629,7 @@ export function SelectRequirementModal({
                     <CertColGroup />
                     <tbody>
                       {pagedCerts.map((c) => {
-                        const locked = taken.has(c.name);
+                        const locked = takenCerts.has(c.id) || taken.has(c.name);
                         const on = locked || pickedCerts.includes(c.id);
                         return (
                           <tr
@@ -631,7 +658,7 @@ export function SelectRequirementModal({
                               )}
                             </td>
                             <td className="stm-col-name col-name">{nameCell(c.name, locked)}</td>
-                            <td className="stm-col-certs">{c.industry || "—"}</td>
+                            <td className="stm-col-certs">{certIndustryText(c.industries) || "—"}</td>
                             <td className="stm-col-type">{c.careerStage ?? "—"}</td>
                             <td className="stm-col-edited">{c.dateModified ?? "—"}</td>
                           </tr>

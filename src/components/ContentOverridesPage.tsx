@@ -9,7 +9,9 @@ import {
 } from "react";
 import {
   ADMIN_ACTOR,
-  ADMIN_STAMP,
+  adminStamp,
+  liveCells,
+  saveCompletions,
   applyClearCert,
   applyGrantAttempt,
   applyMarkCert,
@@ -27,6 +29,7 @@ import {
   passMark,
   formatGrade,
   passMarkLabel,
+  sectionMarks,
   tracksAttempts,
   tracksTime,
   TYPE_SHORT,
@@ -36,6 +39,7 @@ import {
   type CertTask,
 } from "../data/certLookup";
 import { PrmModal } from "./PrmModal";
+import { useCompletions } from "../data/completions";
 import { NoteCard } from "./NoteCard";
 import { SearchHints, stepActive, ResultsHead, HighlightMatch, SearchNoResults } from "./SearchPanelParts";
 import { Stepper } from "./Stepper";
@@ -162,7 +166,7 @@ const PENDING_TIP =
 /* ─────────────────────────────── staging model ─────────────────────────── */
 
 type Staged =
-  | { kind: "complete"; uid: string; tid: string; grade: number | null }
+  | { kind: "complete"; uid: string; tid: string; grade: number | null; sectionGrades?: number[] }
   | { kind: "incomplete"; uid: string; tid: string }
   /* Certifying is its OWN record — it does not touch a single task. */
   | { kind: "cert"; uid: string; certId: string }
@@ -175,7 +179,17 @@ type What = { kind: "cert" | "task"; id: string } | null;
 /** `max` is the scale the admin types in — 100 for a Quiz, the Task's own
  *  max score for a Hands-On Task (see {@link gradeScale}); `pass` is the
  *  lowest grade on that scale that passes it (see {@link passMark}). */
-type GradePrompt = { uid: string; tid: string; taskName: string; type: string; max: number; pass: number } | null;
+type GradePrompt = {
+  uid: string;
+  tid: string;
+  taskName: string;
+  type: string;
+  max: number;
+  pass: number;
+  /** A section-level Quiz takes a grade per Section, each held to its own mark
+   *  (`decides` — the Sections that decide the pass; see `sectionMarks`). */
+  sections: { name: string; pass: number; decides: boolean }[] | null;
+} | null;
 type TaskRef = { uid: string; tid: string } | null;
 type MenuState =
   | { kind: "task"; uid: string; tid: string; rect: DOMRect }
@@ -208,9 +222,12 @@ export function ContentOverridesPage({
 }) {
   const data = useMemo(() => buildData(), []);
 
-  /* Committed state — only the apply step writes these. */
-  const [cells, setCells] = useState<CellMap>(() => data.cells);
-  const [certManual, setCertManual] = useState<CertManual>({});
+  /* Committed state — only the apply step writes these. Both are read from
+     the completions store (completions.ts), so what was applied is still
+     there on the next visit. */
+  const committed = useCompletions();
+  const cells = useMemo<CellMap>(() => liveCells(data, committed), [data, committed]);
+  const certManual: CertManual = committed.certs;
 
   /* Staged changes — nothing touches `cells` until Review & Save confirms. */
   const [staged, setStaged] = useState<Staged[]>([]);
@@ -258,6 +275,8 @@ export function ContentOverridesPage({
 
   const [gradePrompt, setGradePrompt] = useState<GradePrompt>(null);
   const [gradeInput, setGradeInput] = useState("");
+  /** One grade per Section, when the prompt is a section-level Quiz's. */
+  const [sectionInputs, setSectionInputs] = useState<string[]>([]);
   /** Set once the admin leaves the grade input or tries to continue; the
    *  under-pass error waits for it so typing "8" on the way to "80" never flashes. */
   const [gradeTried, setGradeTried] = useState(false);
@@ -295,10 +314,12 @@ export function ContentOverridesPage({
     staged.find((s): s is Extract<Staged, { kind: "complete" }> => s.kind === "complete" && s.uid === uid && s.tid === tid);
   const stagedIncomplete = (uid: string, tid: string) =>
     staged.find((s): s is Extract<Staged, { kind: "incomplete" }> => s.kind === "incomplete" && s.uid === uid && s.tid === tid);
-  const stagedCertOf = (uid: string) =>
-    staged.find((s): s is Extract<Staged, { kind: "cert" }> => s.kind === "cert" && s.uid === uid);
-  const stagedCertUnOf = (uid: string) =>
-    staged.find((s): s is Extract<Staged, { kind: "certun" }> => s.kind === "certun" && s.uid === uid);
+  /* Keyed by person AND certification: staging one certification for someone
+     must not read as staged on every other certification they hold. */
+  const stagedCertOf = (uid: string, certId: string) =>
+    staged.find((s): s is Extract<Staged, { kind: "cert" }> => s.kind === "cert" && s.uid === uid && s.certId === certId);
+  const stagedCertUnOf = (uid: string, certId: string) =>
+    staged.find((s): s is Extract<Staged, { kind: "certun" }> => s.kind === "certun" && s.uid === uid && s.certId === certId);
 
   const isStagedComplete = (uid: string, tid: string) => !!stagedComplete(uid, tid);
   const isStagedIncomplete = (uid: string, tid: string) => !!stagedIncomplete(uid, tid);
@@ -321,8 +342,10 @@ export function ContentOverridesPage({
     }
     const t = data.tasksById[tid];
     if (t && needsGradePrompt(t)) {
-      setGradePrompt({ uid, tid, taskName: t.name, type: t.type, max: gradeScale(t), pass: passMark(t) });
+      const sections = sectionMarks(t);
+      setGradePrompt({ uid, tid, taskName: t.name, type: t.type, max: gradeScale(t), pass: passMark(t), sections });
       setGradeInput("");
+      setSectionInputs(sections ? sections.map(() => "") : []);
       setGradeTried(false);
     } else {
       setStaged((prev) => [...prev, { kind: "complete", uid, tid, grade: null }]);
@@ -336,16 +359,57 @@ export function ContentOverridesPage({
   const gradeNum = gradeInput.trim() === "" ? null : Number(gradeInput);
   const gradeOverMax = !!gradePrompt && gradeNum != null && gradeNum > gradePrompt.max;
   const gradeUnderPass = !!gradePrompt && gradeNum != null && gradeNum < gradePrompt.pass;
+  /* Per Section: each grade is checked against 100 at once, and — on the
+     Sections that decide the pass — against its own mark once tried. Grades
+     are all-or-none: some filled and some blank can't be staged. */
+  const sectionNums = sectionInputs.map((v) => (v.trim() === "" ? null : Number(v)));
+  const someSections = sectionNums.some((n) => n != null);
+  const sectionErrors = (gradePrompt?.sections ?? []).map((sec, i) => {
+    const n = sectionNums[i];
+    if (n != null && n > 100) return "Grade can't exceed 100";
+    if (n != null && sec.decides && n < sec.pass && gradeTried) return `Must be ${sec.pass} or higher`;
+    if (n == null && someSections && gradeTried) return "Enter a grade for this Section";
+    return null;
+  });
+  const sectionBlocked = (gradePrompt?.sections ?? []).some((sec, i) => {
+    const n = sectionNums[i];
+    return (n != null && (n > 100 || (sec.decides && n < sec.pass))) || (n == null && someSections);
+  });
   const gradeError = !gradePrompt
     ? null
-    : gradeOverMax
-      ? `Grade can't exceed ${gradePrompt.max}`
-      : gradeUnderPass && gradeTried
-        ? `Grade must be ${gradePrompt.pass} or higher`
-        : null;
+    : gradePrompt.sections
+      ? sectionErrors.find((e) => e != null) ?? null
+      : gradeOverMax
+        ? `Grade can't exceed ${gradePrompt.max}`
+        : gradeUnderPass && gradeTried
+          ? `Grade must be ${gradePrompt.pass} or higher`
+          : null;
 
   function confirmGrade() {
     if (!gradePrompt) return;
+    if (gradePrompt.sections) {
+      if (sectionBlocked) {
+        setGradeTried(true);
+        return;
+      }
+      /* Stored as the Sections' average, with the Section grades kept beside
+         it. All blank marks it complete without a grade. */
+      const nums = sectionNums.filter((n): n is number => n != null);
+      const grade = nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null;
+      setStaged((prev) => [
+        ...prev,
+        {
+          kind: "complete",
+          uid: gradePrompt.uid,
+          tid: gradePrompt.tid,
+          grade,
+          ...(nums.length ? { sectionGrades: nums } : {}),
+        },
+      ]);
+      setGradePrompt(null);
+      setSectionInputs([]);
+      return;
+    }
     if (gradeOverMax || gradeUnderPass) {
       setGradeTried(true);
       return;
@@ -363,14 +427,14 @@ export function ContentOverridesPage({
    *  about the individual tasks — they keep whatever state they earned, and a
    *  task is only ever completed by completing that task. */
   function toggleCertStage(uid: string, certId: string) {
-    const ex = stagedCertOf(uid);
+    const ex = stagedCertOf(uid, certId);
     setStaged((prev) => (ex ? prev.filter((s) => s !== ex) : [...prev, { kind: "cert", uid, certId }]));
   }
 
   /** Stage / unstage "mark certification incomplete" — the mirror image: it
    *  withdraws the certification and leaves every task alone. */
   function toggleCertUnstage(uid: string, certId: string) {
-    const ex = stagedCertUnOf(uid);
+    const ex = stagedCertUnOf(uid, certId);
     setStaged((prev) => (ex ? prev.filter((s) => s !== ex) : [...prev, { kind: "certun", uid, certId }]));
   }
 
@@ -428,19 +492,18 @@ export function ContentOverridesPage({
     let m = certManual;
     staged.forEach((s) => {
       if (s.kind === "grant") c = applyGrantAttempt(c, s.uid, s.tid, s.n);
-      else if (s.kind === "complete") c = applyMarkComplete(c, s.uid, s.tid, s.grade, ADMIN_ACTOR);
+      else if (s.kind === "complete") c = applyMarkComplete(c, s.uid, s.tid, s.grade, ADMIN_ACTOR, s.sectionGrades);
       else if (s.kind === "incomplete") c = applyMarkIncomplete(c, s.uid, s.tid);
       /* Both certification actions write the certification record ONLY —
          `cells` is untouched, so no task gains or loses a completion. */
-      else if (s.kind === "cert") m = applyMarkCert(m, s.uid, s.certId);
-      else if (s.kind === "certun") m = applyClearCert(m, s.uid, s.certId);
+      else if (s.kind === "cert") m = applyMarkCert(m, s.uid, s.certId, data.certsById[s.certId]?.name ?? s.certId);
+      else if (s.kind === "certun") m = applyClearCert(m, s.uid, s.certId, data.certsById[s.certId]?.name ?? s.certId);
     });
     const n = staged.length;
-    setCells(c);
-    setCertManual(m);
+    saveCompletions(data, c, m);
     setStaged([]);
     setDialogOpen(false);
-    toast(`${n} ${n === 1 ? "Change" : "Changes"} Applied — logged as ${ADMIN_ACTOR}, ${ADMIN_STAMP}`);
+    toast(`${n} ${n === 1 ? "Change" : "Changes"} Applied — logged as ${ADMIN_ACTOR}, ${adminStamp()}`);
   }
 
   /* ───── derived scope ───── */
@@ -618,8 +681,8 @@ export function ContentOverridesPage({
   /* Employee × certification derivations. */
   const certProgress =
     showUserCert ? progress(cells, certManual, whoUser!.id, certTasks, certObj!.id) : null;
-  const certStaged = showUserCert && !!stagedCertOf(whoUser!.id);
-  const certUnStaged = showUserCert && !!stagedCertUnOf(whoUser!.id);
+  const certStaged = showUserCert && !!stagedCertOf(whoUser!.id, certObj!.id);
+  const certUnStaged = showUserCert && !!stagedCertUnOf(whoUser!.id, certObj!.id);
 
   /* Employee × task derivations. */
   const taskCell = showUserTask ? cells[whoUser!.id + "_" + taskObj!.id] : null;
@@ -912,39 +975,82 @@ export function ContentOverridesPage({
               onCancel={() => {
                 setGradePrompt(null);
                 setGradeInput("");
+                setSectionInputs([]);
               }}
               onConfirm={confirmGrade}
               confirmDisabled={gradeError != null}
             >
-              <div className="prm-field">
-                <label className="prm-label" htmlFor="mc-grade">
-                  Grade
-                  {gradeError && <span className="form-label-error">{gradeError}</span>}
-                </label>
-                {/* Figma 1554:2972 "Input + Suffix": one input shell, the
-                    scale ("/100", "/10"…) riding inside it at the right. */}
-                <div className={`mc-gradefield${gradeError ? " has-error" : ""}`}>
-                  <input
-                    id="mc-grade"
-                    className="mc-gradefield-input"
-                    type="number"
-                    placeholder="Grade..."
-                    min={0}
-                    max={gradePrompt.max}
-                    autoFocus
-                    value={gradeInput}
-                    onChange={(e) => setGradeInput(e.target.value)}
-                    onBlur={() => setGradeTried(true)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") confirmGrade();
-                    }}
-                  />
-                  <span className="mc-gradefield-suffix">/{gradePrompt.max}</span>
+              {gradePrompt.sections ? (
+                /* A section-level Quiz: a Grade field per Section, in Section
+                   order, each on the same Input + Suffix shell. */
+                <div className="prm-stack">
+                  {gradePrompt.sections.map((sec, i) => (
+                    <div className="prm-field" key={sec.name + i}>
+                      <label className="prm-label" htmlFor={`mc-grade-${i}`}>
+                        {sec.name}
+                        {sectionErrors[i] && <span className="form-label-error">{sectionErrors[i]}</span>}
+                      </label>
+                      <div className={`mc-gradefield${sectionErrors[i] ? " has-error" : ""}`}>
+                        <input
+                          id={`mc-grade-${i}`}
+                          className="mc-gradefield-input"
+                          type="number"
+                          placeholder="Grade..."
+                          min={0}
+                          max={100}
+                          autoFocus={i === 0}
+                          value={sectionInputs[i] ?? ""}
+                          onChange={(e) =>
+                            setSectionInputs((prev) => prev.map((v, j) => (j === i ? e.target.value : v)))
+                          }
+                          onBlur={() => setGradeTried(true)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") confirmGrade();
+                          }}
+                        />
+                        <span className="mc-gradefield-suffix">/100</span>
+                      </div>
+                      <p className="prm-help">
+                        {sec.decides ? `Passes at ${sec.pass}%.` : "Doesn't decide the pass — any grade."}
+                      </p>
+                    </div>
+                  ))}
+                  <p className="prm-help">
+                    Optional. Enter a grade for every Section, or leave them all blank to mark
+                    complete without one
+                  </p>
                 </div>
-                <p className="prm-help">
-                  Optional. Enter a score, or leave blank to mark complete without one
-                </p>
-              </div>
+              ) : (
+                <div className="prm-field">
+                  <label className="prm-label" htmlFor="mc-grade">
+                    Grade
+                    {gradeError && <span className="form-label-error">{gradeError}</span>}
+                  </label>
+                  {/* Figma 1554:2972 "Input + Suffix": one input shell, the
+                      scale ("/100", "/10"…) riding inside it at the right. */}
+                  <div className={`mc-gradefield${gradeError ? " has-error" : ""}`}>
+                    <input
+                      id="mc-grade"
+                      className="mc-gradefield-input"
+                      type="number"
+                      placeholder="Grade..."
+                      min={0}
+                      max={gradePrompt.max}
+                      autoFocus
+                      value={gradeInput}
+                      onChange={(e) => setGradeInput(e.target.value)}
+                      onBlur={() => setGradeTried(true)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") confirmGrade();
+                      }}
+                    />
+                    <span className="mc-gradefield-suffix">/{gradePrompt.max}</span>
+                  </div>
+                  <p className="prm-help">
+                    Optional. Enter a score, or leave blank to mark complete without one
+                  </p>
+                </div>
+              )}
             </PrmModal>
           )}
 
@@ -1317,7 +1423,18 @@ function TaskRow({ uid, task, ctx }: { uid: string; task: CertTask; ctx: RowCtx 
       </span>
       {/* Every task's grade reads on its own scale ("72%", "18/25"), so the
           bar it had to clear is named on hover rather than guessed at. */}
-      <span className="mct-c-grade" data-tip={grade ? passMarkLabel(task) : undefined}>
+      <span
+        className="mct-c-grade"
+        data-tip={
+          !grade
+            ? undefined
+            : cell.sectionGrades?.length
+              ? (sectionMarks(task) ?? [])
+                  .map((sec, i) => `${sec.name}: ${cell.sectionGrades?.[i] ?? "—"}%`)
+                  .join("\n")
+              : passMarkLabel(task)
+        }
+      >
         {grade || "-"}
       </span>
       <span className="mct-c-att">

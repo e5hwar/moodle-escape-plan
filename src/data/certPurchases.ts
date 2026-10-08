@@ -1,5 +1,6 @@
 import { users, type User } from "./users";
-import type { Certification } from "./certifications";
+import { certifications as seedCerts, type Certification } from "./certifications";
+import { appToday, isoDate } from "./companies";
 
 /**
  * A record of one user's paid (or comped) access to a Certification. Generated
@@ -22,9 +23,8 @@ export type CertPurchase = {
   /** True once the Certification is fully completed (progress === 100). */
   completed: boolean;
   /**
-   * Consumables only: the ISO date access ended (consumed, expired, or revoked
-   * by an admin). null while access is still active, and always null for
-   * non-consumable Certifications.
+   * The ISO date access ended — only ever an admin revoking access (on any
+   * Certification; consumables don't expire in V1). null while access is live.
    */
   accessEndedDate: string | null;
   /**
@@ -66,16 +66,17 @@ function phash(s: string): number {
   return h >>> 0;
 }
 
-const TODAY = new Date("2026-06-24");
-
-export function isoDaysAgo(n: number, from: Date = TODAY): string {
+/* Dates count from the app's one clock (companies.ts appToday), so a revoke or
+   grant stamps the real today and the seed purchases sit behind it. Local
+   dates throughout — toISOString is UTC and can slip a day. */
+export function isoDaysAgo(n: number, from: Date = appToday()): string {
   const d = new Date(from);
   d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
+  return isoDate(d);
 }
 
 export function todayIso(): string {
-  return TODAY.toISOString().slice(0, 10);
+  return isoDate(appToday());
 }
 
 export function isConsumableCert(cert: Pick<Certification, "payment">): boolean {
@@ -139,13 +140,17 @@ export function applyGrants<T extends Grantable>(rows: T[], seed: string): T[] {
   );
 }
 
+/** Seed Certification ids — the only ones with a purchase history. */
+const SEED_CERT_IDS = new Set(seedCerts.map((c) => c.id));
+
 /**
  * Build the seed list of purchasers for a Certification. Roughly half the user
- * base "bought" it, with a spread of progress, completion, and (for
- * consumables) ended-access states.
+ * base "bought" it, with a spread of progress and completion; every seed
+ * buyer's access is live. A Certification created this session isn't in the
+ * seed and has no buyers yet — its list starts empty.
  */
 export function buildCertPurchases(cert: Certification): CertPurchase[] {
-  const consumable = isConsumableCert(cert);
+  if (!SEED_CERT_IDS.has(cert.id)) return [];
   const out: CertPurchase[] = [];
 
   for (const u of users) {
@@ -161,13 +166,9 @@ export function buildCertPurchases(cert: Certification): CertPurchase[] {
     const progress = bucket < 32 ? 100 : 5 + ((h >>> 5) % 94);
     const completed = progress === 100;
 
-    // Consumables can have a finished access window once consumed: completed
-    // runs, or a deterministic slice that expired.
-    let accessEndedDate: string | null = null;
-    if (consumable && (completed || h % 5 === 0)) {
-      const endedDaysAgo = Math.max(1, purchasedDaysAgo - 10 - (h % 8));
-      accessEndedDate = isoDaysAgo(endedDaysAgo);
-    }
+    // Consumables never expire in V1 and completing doesn't end access, so a
+    // seed buyer's access is always live — only an admin revoke ends it.
+    const accessEndedDate: string | null = null;
 
     out.push({
       userId: u.id,
@@ -193,15 +194,18 @@ export function buildAllCertPurchases(certs: Certification[]): CertPurchase[] {
   return certs.flatMap((c) => buildCertPurchases(c));
 }
 
-/** Users who don't yet have access to ONE Certification — candidates for its
- * Grant Access flow. Rows now span certs, so the caller passes its cert name. */
+/** Users who don't currently have access to ONE Certification — candidates
+ * for its Grant Access flow. A revoked user counts as without access, so they
+ * can be granted again. Rows span certs, so the caller passes its cert name. */
 export function usersWithoutAccess(
   purchases: CertPurchase[],
   certName: string,
   all: User[] = users,
 ): User[] {
   const have = new Set(
-    purchases.filter((p) => p.certName === certName).map((p) => p.userId),
+    purchases
+      .filter((p) => p.certName === certName && !p.revokedDate)
+      .map((p) => p.userId),
   );
   return all.filter((u) => !have.has(u.id));
 }

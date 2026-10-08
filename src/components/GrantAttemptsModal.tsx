@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { subscriptionText, type User } from "../data/users";
+import { subscriptionFilterStatus, subscriptionText, type User } from "../data/users";
 import { PrmModal } from "./PrmModal";
 import { TableCols } from "./TableCols";
 import { MultiSelectTags } from "./MultiSelectTags";
@@ -18,7 +18,7 @@ import {
   PageNextIcon,
 } from "./icons";
 
-/* Grant Free Attempts — the Who Paid page's comp flow.
+/* Grant Additional Attempts — the comp flow on Who Paid and Quiz Attempts.
  *
  * The page's button opens the PICKER first — picking who to comp is the first
  * thing the admin does — and Continue lands on the FORM (a plain PrmModal laid
@@ -57,7 +57,9 @@ const MAX_GRANT = 10;
  *  Two, not the Skill wizard's three: the field is 470px inside the modal and
  *  a third name pushed the "+N" past the caret, where the field clips it. */
 const USER_TYPES = ["B2C", "B2B"];
-const SUBSCRIPTIONS = ["Starter", "Subscriber", "Scholarship", "Free Trial"];
+/* Every status the Users page and Who Paid filter on (`subscriptionFilterStatus`),
+   so a Company Plan or Cancelled user can be found here too. */
+const SUBSCRIPTIONS = ["Starter", "Subscriber", "Company Plan", "Scholarship", "Free Trial", "Cancelled"];
 const ROLES = ["Self-Learner", "Employee", "Manager", "Admin"];
 
 type SortKey =
@@ -119,8 +121,8 @@ export function GrantAttemptsModal({
     <>
       {reachedForm && (
       <PrmModal
-        title="Grant Free Attempts"
-        description={`Comp attempts on “${quizName}”. The users you pick get them at no charge, logged as an admin grant.`}
+        title="Grant Additional Attempts"
+        description={`Give extra attempts on “${quizName}”. The users you pick get them at no charge, logged as an admin grant.`}
         confirmLabel="Grant Attempts"
         confirmDisabled={!valid}
         onCancel={onClose}
@@ -162,14 +164,14 @@ export function GrantAttemptsModal({
 
           <div className="prm-field">
             <span className="prm-label">
-              Free Attempts per User<span className="prm-req">*</span>
+              Additional Attempts per User<span className="prm-req">*</span>
             </span>
             <Stepper
               value={count}
               onChange={setCount}
               min={1}
               max={MAX_GRANT}
-              ariaLabel="Free attempts per user"
+              ariaLabel="Additional attempts per user"
             />
             <p className="form-help">
               Up to {MAX_GRANT} per grant. Each attempt is added on top of the
@@ -182,7 +184,7 @@ export function GrantAttemptsModal({
 
       {picking && (
         <SelectGrantUsersModal
-          description={`Choose who to comp on “${quizName}”. You can grant to as many users as you like in one go.`}
+          description={`Choose who gets additional attempts on “${quizName}”. You can grant to as many users as you like in one go.`}
           candidates={candidates}
           attemptsOf={attemptsOf}
           value={picked}
@@ -294,7 +296,7 @@ export function SelectGrantUsersModal({
       )
         return false;
       if (types.length && !types.includes(u.userType)) return false;
-      if (subs.length && !subs.includes(u.subscriptionStatus)) return false;
+      if (subs.length && !subs.includes(subscriptionFilterStatus(u))) return false;
       if (roles.length && !roles.includes(u.role)) return false;
       if (companies.length && !companies.includes(companyOf(u))) return false;
       return true;

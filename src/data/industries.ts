@@ -1,4 +1,6 @@
+import { useSyncExternalStore } from "react";
 import type { PickedImage } from "../components/ImageUploadField";
+import type { Certification } from "./certifications";
 import hvacIcon from "../assets/industry-hvac.svg";
 import plumbingIcon from "../assets/industry-plumbing.svg";
 import electricalIcon from "../assets/industry-electrical.svg";
@@ -28,15 +30,6 @@ export function rowIcon(item: { key: string; icon?: PickedImage }): PickedImage 
   return PLACEHOLDER_ICONS[h % PLACEHOLDER_ICONS.length];
 }
 
-export type CareerStage = "Apprentice" | "Journeyman" | "Master";
-
-export type IndustryCert = {
-  id: string;
-  name: string;
-  stage: CareerStage;
-  hours: number;
-};
-
 export type SubIndustry = {
   key: string;
   name: string;
@@ -47,7 +40,9 @@ export type SubIndustry = {
   // Whether this Sub-Industry is visible to learners
   hidden?: boolean;
   displayPosition: number;
-  // Ordered cert ids tagged at this sub-industry level
+  /* The display ORDER of the Certifications tagged with this Sub-Industry.
+     Membership is the tag on the Certification (`Certification.industries`);
+     see `syncIndustryOrder`. */
   certIds: string[];
 };
 
@@ -62,33 +57,15 @@ export type Industry = {
   hidden?: boolean;
   displayPosition: number;
   subIndustries: SubIndustry[];
-  // Ordered cert ids tagged at the industry level only (not via sub-industries)
+  /* The display ORDER of the Certifications tagged with this Industry itself
+     (a Sub-Industry tag doesn't count). Membership is the tag on the
+     Certification; see `syncIndustryOrder`. */
   certIds: string[];
 };
 
-// ─── Cert pool ──────────────────────────────────────────────────────────────
-// These are the certifications referenced by the tagging structure. Names,
-// stages, and hours mirror the mockups; ids are stable and used for "Also
-// tagged in" inference plus the Add Certifications picker.
-export const certPool: IndustryCert[] = [
-  { id: "C-1001", name: "HVAC Fundamentals", stage: "Apprentice", hours: 8 },
-  { id: "C-1002", name: "EPA 608 Universal", stage: "Journeyman", hours: 12 },
-  { id: "C-1003", name: "NATE Core", stage: "Journeyman", hours: 16 },
-  { id: "C-1004", name: "HVAC Math & Tools", stage: "Apprentice", hours: 4 },
-  { id: "C-1005", name: "Refrigerant Identification", stage: "Journeyman", hours: 3 },
-
-  { id: "C-1010", name: "Residential AC Installation", stage: "Journeyman", hours: 14 },
-  { id: "C-1011", name: "Indoor Air Quality (Residential)", stage: "Apprentice", hours: 5 },
-  { id: "C-1012", name: "EPA 608 Type I", stage: "Apprentice", hours: 6 },
-
-  { id: "C-1020", name: "EPA 608 Type II", stage: "Apprentice", hours: 8 },
-  { id: "C-1021", name: "Commercial Refrigeration Systems", stage: "Master", hours: 20 },
-
-  { id: "C-1030", name: "Heat Pump Service Pro", stage: "Journeyman", hours: 12 },
-  { id: "C-1031", name: "Ductwork Design Fundamentals", stage: "Journeyman", hours: 10 },
-];
-
 // ─── Tagging ────────────────────────────────────────────────────────────────
+/* Each `certIds` is the display order of the seed Certifications carrying
+   that exact tag (data/certifications), so the seed starts in sync. */
 export const industries: Industry[] = [
   {
     key: "hvac",
@@ -96,29 +73,25 @@ export const industries: Industry[] = [
     nameEs: "Climatización (HVAC)",
     icon: seedIcon("hvac.svg", 3295, hvacIcon),
     displayPosition: 1,
-    certIds: ["C-1001", "C-1002", "C-1003", "C-1004", "C-1005"],
+    certIds: ["C-0421", "C-0410", "C-0417", "C-0406", "C-0398", "C-0376"],
     subIndustries: [
       {
         key: "hvac-residential",
         name: "Residential",
         displayPosition: 1,
-        certIds: [
-          "C-1010", "C-1011", "C-1012",
-          "P-2001", "P-2002", "P-2003", "P-2004", "P-2005",
-          "P-2006", "P-2007", "P-2008", "P-2009",
-        ],
+        certIds: ["C-0421", "C-0420", "C-0410", "C-0405", "C-0612", "C-0629"],
       },
       {
         key: "hvac-commercial",
         name: "Commercial",
         displayPosition: 2,
-        certIds: ["C-1020", "C-1021", "P-2010", "P-2011", "P-2012", "P-2013", "P-2014", "P-2015"],
+        certIds: ["C-0421", "C-0419", "C-0418"],
       },
       {
         key: "hvac-industrial",
         name: "Industrial",
         displayPosition: 3,
-        certIds: ["P-2016", "P-2017", "P-2018", "P-2019"],
+        certIds: ["C-0265"],
       },
     ],
   },
@@ -128,31 +101,31 @@ export const industries: Industry[] = [
     nameEs: "Plomería",
     icon: seedIcon("plumbing.svg", 961, plumbingIcon),
     displayPosition: 2,
-    certIds: ["P-3001", "P-3002", "P-3003"],
+    certIds: ["C-0322"],
     subIndustries: [
       {
         key: "plumbing-residential",
         name: "Residential",
         displayPosition: 1,
-        certIds: ["P-3010", "P-3011", "P-3012", "P-3013", "P-3014"],
+        certIds: [],
       },
       {
         key: "plumbing-commercial",
         name: "Commercial",
         displayPosition: 2,
-        certIds: ["P-3020", "P-3021", "P-3022"],
+        certIds: [],
       },
       {
         key: "plumbing-service",
         name: "Service & Repair",
         displayPosition: 3,
-        certIds: ["P-3030", "P-3031", "P-3032", "P-3033"],
+        certIds: ["C-0624"],
       },
       {
         key: "plumbing-pipefitting",
         name: "Pipefitting",
         displayPosition: 4,
-        certIds: ["P-3040", "P-3041"],
+        certIds: ["C-0221"],
       },
     ],
   },
@@ -162,56 +135,133 @@ export const industries: Industry[] = [
     nameEs: "Electricidad",
     icon: seedIcon("electrical.svg", 553, electricalIcon),
     displayPosition: 3,
-    certIds: ["P-4001", "P-4002"],
+    certIds: ["C-0298"],
     subIndustries: [
       {
         key: "electrical-residential",
         name: "Residential",
         displayPosition: 1,
-        certIds: ["P-4010", "P-4011", "P-4012", "P-4013"],
+        certIds: ["C-0242"],
       },
       {
         key: "electrical-commercial",
         name: "Commercial",
         displayPosition: 2,
-        certIds: ["P-4020", "P-4021", "P-4022", "P-4023"],
+        certIds: [],
       },
       {
         key: "electrical-industrial",
         name: "Industrial",
         displayPosition: 3,
-        certIds: ["P-4030", "P-4031", "P-4032"],
+        certIds: ["C-0341"],
       },
     ],
   },
 ];
 
-// Placeholder pool — fills out the picker so filters and pagination feel real.
-export const placeholderPool: IndustryCert[] = (() => {
-  const out: IndustryCert[] = [];
-  const stages: CareerStage[] = ["Apprentice", "Journeyman", "Master"];
-  const families = ["P-2", "P-3", "P-4", "P-5", "P-6", "P-7"];
-  for (const fam of families) {
-    /* Each family numbers its own 001–050 (P-3001 … P-3050). A counter shared
-       across families started P-3 at 3051 and P-4 at 4101, so the P-3xxx /
-       P-4xxx ids Plumbing and Electrical tag above never existed and their
-       lists rendered blank. */
-    for (let i = 0; i < 50; i++) {
-      const id = `${fam}${String(i + 1).padStart(3, "0")}`;
-      out.push({
-        id,
-        name: `Placeholder Cert ${id}`,
-        stage: stages[i % 3],
-        hours: 2 + (i % 10),
-      });
+/* ── The live Industry list ──
+ * App owns the Industries (the Industries page edits them) and mirrors them
+ * here, so the Certifications page's Industries modal, filters and columns
+ * read the current names and order rather than the seed. Membership lives on
+ * the Certification (`Certification.industries`, tag keys); an Industry's or
+ * Sub-Industry's `certIds` is only its display ORDER for the tagged ones. */
+let liveIndustries: Industry[] = industries;
+const liveIndustryListeners = new Set<() => void>();
+export function setLiveIndustries(list: Industry[]) {
+  if (list === liveIndustries) return;
+  liveIndustries = list;
+  liveIndustryListeners.forEach((l) => l());
+}
+export function getLiveIndustries(): Industry[] {
+  return liveIndustries;
+}
+export function useLiveIndustries(): Industry[] {
+  return useSyncExternalStore(
+    (l) => {
+      liveIndustryListeners.add(l);
+      return () => liveIndustryListeners.delete(l);
+    },
+    getLiveIndustries,
+  );
+}
+
+export type IndustryTagOption = { key: string; label: string };
+
+/** Every taggable Industry and Sub-Industry, in browse order: each Industry
+ *  ("HVAC") followed by its Sub-Industries ("HVAC › Residential"). */
+export function industryTagOptions(inds: Industry[] = liveIndustries): IndustryTagOption[] {
+  return [...inds]
+    .sort((a, b) => a.displayPosition - b.displayPosition)
+    .flatMap((ind) => [
+      { key: ind.key, label: ind.name },
+      ...[...ind.subIndustries]
+        .sort((a, b) => a.displayPosition - b.displayPosition)
+        .map((sub) => ({ key: sub.key, label: `${ind.name} › ${sub.name}` })),
+    ]);
+}
+
+/** "HVAC" or "HVAC › Residential" for a tag key; "" when the key no longer
+ *  names an Industry (it was deleted). */
+export function industryTagLabel(key: string, inds: Industry[] = liveIndustries): string {
+  for (const ind of inds) {
+    if (ind.key === key) return ind.name;
+    const sub = ind.subIndustries.find((s) => s.key === key);
+    if (sub) return `${ind.name} › ${sub.name}`;
+  }
+  return "";
+}
+
+/** A Certification's tags as labels, in browse order; unknown keys dropped. */
+export function industryTagLabels(tags: readonly string[], inds: Industry[] = liveIndustries): string[] {
+  const opts = industryTagOptions(inds);
+  return opts.filter((o) => tags.includes(o.key)).map((o) => o.label);
+}
+
+/** A Certification's tags as one display string ("HVAC, HVAC › Residential"),
+ *  "" when untagged. */
+export function certIndustryText(tags: readonly string[], inds: Industry[] = liveIndustries): string {
+  return industryTagLabels(tags, inds).join(", ");
+}
+
+/* ── Membership vs. display order ──
+ * A scope's Certifications are the ones whose `industries` hold its key.
+ * `certIds` only orders them: tagged ids in their saved order, then any newly
+ * tagged ones appended (in catalog order); ids no longer tagged drop out. */
+function orderTagged(order: string[], tagged: string[]): string[] {
+  const set = new Set(tagged);
+  const kept = order.filter((id) => set.has(id));
+  const known = new Set(kept);
+  return [...kept, ...tagged.filter((id) => !known.has(id))];
+}
+const sameIds = (a: string[], b: string[]) =>
+  a.length === b.length && a.every((id, i) => id === b[i]);
+
+/** The Industries with every `certIds` matched to the Certifications' tags.
+ *  Returns `inds` itself when nothing changed, so it is safe in a state
+ *  updater or an effect. */
+export function syncIndustryOrder(inds: Industry[], certs: readonly Certification[]): Industry[] {
+  const byTag = new Map<string, string[]>();
+  for (const c of certs) {
+    for (const k of c.industries) {
+      const list = byTag.get(k);
+      if (list) list.push(c.id);
+      else byTag.set(k, [c.id]);
     }
   }
-  return out;
-})();
-
-export const allCertsById: Record<string, IndustryCert> = (() => {
-  const m: Record<string, IndustryCert> = {};
-  for (const c of certPool) m[c.id] = c;
-  for (const c of placeholderPool) if (!m[c.id]) m[c.id] = c;
-  return m;
-})();
+  let changed = false;
+  const next = inds.map((ind) => {
+    const certIds = orderTagged(ind.certIds, byTag.get(ind.key) ?? []);
+    let subChanged = false;
+    const subIndustries = ind.subIndustries.map((sub) => {
+      const ids = orderTagged(sub.certIds, byTag.get(sub.key) ?? []);
+      if (sameIds(ids, sub.certIds)) return sub;
+      subChanged = true;
+      return { ...sub, certIds: ids };
+    });
+    const idsChanged = !sameIds(certIds, ind.certIds);
+    if (!idsChanged && !subChanged) return ind;
+    changed = true;
+    return { ...ind, certIds: idsChanged ? certIds : ind.certIds, subIndustries };
+  });
+  return changed ? next : inds;
+}

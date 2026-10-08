@@ -1,4 +1,6 @@
 import { certifications, type Certification } from "./certifications";
+import { buildData, liveCells, progress } from "./certLookup";
+import { completionsStore } from "./completions";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Awards (spec §12)
@@ -202,6 +204,58 @@ export function appearanceSummary(award: Award): string {
   if (hasCard) return "Card only";
   if (hasCert) return "Certificate only";
   return "No appearance";
+}
+
+/* Award ids are never re-issued, even after a delete — the same rule as
+   Certification ids (App's issueCertId). The next id is one past the
+   HIGH-WATER MARK: the largest id ever in the seed, the live list, or ever
+   issued. The mark is also kept in localStorage, so a reload (which resets the
+   list to the seed) can't hand a new Award an id an earlier session used. */
+const AWARD_ID_HIGH_WATER_KEY = "award-id-high-water";
+let awardIdHighWater = 0;
+function maxAwardIdNumber(list: Award[], floor: number): number {
+  return list.reduce((m, a) => {
+    const n = Number(/^AW-(\d+)$/.exec(a.id)?.[1]);
+    return Number.isFinite(n) && n > m ? n : m;
+  }, floor);
+}
+function readAwardIdHighWater(): number {
+  try {
+    return Number(window.localStorage.getItem(AWARD_ID_HIGH_WATER_KEY)) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Issue the next Award id (the seed runs AW-101…114, out of order) and move
+ *  the high-water mark past it. Call once per created Award. */
+export function issueAwardId(list: Award[]): string {
+  const n =
+    maxAwardIdNumber(list, maxAwardIdNumber(awards, Math.max(100, awardIdHighWater, readAwardIdHighWater()))) + 1;
+  awardIdHighWater = n;
+  try {
+    window.localStorage.setItem(AWARD_ID_HIGH_WATER_KEY, String(n));
+  } catch {
+    /* storage unavailable — the module mark still holds for the session */
+  }
+  return `AW-${n}`;
+}
+
+/** How many users have already completed a Certification — what a new Award
+ *  issues to retroactively. Read from the Certification Lookup model as Manage
+ *  Completions last left it (seeded cells + applied changes + manual
+ *  certification decisions). A Certification created this session isn't in
+ *  that model, so nobody has completed it yet: 0. */
+export function completedUsersCount(certId: string): number {
+  const data = buildData();
+  const def = data.certsById[certId];
+  if (!def) return 0;
+  const state = completionsStore.get();
+  const cells = liveCells(data, state);
+  const taskList = def.taskIds.map((id) => data.tasksById[id]).filter(Boolean);
+  return data.employees.filter(
+    (e) => progress(cells, state.certs, e.id, taskList, certId).certified,
+  ).length;
 }
 
 export function fmtHolders(n: number): string {

@@ -59,6 +59,7 @@ const DURATION_BY_TYPE: Record<TaskType, string> = {
   Quiz: "15 min",
   "Hands-On Task": "30 min",
   Resource: "5 min",
+  "ID Upload": "2 min",
 };
 
 function hash(s: string): number {

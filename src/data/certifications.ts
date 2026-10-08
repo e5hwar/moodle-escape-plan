@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from "react";
 import certThumbSample from "../assets/cert-thumb-sample.jpg";
 
 export type CareerStage = "Pre-Apprentice" | "Apprentice" | "Journeyman" | "Master";
@@ -8,12 +9,17 @@ export type CertVisibility = "Visible" | "Hidden" | "Archived";
 // free.
 export type CertPayment = "Consumable" | "Non-consumable";
 // Time to Complete is a whole number of one of the wizard's four units.
-export type CertTimeUnit = "minutes" | "hours" | "days" | "weeks";
+export type CertTimeUnit = "minutes" | "hours" | "days" | "weeks" | "months";
 
 export type Certification = {
   id: string;
   name: string;
-  industry: string;
+  /* Industry tags (the backend tagging model): zero or more keys, each an
+     Industry ("hvac") or a Sub-Industry ("hvac-residential") from the live
+     Industry list (data/industries). Tagging a Sub-Industry does not tag its
+     parent. Stored as keys so a rename shows everywhere at once; labels come
+     from `industryTagLabel`. Company-created Certifications are never tagged. */
+  industries: string[];
   ceus: string;
   tasks: number;
   createdBy: string;
@@ -24,6 +30,14 @@ export type Certification = {
   dateCreated?: string;
   dateModified?: string;
   visibility?: CertVisibility;
+  /* Archive & Replace. Archiving is reversible: Unarchive puts the
+     Certification back to the visibility it had before (absent = Visible).
+     The replacements (Certification ids) and the bilingual Replacement Alert
+     are what enrolled learners see while it is archived; both are kept on
+     the record so the page reopens with them, and cleared on Unarchive. */
+  visibilityBeforeArchive?: Exclude<CertVisibility, "Archived">;
+  replacementIds?: string[];
+  replacementAlert?: { en: string; es: string };
   // Career stage and type can be blank — these are filterable as "No Career
   // Stage" / "No Type".
   careerStage?: CareerStage;
@@ -48,6 +62,79 @@ export type Certification = {
      one (the sample from Figma 1585:1620), so the preview panel's head is
      seen both with and without it. */
   thumbnail?: string;
+  /** The picked thumbnail file's name, size and extension — a blob URL
+   *  carries none of them. Absent on the seed. */
+  thumbnailFile?: { name: string; size: number; ext: string };
+
+  /* ── Everything else the wizard edits. The seed carries none of these, so a
+     seed Certification opens Edit (and its preview panel) on sample structure
+     and sample Product IDs; one created or saved this session keeps what was
+     entered. ── */
+  /** Spanish halves of Name and Description (blank falls back to English). */
+  nameEs?: string;
+  descriptionEs?: string;
+  /** Additional Info › Announcement, EN and ES. */
+  announcement?: string;
+  announcementEs?: string;
+  /** Spanish Keywords, split on commas like `keywords`. */
+  keywordsEs?: string[];
+  /** The Deep Link slug. Absent → the slugified name (what the seed uses). */
+  slug?: string;
+  /** Paid only: the store Product IDs, by channel (PriceIdFields). */
+  priceIds?: Record<"appleB2c" | "googleB2c" | "stripeB2c" | "stripeB2b", string>;
+  /** Add Tasks: Courses › Lessons › Tasks, Access Restrictions included. */
+  courses?: CertStoredCourse[];
+  /** Completion: the Condition Sets (OR'd; each one's items AND'd). */
+  conditionSets?: CertConditionSet[];
+  /** Certification ids merged in via Import Courses, in plan order. Stored
+   *  by id, never name, so a rename shows everywhere (see certReferences). */
+  importedCerts?: string[];
+};
+
+/* ── The Certification's stored structure (the wizard's Add Tasks tree and
+   Completion criteria). ── */
+export type CertTaskKind = "xapi" | "quiz" | "hands-on" | "file";
+export type CertStoredTask = {
+  id: string;
+  name: string;
+  kind: CertTaskKind;
+  duration?: string;
+  /** Access Restriction: open only once `all` / `any` of these Tasks (ids in
+   *  this tree) are completed. */
+  restriction?: { enabled: boolean; mode: "all" | "any"; taskIds: string[] };
+  requiresSubscription?: boolean;
+  usedIn?: string[];
+};
+export type CertStoredLesson = {
+  id: string;
+  nameEn: string;
+  nameEs: string;
+  descEn: string;
+  descEs: string;
+  hidden: boolean;
+  tasks: CertStoredTask[];
+};
+export type CertStoredCourse = {
+  id: string;
+  nameEn: string;
+  nameEs: string;
+  descEn: string;
+  descEs: string;
+  expanded: boolean;
+  hidden: boolean;
+  children: ({ kind: "task"; task: CertStoredTask } | { kind: "lesson"; lesson: CertStoredLesson })[];
+  /** The Certification this Course was imported from (Import Courses). */
+  sourceCertId?: string;
+};
+export type CertConditionSet = {
+  id: string;
+  items: (
+    | { kind: "task"; id: string; name: string; taskKind: CertTaskKind }
+    | { kind: "quiz-section"; id: string; name: string; quizName: string }
+    /* A required Certification: `id` is the item's own node id, `certId` the
+       Certification's. No name is kept — it's read off the live record. */
+    | { kind: "cert"; id: string; certId: string }
+  )[];
 };
 
 /* The Details step's long-form fields, kept apart from the seed rows below so
@@ -156,6 +243,7 @@ const TIME_UNIT_NAMES: Record<CertTimeUnit, [one: string, many: string]> = {
   hours: ["Hour", "Hours"],
   days: ["Day", "Days"],
   weeks: ["Week", "Weeks"],
+  months: ["Month", "Months"],
 };
 
 /** "20 Minutes", "1 Hour": a Time to Complete in the words of the wizard's
@@ -169,7 +257,7 @@ export function formatTimeToComplete(time: Certification["timeToComplete"]): str
 const C = (
   id: string,
   name: string,
-  industry: string,
+  industries: string[],
   ceus: string,
   tasks: number,
   createdBy: string,
@@ -179,7 +267,7 @@ const C = (
 ): Certification => ({
   id,
   name,
-  industry,
+  industries,
   ceus,
   tasks,
   createdBy,
@@ -192,36 +280,37 @@ const C = (
 });
 
 export const certifications: Certification[] = [
-  C("C-0421", "EPA 608 Universal", "HVAC", "2.4", 13, "SkillCat", "Mar 04, 2024", "Apr 28, 2026", { careerStage: "Journeyman", type: "Credential", payment: "Non-consumable", keywords: ["epa", "608", "refrigerant", "universal"], tags: ["B2B Companies Only", "NexStar", "HVACR", "Commercial HVAC", "Residential HVAC"] }),
-  C("C-0420", "EPA 608 Type I", "HVAC › Residential", "0.8", 5, "SkillCat", "Mar 04, 2024", "Mar 18, 2026", { careerStage: "Apprentice", type: "Unit", payment: "Consumable", resetsProgress: true, keywords: ["epa", "608", "type i", "refrigerant"], tags: ["Residential HVAC"] }),
-  C("C-0419", "EPA 608 Type II", "HVAC › Commercial", "0.8", 5, "SkillCat", "Mar 04, 2024", "Mar 18, 2026", { careerStage: "Journeyman", type: "Unit", payment: "Consumable", keywords: ["epa", "608", "type ii", "refrigerant"], tags: ["B2B Companies Only", "Commercial HVAC"] }),
-  C("C-0418", "EPA 608 Type III", "HVAC › Commercial", "0.8", 5, "SkillCat", "Mar 04, 2024", "Mar 18, 2026", { careerStage: "Master", type: "Unit", keywords: ["epa", "608", "type iii", "refrigerant"], tags: ["Commercial HVAC"] }),
-  C("C-0417", "EPA 609", "HVAC", "0.6", 4, "SkillCat", "Mar 04, 2024", "Mar 18, 2026", { careerStage: "Apprentice", type: "Unit", payment: "Consumable", keywords: ["epa", "609", "mvac", "automotive", "refrigerant"], tags: ["HVACR", "Residential HVAC"] }),
-  C("C-0410", "NATE Ready-to-Work", "HVAC", "1.6", 9, "SkillCat", "Feb 12, 2024", "Apr 14, 2026", { careerStage: "Apprentice", type: "Program", keywords: ["nate", "entry", "rtw"], tags: ["NexStar", "HVACR", "Residential HVAC", "Commercial HVAC"] }),
-  C("C-0406", "Building Science Principles", "HVAC", "1.4", 8, "SkillCat", "Jan 29, 2024", "Apr 08, 2026", { careerStage: "Apprentice", type: "Unit", keywords: ["building science", "envelope", "load", "principles"], tags: ["Residential HVAC"] }),
-  C("C-0405", "Refrigerant Safety Bundle", "HVAC › Residential", "1.2", 7, "SkillCat", "Jan 20, 2024", "Apr 02, 2026", { careerStage: "Journeyman", type: "Bundle", payment: "Non-consumable", keywords: ["refrigerant", "safety", "bundle"], tags: ["Residential HVAC"] }),
-  C("C-0398", "HVAC JobReady", "HVAC", "2.0", 11, "SkillCat", "Jan 08, 2024", "Mar 30, 2026", { careerStage: "Journeyman", type: "Program", keywords: ["hvac", "jobready", "field", "skills"], tags: ["B2B Companies Only", "Commercial HVAC"] }),
-  C("C-0376", "Brazing Fundamentals", "HVAC", "0.6", 4, "SkillCat", "Nov 14, 2023", "Feb 22, 2026", { careerStage: "Apprentice", type: "Unit", keywords: ["brazing", "welding", "fundamentals"] }),
-  C("C-0341", "OSHA 10 — General Industry", "Electrical › Industrial", "1.0", 6, "SkillCat", "Sep 02, 2023", "Jan 11, 2026", { careerStage: "Apprentice", type: "Credential", payment: "Consumable", keywords: ["osha", "10", "safety", "general industry"], tags: ["B2B Companies Only"] }),
-  C("C-0322", "Plumbing Apprentice Year 1", "Plumbing", "3.2", 18, "SkillCat", "Jul 21, 2023", "Dec 04, 2025", { careerStage: "Apprentice", type: "Program", payment: "Non-consumable", keywords: ["plumbing", "apprentice", "year 1"], tags: ["Residential Plumbing"], thumbnail: certThumbSample }),
-  C("C-0298", "Electrical Code Refresher", "Electrical", "1.4", 8, "SkillCat", "May 30, 2023", "Nov 18, 2025", { careerStage: "Journeyman", type: "Unit", visibility: "Hidden", keywords: ["electrical", "code", "nec", "refresher"] }),
+  C("C-0421", "EPA 608 Universal", ["hvac", "hvac-residential", "hvac-commercial"], "2.4", 13, "SkillCat", "Mar 04, 2024", "Apr 28, 2026", { careerStage: "Journeyman", type: "Credential", payment: "Non-consumable", keywords: ["epa", "608", "refrigerant", "universal"], tags: ["B2B Companies Only"] }),
+  C("C-0420", "EPA 608 Type I", ["hvac-residential"], "0.8", 5, "SkillCat", "Mar 04, 2024", "Mar 18, 2026", { careerStage: "Apprentice", type: "Unit", payment: "Consumable", resetsProgress: true, keywords: ["epa", "608", "type i", "refrigerant"] }),
+  C("C-0419", "EPA 608 Type II", ["hvac-commercial"], "0.8", 5, "SkillCat", "Mar 04, 2024", "Mar 18, 2026", { careerStage: "Journeyman", type: "Unit", payment: "Consumable", keywords: ["epa", "608", "type ii", "refrigerant"], tags: ["B2B Companies Only"] }),
+  C("C-0418", "EPA 608 Type III", ["hvac-commercial"], "0.8", 5, "SkillCat", "Mar 04, 2024", "Mar 18, 2026", { careerStage: "Master", type: "Unit", keywords: ["epa", "608", "type iii", "refrigerant"] }),
+  C("C-0417", "EPA 609", ["hvac"], "0.6", 4, "SkillCat", "Mar 04, 2024", "Mar 18, 2026", { careerStage: "Apprentice", type: "Unit", payment: "Consumable", keywords: ["epa", "609", "mvac", "automotive", "refrigerant"] }),
+  C("C-0410", "NATE Ready-to-Work", ["hvac", "hvac-residential"], "1.6", 9, "SkillCat", "Feb 12, 2024", "Apr 14, 2026", { careerStage: "Apprentice", type: "Program", keywords: ["nate", "entry", "rtw"] }),
+  C("C-0406", "Building Science Principles", ["hvac"], "1.4", 8, "SkillCat", "Jan 29, 2024", "Apr 08, 2026", { careerStage: "Apprentice", type: "Unit", keywords: ["building science", "envelope", "load", "principles"] }),
+  C("C-0405", "Refrigerant Safety Bundle", ["hvac-residential"], "1.2", 7, "SkillCat", "Jan 20, 2024", "Apr 02, 2026", { careerStage: "Journeyman", type: "Bundle", payment: "Non-consumable", keywords: ["refrigerant", "safety", "bundle"] }),
+  C("C-0398", "HVAC JobReady", ["hvac"], "2.0", 11, "SkillCat", "Jan 08, 2024", "Mar 30, 2026", { careerStage: "Journeyman", type: "Program", keywords: ["hvac", "jobready", "field", "skills"], tags: ["B2B Companies Only", "Commercial HVAC", "NexStar"] }),
+  C("C-0376", "Brazing Fundamentals", ["hvac"], "0.6", 4, "SkillCat", "Nov 14, 2023", "Feb 22, 2026", { careerStage: "Apprentice", type: "Unit", keywords: ["brazing", "welding", "fundamentals"] }),
+  C("C-0341", "OSHA 10 — General Industry", ["electrical-industrial"], "1.0", 6, "SkillCat", "Sep 02, 2023", "Jan 11, 2026", { careerStage: "Apprentice", type: "Credential", payment: "Consumable", keywords: ["osha", "10", "safety", "general industry"], tags: ["B2B Companies Only", "National Account"] }),
+  C("C-0322", "Plumbing Apprentice Year 1", ["plumbing"], "3.2", 18, "SkillCat", "Jul 21, 2023", "Dec 04, 2025", { careerStage: "Apprentice", type: "Program", payment: "Non-consumable", keywords: ["plumbing", "apprentice", "year 1"], thumbnail: certThumbSample }),
+  C("C-0298", "Electrical Code Refresher", ["electrical"], "1.4", 8, "SkillCat", "May 30, 2023", "Nov 18, 2025", { careerStage: "Journeyman", type: "Unit", visibility: "Hidden", keywords: ["electrical", "code", "nec", "refresher"] }),
   // Blank career stage — exercises the "No Career Stage" filter. Archived too.
-  C("C-0265", "Forklift Operator", "HVAC › Industrial", "0.5", 3, "SkillCat", "Mar 12, 2023", "Oct 08, 2025", { type: "Credential", visibility: "Archived", keywords: ["forklift", "operator", "warehouse", "safety"] }),
-  C("C-0242", "Solar PV Installer Basics", "Electrical › Residential", "2.2", 12, "SkillCat", "Jan 18, 2023", "Sep 12, 2025", { careerStage: "Apprentice", type: "Program", payment: "Consumable", resetsProgress: true, keywords: ["solar", "pv", "installer", "renewables"], tags: ["MultiFamily Maintenance"] }),
-  C("C-0221", "Welding Inspector Prep", "Plumbing › Pipefitting", "1.8", 10, "SkillCat", "Dec 02, 2022", "Aug 21, 2025", { careerStage: "Master", type: "Credential", payment: "Non-consumable", keywords: ["welding", "inspector", "cwi"] }),
+  C("C-0265", "Forklift Operator", ["hvac-industrial"], "0.5", 3, "SkillCat", "Mar 12, 2023", "Oct 08, 2025", { type: "Credential", visibility: "Archived", keywords: ["forklift", "operator", "warehouse", "safety"] }),
+  C("C-0242", "Solar PV Installer Basics", ["electrical-residential"], "2.2", 12, "SkillCat", "Jan 18, 2023", "Sep 12, 2025", { careerStage: "Apprentice", type: "Program", payment: "Consumable", resetsProgress: true, keywords: ["solar", "pv", "installer", "renewables"] }),
+  C("C-0221", "Welding Inspector Prep", ["plumbing-pipefitting"], "1.8", 10, "SkillCat", "Dec 02, 2022", "Aug 21, 2025", { careerStage: "Master", type: "Credential", payment: "Non-consumable", keywords: ["welding", "inspector", "cwi"] }),
   // Blank type — exercises the "No Type" filter.
-  C("C-0612", "Heat Pump Specialist (2026)", "HVAC › Residential", "1.6", 9, "SkillCat", "Apr 02, 2026", "Apr 28, 2026", { visibility: "Hidden", careerStage: "Journeyman", keywords: ["heat pump", "specialist", "hvac"], tags: ["Residential HVAC"] }),
+  C("C-0612", "Heat Pump Specialist (2026)", ["hvac-residential"], "1.6", 9, "SkillCat", "Apr 02, 2026", "Apr 28, 2026", { visibility: "Hidden", careerStage: "Journeyman", keywords: ["heat pump", "specialist", "hvac"] }),
   // Recently created, setup unfinished (see CERT_DETAILS above). Boiler Safety
-  // Basics has no Industry yet — an empty path is what "Add Industries" fixes.
-  C("C-0631", "Boiler Safety Basics", "", "0.6", 5, "SkillCat", "Oct 01, 2026", "Oct 01, 2026", { setupClosed: false, careerStage: "Apprentice", type: "Credential", keywords: ["boiler", "safety", "lockout"] }),
-  C("C-0629", "Ductless Mini-Split Install", "HVAC › Residential", "0.8", 6, "SkillCat", "Sep 29, 2026", "Sep 29, 2026", { setupClosed: false, careerStage: "Journeyman", type: "Unit", keywords: ["mini-split", "ductless", "install"], tags: ["Residential HVAC"] }),
-  C("C-0624", "Confined Space Entry", "Plumbing › Service & Repair", "0.4", 4, "SkillCat", "Sep 24, 2026", "Sep 24, 2026", { setupClosed: false, careerStage: "Apprentice", type: "Credential", keywords: ["confined space", "permit", "entry"] }),
+  // Basics has no Industry yet — no tags is what "Add Industries" fixes.
+  C("C-0631", "Boiler Safety Basics", [], "0.6", 5, "SkillCat", "Oct 01, 2026", "Oct 01, 2026", { setupClosed: false, careerStage: "Apprentice", type: "Credential", keywords: ["boiler", "safety", "lockout"] }),
+  C("C-0629", "Ductless Mini-Split Install", ["hvac-residential"], "0.8", 6, "SkillCat", "Sep 29, 2026", "Sep 29, 2026", { setupClosed: false, careerStage: "Journeyman", type: "Unit", keywords: ["mini-split", "ductless", "install"] }),
+  C("C-0624", "Confined Space Entry", ["plumbing-service"], "0.4", 4, "SkillCat", "Sep 24, 2026", "Sep 24, 2026", { setupClosed: false, careerStage: "Apprentice", type: "Credential", keywords: ["confined space", "permit", "entry"] }),
   // Company-created certifications — owned by a B2B account, editable only from
-  // the B2B Dashboard (exercises the company edit-block flow).
-  C("C-0588", "ARS Onboarding Path", "HVAC", "1.2", 7, "ARS", "Feb 18, 2026", "Apr 25, 2026", { careerStage: "Apprentice", type: "Program", keywords: ["ars", "onboarding"] }),
-  C("C-0571", "NexTech Field Readiness", "HVAC › Commercial", "1.0", 6, "NexTech", "Jan 30, 2026", "Apr 20, 2026", { careerStage: "Journeyman", type: "Program", keywords: ["nextech", "field", "readiness"] }),
-  C("C-0559", "Premium HVAC Install Standards", "HVAC › Residential", "0.9", 5, "Premium HVAC Services", "Jan 12, 2026", "Apr 16, 2026", { careerStage: "Journeyman", type: "Unit", keywords: ["premium", "install", "standards"] }),
-  C("C-0540", "HVACR Safety Refresher", "HVAC", "0.7", 4, "HVACR", "Dec 05, 2025", "Apr 10, 2026", { careerStage: "Apprentice", type: "Credential", keywords: ["hvacr", "safety", "refresher"] }),
+  // the B2B Dashboard (exercises the company edit-block flow). Only SkillCat-
+  // created Certifications can carry Industry tags, so these have none.
+  C("C-0588", "ARS Onboarding Path", [], "1.2", 7, "ARS", "Feb 18, 2026", "Apr 25, 2026", { careerStage: "Apprentice", type: "Program", keywords: ["ars", "onboarding"] }),
+  C("C-0571", "NexTech Field Readiness", [], "1.0", 6, "NexTech", "Jan 30, 2026", "Apr 20, 2026", { careerStage: "Journeyman", type: "Program", keywords: ["nextech", "field", "readiness"] }),
+  C("C-0559", "Premium HVAC Install Standards", [], "0.9", 5, "Premium HVAC Services", "Jan 12, 2026", "Apr 16, 2026", { careerStage: "Journeyman", type: "Unit", keywords: ["premium", "install", "standards"] }),
+  C("C-0540", "HVACR Safety Refresher", [], "0.7", 4, "HVACR", "Dec 05, 2025", "Apr 10, 2026", { careerStage: "Apprentice", type: "Credential", keywords: ["hvacr", "safety", "refresher"] }),
 ];
 
 /* Tasks reference their Certifications by NAME in `usedIn`, and a few of those
@@ -246,12 +335,73 @@ export const CERT_BY_USEDIN: Map<string, Certification> = (() => {
   return m;
 })();
 
-/* A Certification stores its Industry as a full path ("HVAC › Residential").
-   The top-level Industry is everything before the first separator — what a
-   column headed "Industries" shows, so two sub-Industries of one Industry read
-   as that one Industry rather than as two entries. */
-export function topIndustry(path: string): string {
-  return path.split(" › ")[0];
+/** Whether SkillCat made this Certification (as opposed to a B2B company).
+ *  Only these can carry Industry tags or be Content Link targets. */
+export function isSkillCatCert(c: Pick<Certification, "createdBy">): boolean {
+  return c.createdBy === "SkillCat";
+}
+
+/* ── The live Certification list ──
+ * App owns the Certifications (seed + everything created, edited or deleted
+ * this session) and mirrors them here, so pickers and data builders that
+ * aren't handed the list (Import Courses, Add Requirement, Content Links, the
+ * Industries page) see the same Certifications the Certifications page shows. */
+let liveCerts: Certification[] = certifications;
+const liveCertListeners = new Set<() => void>();
+export function setLiveCerts(list: Certification[]) {
+  if (list === liveCerts) return;
+  liveCerts = list;
+  liveCertListeners.forEach((l) => l());
+}
+export function getLiveCerts(): Certification[] {
+  return liveCerts;
+}
+export function useLiveCerts(): Certification[] {
+  return useSyncExternalStore(
+    (l) => {
+      liveCertListeners.add(l);
+      return () => liveCertListeners.delete(l);
+    },
+    getLiveCerts,
+  );
+}
+/** The live Certification with this id. */
+export function certById(id: string): Certification | undefined {
+  return liveCerts.find((c) => c.id === id);
+}
+/** A referenced Certification's name, read off the live record by id, so a
+ *  rename shows wherever it is referenced. */
+export function certNameById(id: string): string {
+  return certById(id)?.name ?? id;
+}
+
+/** Where other Certifications build on this one: each referencing
+ *  Certification with the places it does ("Completion Criteria · Condition
+ *  Set 2", "Imported Course: …"). Only STORED structure counts — a seed
+ *  Certification that was never saved opens on generated sample structure,
+ *  which isn't real data (and never requires a Certification anyway). A
+ *  referenced Certification can't be deleted. */
+export type CertReference = { cert: Certification; where: string[] };
+export function certReferences(certId: string, certs: Certification[] = liveCerts): CertReference[] {
+  return certs.flatMap((c) => {
+    if (c.id === certId) return [];
+    const where: string[] = [];
+    (c.conditionSets ?? []).forEach((cs, i) => {
+      if (cs.items.some((it) => it.kind === "cert" && it.certId === certId))
+        where.push(`Completion Criteria · Condition Set ${i + 1}`);
+    });
+    const courses = (c.courses ?? []).filter((co) => co.sourceCertId === certId);
+    courses.forEach((co) => where.push(`Imported Course: ${co.nameEn || "Untitled Course"}`));
+    // Still in the Learning Plan with every Course it brought deleted.
+    if (courses.length === 0 && c.importedCerts?.includes(certId)) where.push("Imported Courses");
+    return where.length ? [{ cert: c, where }] : [];
+  });
+}
+/** Whether this is one of the seed Certifications (it has enrolment history
+ *  in the prototype) rather than one created this session. */
+const SEED_CERT_IDS = new Set(certifications.map((c) => c.id));
+export function isSeedCert(id: string): boolean {
+  return SEED_CERT_IDS.has(id);
 }
 
 // ─── Filter option constants ──────────────────────────────────────────────────

@@ -1,20 +1,22 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
-  users as seedUsers,
+  useUsers,
   updateUserContact,
   accessMoment,
   subscriptionFilterStatus,
+  canCancelSubscription,
+  cancelSubscription,
+  matchesUserQuery,
   type User,
   type UserType,
   type UserRole,
   type SubscriptionStatus,
 } from "../data/users";
 import { buildUserProfile, type ProfileFields } from "../data/userProfile";
-import { nameChangeRequests } from "../data/nameChangeRequests";
-import { PrmModal } from "./PrmModal";
+import { pendingCount, useNameChangeRequests } from "../data/nameChangeRequests";
 import { CopiedToast } from "./CopiedToast";
 import { useToast } from "./useToast";
-import { EditUserModal } from "./UserProfilePage";
+import { CancelSubscriptionModal, EditUserModal } from "./UserProfilePage";
 import {
   UsersFilters,
   UsersEditColumns,
@@ -84,6 +86,8 @@ function formatDaysAgo(iso: string): string {
 /* Hover tip on a relative stamp: the exact date and time behind it, always
    in Eastern Time whatever the viewer's own zone. */
 function LastAccessCell({ userId, iso, salt }: { userId: string; iso: string; salt: string }) {
+  // An invite nobody has accepted has never been in.
+  if (!iso) return null;
   const at = accessMoment(userId, iso, salt);
   const tz = "America/New_York";
   const tip = `${at.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: tz })} · ${at.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz })} ET`;
@@ -126,6 +130,18 @@ function subscriptionSortValue(u: User): string {
 
 type Row = { u: User; f: ProfileFields };
 
+/* Last-access columns sort by day, then the moment the hover tip shows, then
+   a fixed per-user tiebreak — never the bare day alone, or everyone seen that
+   day ties and the tie keeps roster order (all learners, then every company's
+   employees) in one block. */
+function accessSortValue(userId: string, iso: string | undefined, salt: string): string {
+  if (!iso) return "";
+  let h = 2166136261;
+  for (let i = 0; i < userId.length; i++) h = Math.imul(h ^ userId.charCodeAt(i), 16777619);
+  const ms = String(accessMoment(userId, iso, salt).getTime()).padStart(15, "0");
+  return `${iso}|${ms}|${String(h >>> 0).padStart(10, "0")}`;
+}
+
 // One config object per optional column drives the colgroup, header, cell, and sort.
 type ColMeta = {
   key: UserColumnKey;
@@ -151,8 +167,8 @@ const COLS: ColMeta[] = [
   { key: "attribution", label: "Attribution", className: "col-u-attr", width: 160, render: (_u, f) => f.attribution, sortValue: (_u, f) => f.attribution.toLowerCase() },
   { key: "zipCode", label: "Zip Code", className: "col-u-zip", width: 100, render: (_u, f) => f.zipCode, sortValue: (_u, f) => f.zipCode },
   { key: "industryPreference", label: "Industry Preference", className: "col-u-industry", width: 188, render: (_u, f) => f.industryPreference, sortValue: (_u, f) => f.industryPreference.toLowerCase() },
-  { key: "lastAccess", label: "App Last Access", className: "col-u-date", width: 160, render: (u) => <LastAccessCell userId={u.id} iso={u.lastAccess} salt="app" />, sortValue: (u) => u.lastAccess },
-  { key: "dashboardLastAccess", label: "Dashboard Last Access", className: "col-u-date", width: 210, render: (u) => (u.dashboardLastAccess ? <LastAccessCell userId={u.id} iso={u.dashboardLastAccess} salt="dashboard" /> : null), sortValue: (u) => u.dashboardLastAccess ?? "" },
+  { key: "lastAccess", label: "App Last Access", className: "col-u-date", width: 160, render: (u) => <LastAccessCell userId={u.id} iso={u.lastAccess} salt="app" />, sortValue: (u) => accessSortValue(u.id, u.lastAccess, "app") },
+  { key: "dashboardLastAccess", label: "Dashboard Last Access", className: "col-u-date", width: 210, render: (u) => (u.dashboardLastAccess ? <LastAccessCell userId={u.id} iso={u.dashboardLastAccess} salt="dashboard" /> : null), sortValue: (u) => accessSortValue(u.id, u.dashboardLastAccess, "dashboard") },
   { key: "joinedOn", label: "Joined SkillCat", className: "col-u-date", width: 150, render: (u) => formatDate(u.joinedOn), sortValue: (u) => u.joinedOn },
 ];
 const COL_BY_KEY = new Map(COLS.map((c) => [c.key, c]));
@@ -169,6 +185,30 @@ function compareRows(a: Row, b: Row, key: SortKey): number {
   return String(va).localeCompare(String(vb));
 }
 
+/** What the list was showing — App hands it back when the page is returned
+ *  to from Scholarships, Name Changes, Manage Completions, Merge or Transfer. */
+export type UsersListState = {
+  filters: UserFilterState;
+  columns: UserColumnState;
+  order: UserColumnKey[];
+  sort: { key: SortKey; dir: SortDir };
+  query: string;
+  page: number;
+};
+
+/** Runs `fn` when any of `deps` changes AFTER the first render — never on
+ *  mount (StrictMode's second run included), so a restored list keeps its
+ *  page and scroll. Same helper as the Companies list. */
+function useOnChange(deps: unknown[], fn: () => void, useEff = useEffect) {
+  const prev = useRef<unknown[] | null>(null);
+  useEff(() => {
+    const p = prev.current;
+    prev.current = deps;
+    if (p && p.some((d, i) => !Object.is(d, deps[i]))) fn();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+}
+
 export function UsersPage({
   onViewCompany,
   onManageCompletions,
@@ -177,6 +217,8 @@ export function UsersPage({
   onOpenMergeAccounts,
   onOpenTransferSubscription,
   initialCompanyFilter,
+  restore,
+  onSaveState,
   flash,
   onFlashDone,
 }: {
@@ -187,45 +229,67 @@ export function UsersPage({
   onOpenMergeAccounts?: () => void;
   onOpenTransferSubscription?: () => void;
   initialCompanyFilter?: string;
+  /** The list as it was left, when coming back to it. */
+  restore?: UsersListState | null;
+  onSaveState?: (state: UsersListState) => void;
   /** A one-line success raised by something that finished and came back here
    *  (a merge, a transfer) — shown as the shared toast. */
   flash?: string | null;
   onFlashDone?: () => void;
 }) {
-  const [list, setList] = useState<User[]>(() => seedUsers);
-  // "S" opens Scholarships from the page 3-dot menu.
-  useCreateShortcut(() => onOpenScholarships?.(), !!onOpenScholarships, "s");
-  // "N" is the landing banner's Review Names badge.
-  useCreateShortcut(() => onOpenNameChanges?.(), !!onOpenNameChanges, "n");
+  // The live roster (users.ts): every learner and every company's employees,
+  // with this session's edits — the Full Profile tab writes to the same one.
+  const list = useUsers();
   const profiles = useMemo(
     () => new Map(list.map((u) => [u.id, buildUserProfile(u).fields] as const)),
     [list],
   );
-  const [columns, setColumns] = useState<UserColumnState>(DEFAULT_COLUMNS);
+  /* Coming back from a page this one opened restores the list as it was left;
+     a company deep link (View Employees) starts from that company instead. */
+  const restored = initialCompanyFilter ? null : restore ?? null;
+  const [columns, setColumns] = useState<UserColumnState>(restored?.columns ?? DEFAULT_COLUMNS);
   // Column display order — reordered by dragging in the Edit Columns menu.
-  const [order, setOrder] = useColumnOrder(COLS);
+  const [defaultOrder, setOrder] = useColumnOrder(COLS);
+  const [orderTouched, setOrderTouched] = useState(false);
+  const order = !orderTouched && restored ? restored.order : defaultOrder;
   const [filters, setFilters] = useState<UserFilterState>(
-    initialCompanyFilter ? { ...EMPTY_FILTERS, companies: [initialCompanyFilter] } : EMPTY_FILTERS,
+    restored?.filters ??
+      (initialCompanyFilter ? { ...EMPTY_FILTERS, companies: [initialCompanyFilter] } : EMPTY_FILTERS),
   );
   // Search bar: committedQuery only changes on Enter. The company filter is shared
   // with the Filters row (filters.companies) and applies immediately.
-  const [committedQuery, setCommittedQuery] = useState("");
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "lastAccess", dir: "desc" });
-  const [page, setPage] = useState(1);
+  const [committedQuery, setCommittedQuery] = useState(restored?.query ?? "");
+  /* A company's roster opens grouped by seniority (Admin, Manager, then
+     Employee); any header still re-sorts it. */
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>(
+    restored?.sort ?? (initialCompanyFilter ? { key: "role", dir: "desc" } : { key: "lastAccess", dir: "desc" }),
+  );
+  const [page, setPage] = useState(restored?.page ?? 1);
   const [menu, setMenu] = useState<{ user: User; rect: DOMRect } | null>(null);
   // Page-level 3-dot menu (Figma 677:1956), anchored to the header kebab.
   const [pageMenu, setPageMenu] = useState<DOMRect | null>(null);
-  // Cancel Subscription confirm — the Full Profile page's PrmModal, mirrored.
-  // Confirmed cancellations are session-local, like the profile's — the menu
-  // just stops offering Cancel for that user; the row's pill keeps its seeded
-  // status since access runs to the end of the billing period anyway.
+  // Cancel Subscription confirm — the Full Profile's own modal. Confirming
+  // writes `cancelsOn` to the user, so the pill reads "Cancels …" here and on
+  // the profile, and neither offers Cancel again.
   const [cancelSub, setCancelSub] = useState<User | null>(null);
-  const [canceledSubs, setCanceledSubs] = useState<ReadonlySet<string>>(new Set());
   // Edit User — the Full Profile's own modal, from the row pencil or the menu.
   const [editing, setEditing] = useState<User | null>(null);
   /** The page's own success toast — "Profile Updated" after an Edit User
    *  save (the user, 2026-10-04), "Subscription Canceled" after a cancel. */
   const [toast, toastNode] = useToast();
+  /* S opens Scholarships (page 3-dot menu), N the name-change queue (the
+     banner's Review Names) — never through an open dialog or menu, and N only
+     while something is waiting. */
+  const nameChanges = useNameChangeRequests();
+  const pendingNames = pendingCount(nameChanges);
+  const overlayUp = !!(menu || pageMenu || cancelSub || editing);
+  useCreateShortcut(() => onOpenScholarships?.(), !!onOpenScholarships && !overlayUp, "s");
+  useCreateShortcut(() => onOpenNameChanges?.(), !!onOpenNameChanges && pendingNames > 0 && !overlayUp, "n");
+
+  // Hand the list's state back to App, for the return trip.
+  useEffect(() => {
+    onSaveState?.({ filters, columns, order, sort, query: committedQuery, page });
+  }, [filters, columns, order, sort, committedQuery, page, onSaveState]);
 
   const rows = useMemo<Row[]>(
     () => list.map((u) => ({ u, f: profiles.get(u.id)! })),
@@ -241,22 +305,17 @@ export function UsersPage({
       if (filters.roles.length && !filters.roles.includes(u.role)) return false;
       if (filters.goals.length && !filters.goals.includes(f.goal)) return false;
       if (filters.industries.length && !filters.industries.includes(f.industryPreference)) return false;
-      if (!q) return true;
-      return (
-        u.name.toLowerCase().includes(q) ||
-        u.email.toLowerCase().includes(q) ||
-        u.phone.toLowerCase().includes(q)
-      );
+      return matchesUserQuery(q, u);
     });
   }, [rows, committedQuery, filters]);
 
-  // Viewing a single company's roster reads best grouped by seniority
-  // (Admin, Manager, then Employee) — enforced regardless of the chosen
-  // column sort while a company filter is active.
+  // Picking a company groups its roster by seniority (Admin, Manager, then
+  // Employee) — a starting order, not a lock: any header re-sorts it.
   const companyFilterActive = filters.companies.length > 0;
-  const effectiveSort: { key: SortKey; dir: SortDir } = companyFilterActive
-    ? { key: "role", dir: "desc" }
-    : sort;
+  useOnChange([companyFilterActive], () => {
+    if (companyFilterActive) setSort({ key: "role", dir: "desc" });
+  });
+  const effectiveSort = sort;
 
   const sorted = useMemo(() => {
     const arr = [...filtered].sort((a, b) => compareRows(a, b, effectiveSort.key));
@@ -265,9 +324,7 @@ export function UsersPage({
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
 
-  useEffect(() => {
-    setPage(1);
-  }, [committedQuery, filters, sort]);
+  useOnChange([committedQuery, filters, sort], () => setPage(1));
 
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
@@ -287,9 +344,7 @@ export function UsersPage({
 
   // A new query, filter, sort or page starts the list at its first row. A
   // collapsed header stays collapsed; one still open is left as it is.
-  useLayoutEffect(() => {
-    scrollToFirstRow();
-  }, [committedQuery, filters, sort, visiblePage, scrollToFirstRow]);
+  useOnChange([committedQuery, filters, sort, visiblePage], scrollToFirstRow, useLayoutEffect);
 
   // The landing's summary line — every user on the roster, not the filtered
   // rows (the pagination footer counts those), and how many of them hold an
@@ -308,12 +363,9 @@ export function UsersPage({
   // into the note (its box shrinks onto the note's line, its count, title and
   // CTA travel onto the note's count, label and chevron), so it reads as the
   // same thing changing shape, never one leaving and another arriving.
-  const hasNameChanges = nameChangeRequests.length > 0 && !!onOpenNameChanges;
+  const hasNameChanges = pendingNames > 0 && !!onOpenNameChanges;
 
   function toggleSort(key: SortKey) {
-    // Sort is locked to role (Admin, Manager, Employee) while a company
-    // filter is active — see effectiveSort above.
-    if (companyFilterActive) return;
     setSort((prev) =>
       prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" },
     );
@@ -366,10 +418,10 @@ export function UsersPage({
                   {hasNameChanges && (
                     <button
                       className="tasks-note"
-                      aria-label={`${nameChangeRequests.length} Name Changes Pending Review`}
+                      aria-label={`${pendingNames} Name Changes Pending Review`}
                       onClick={() => onOpenNameChanges?.()}
                     >
-                      <span className="tasks-note-count">{nameChangeRequests.length}{" "}</span>
+                      <span className="tasks-note-count">{pendingNames}{" "}</span>
                       <span className="tasks-note-text">
                         <span className="nc-shared">Name Change</span>
                         <span className="nc-rest">s Pending Review</span>
@@ -407,7 +459,7 @@ export function UsersPage({
                         }}
                       >
                         <div className="lm-banner-main">
-                          <div className="lm-banner-count">{nameChangeRequests.length}</div>
+                          <div className="lm-banner-count">{pendingNames}</div>
                           <div className="note-card-text">
                             {/* "Name Change" is the words the title shares with
                                 the note's label, so the morph can hold it while
@@ -459,7 +511,10 @@ export function UsersPage({
                           columns={columns}
                           setColumns={setColumns}
                           order={order}
-                          onOrderChange={(o) => setOrder(o as typeof order)}
+                          onOrderChange={(o) => {
+                            setOrderTouched(true);
+                            setOrder(o as typeof order);
+                          }}
                         />
                       </th>
                     </tr>
@@ -518,15 +573,9 @@ export function UsersPage({
           }
           onManageCompletions={() => onManageCompletions(menu.user.id)}
           onCancelSubscription={
-            /* Only subscribers billed through a platform we can cancel from
-               here — Apple subs are managed by Apple, and company-seat users
-               are billed through their company. */
-            menu.user.subscriptionStatus === "Subscriber" &&
-            !menu.user.companyName &&
-            (menu.user.platform === "Stripe" || menu.user.platform === "Google") &&
-            !canceledSubs.has(menu.user.id)
-              ? () => setCancelSub(menu.user)
-              : undefined
+            /* Only a personal plan billed through a platform we can cancel
+               from here, not already cancelling (users.canCancelSubscription). */
+            canCancelSubscription(menu.user) ? () => setCancelSub(menu.user) : undefined
           }
           onEdit={() => setEditing(menu.user)}
         />
@@ -541,11 +590,11 @@ export function UsersPage({
         />
       )}
       {cancelSub && (
-        <CancelSubscriptionConfirm
+        <CancelSubscriptionModal
           user={cancelSub}
           onClose={() => setCancelSub(null)}
           onConfirm={() => {
-            setCanceledSubs((prev) => new Set(prev).add(cancelSub.id));
+            cancelSubscription(cancelSub.id);
             setCancelSub(null);
             toast("Subscription Canceled");
           }}
@@ -557,8 +606,6 @@ export function UsersPage({
           onClose={() => setEditing(null)}
           onSave={(v) => {
             updateUserContact(editing.id, v);
-            // The roster object was updated in place; copy it so the row re-renders.
-            setList((prev) => prev.map((u) => (u.id === editing.id ? { ...u } : u)));
             setEditing(null);
             toast("Profile Updated");
           }}
@@ -859,52 +906,6 @@ function PageActionsMenu({
       {item(<MenuMergeIcon />, "Merge Accounts", onMergeAccounts)}
       {item(<MenuTransferIcon />, "Transfer Subscription", onTransferSubscription)}
     </div>
-  );
-}
-
-/* ─── Cancel Subscription confirm — the Full Profile page's PrmModal, with
-   identical copy, so canceling from the row menu reads the same as canceling
-   from the profile's Subscription card. ─── */
-
-function CancelSubscriptionConfirm({
-  user,
-  onClose,
-  onConfirm,
-}: {
-  user: User;
-  onClose: () => void;
-  onConfirm: () => void;
-}) {
-  // PrmModal has no key handling of its own, so the owner closes on Escape.
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  // Same deterministic subscription record the Full Profile shows.
-  const sub = buildUserProfile(user).subscription;
-  return (
-    <PrmModal
-      title="Cancel Subscription?"
-      cancelLabel="Keep Subscription"
-      confirmLabel="Cancel Subscription"
-      onCancel={onClose}
-      onConfirm={onConfirm}
-    >
-      <p className="prm-content">
-        This cancels <strong>{user.name}</strong>&rsquo;s {sub.platform} subscription at the end of
-        the current billing period. No further charges will be made.
-      </p>
-      {sub.renewsOn && (
-        <p className="prm-content">
-          They keep full access until <strong>{formatDate(sub.renewsOn)}</strong>. No refund is
-          issued for the current period.
-        </p>
-      )}
-    </PrmModal>
   );
 }
 

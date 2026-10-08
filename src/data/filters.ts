@@ -1,3 +1,7 @@
+import { getB2BConfig, subscribeB2BConfig } from "./productConfig";
+import { useMemo } from "react";
+import { useLiveCerts } from "./certifications";
+
 export const CREATED_BY_IN_HOUSE = ["SkillCat"];
 
 export const CREATED_BY_B2B = [
@@ -7,23 +11,24 @@ export const CREATED_BY_B2B = [
   "Premium HVAC Services",
 ];
 
-export const CERTIFICATIONS = [
-  "EPA 608 Type I",
-  "EPA 608 Type II",
-  "EPA 608 Type III",
-  "EPA 608 Universal",
-  "HVAC JobReady",
-  "NATE RTW",
-  "OSHA 10",
-  "OSHA 30",
-  "Safety Bundle",
-];
+/** The Tasks Certifications filter's options: every Certification in the
+ *  live list, by name — the canonical names Tasks resolve their `usedIn`
+ *  aliases to (`taskCertifications`), so the filter, its search and a
+ *  Certification's "View All Tasks" speak the same names. */
+export function useCertificationOptions(): string[] {
+  const certs = useLiveCerts();
+  return useMemo(
+    () => [...new Set(certs.map((c) => c.name))].sort((a, b) => a.localeCompare(b)),
+    [certs],
+  );
+}
 
 export const TASK_TYPES = [
   "xAPI",
   "Quiz",
   "Hands-On Task",
   "Resource",
+  "ID Upload",
 ];
 
 export const VISIBILITIES = ["Hidden", "Visible"];
@@ -46,15 +51,24 @@ export const AUDIENCE_B2B_ONLY = "B2B Companies Only";
 export const AUDIENCE_TAGS = [AUDIENCE_B2B_ONLY];
 /** Both sides of the split, as the filter menu offers them. */
 export const AUDIENCE_OPTIONS = [AUDIENCE_ALL_USERS, AUDIENCE_B2B_ONLY];
-export const PARTNERSHIP_TAGS = ["NexStar", "HVACR"];
-export const TRADE_TAGS = [
-  "Residential HVAC",
-  "Commercial HVAC",
-  "Residential Plumbing",
-  "Commercial Plumbing",
-  "MultiFamily Maintenance",
-  "Hotel Maintenance",
-];
+/* Trade and Partnership values are the ones Product Config's B2B Management
+   offers — what the Task and Certification wizards let an admin pick — so a
+   value picked there shows in every Tags column and filter. They follow the
+   SAVED lists live: on each Product Config save these arrays are refilled in
+   place, so every importer sees the new values on its next render. A value
+   removed in Product Config leaves these lists (and is stripped from every
+   record that carried it — App's removeB2BValue). "HVACR" stays recognised:
+   a legacy partnership tag older records carry that the list never had. */
+export const PARTNERSHIP_TAGS: string[] = [];
+export const TRADE_TAGS: string[] = [];
+const union = (...lists: string[][]) => [...new Set(lists.flat())];
+function syncTagLists() {
+  const { partnerships, trades } = getB2BConfig();
+  PARTNERSHIP_TAGS.splice(0, Infinity, ...union(partnerships, ["HVACR"]));
+  TRADE_TAGS.splice(0, Infinity, ...union(trades));
+}
+syncTagLists();
+subscribeB2BConfig(syncTagLists);
 
 export const TAG_GROUPS: { label: string; tags: string[] }[] = [
   { label: "AUDIENCE", tags: AUDIENCE_OPTIONS },
@@ -63,23 +77,31 @@ export const TAG_GROUPS: { label: string; tags: string[] }[] = [
 ];
 
 /** A record's audience. Untagged means it reaches everyone, so this always
- * resolves to one of the two AUDIENCE_OPTIONS — there is no "no audience". */
+ * resolves to one of the two AUDIENCE_OPTIONS — there is no "no audience".
+ * A Trade or Partnership tag excludes B2C users just as the explicit tag does
+ * (the Audience step's own copy: "B2C is still excluded if you set a Trade or
+ * Partnership"), so either one also reads "B2B Companies Only". The Audience
+ * columns, the Audience filter and the Feedback Form trigger picker
+ * (`allUsersOnly`) all resolve through this one rule. */
 export function audienceOf(tags: string[] | undefined): string {
-  return (tags ?? []).includes(AUDIENCE_B2B_ONLY)
+  const list = tags ?? [];
+  return list.some(
+    (t) => t === AUDIENCE_B2B_ONLY || TRADE_TAGS.includes(t) || PARTNERSHIP_TAGS.includes(t),
+  )
     ? AUDIENCE_B2B_ONLY
     : AUDIENCE_ALL_USERS;
 }
 
-/** Does a record match a selection from the "Audience/B2B Tags" menu? Every
- * tag is a plain membership test except "All Users", which is the absence of the
- * B2B tag rather than a tag of its own. */
+/** Does a record match a selection from the "Audience/B2B Tags" menu? The two
+ * Audience options test the record's resolved audience (`audienceOf`); every
+ * other tag is a plain membership test. */
 export function matchesTagFilter(
   tags: string[] | undefined,
   selected: readonly string[],
 ): boolean {
   const list = tags ?? [];
   return selected.some((t) =>
-    t === AUDIENCE_ALL_USERS ? !list.includes(AUDIENCE_B2B_ONLY) : list.includes(t),
+    t === AUDIENCE_ALL_USERS || t === AUDIENCE_B2B_ONLY ? audienceOf(list) === t : list.includes(t),
   );
 }
 
@@ -101,7 +123,6 @@ export function pickTags(
 }
 
 export type OptionalColumn =
-  | "id"
   | "type"
   | "paid"
   | "usedIn"
@@ -113,7 +134,6 @@ export type OptionalColumn =
   | "dateModified";
 
 export const OPTIONAL_COLUMNS: { key: OptionalColumn; label: string }[] = [
-  { key: "id", label: "Task ID" },
   { key: "type", label: "Type" },
   { key: "paid", label: "Paid" },
   { key: "usedIn", label: "Used in" },

@@ -6,7 +6,7 @@ import { DropdownSearch } from "./SearchPanelParts";
 import {
   CREATED_BY_IN_HOUSE,
   CREATED_BY_B2B,
-  CERTIFICATIONS,
+  useCertificationOptions,
   DISCOVERABLE_OPTIONS,
   SUBSCRIPTION_OPTIONS,
   TASK_TYPES,
@@ -268,7 +268,8 @@ export function CertificationsPill({
   onApply: (v: string[]) => void;
   tip?: string;
 }) {
-  const summary = summarize(value, CERTIFICATIONS);
+  const certifications = useCertificationOptions();
+  const summary = summarize(value, certifications);
 
   return (
     <Dropdown
@@ -286,7 +287,7 @@ export function CertificationsPill({
     >
       {({ close }) => (
         <SectionedMultiSelect
-          sections={[{ items: CERTIFICATIONS }]}
+          sections={[{ items: certifications }]}
           value={value}
           onApply={(v) => {
             onApply(v);

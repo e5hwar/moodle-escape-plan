@@ -74,7 +74,7 @@ export const CERT_TEMPLATE =
     csvLine([...REFRIGERANT_BASICS, ...RECOVERY, "Leak Detection Test", "Hands-On Task"]),
     csvLine([...REFRIGERANT_BASICS, ...NO_LESSON, "Refrigerant Basics Quiz", "Quiz"]),
     csvLine([...SAFETY, ...NO_LESSON, "OSHA 10 Safety Course", "xAPI"]),
-    csvLine([...SAFETY, ...NO_LESSON, "Government ID Upload", "Hands-On Task"]),
+    csvLine([...SAFETY, ...NO_LESSON, "Electrical Panel Labeling", "Hands-On Task"]),
     csvLine([...SAFETY, ...NO_LESSON, "Safety & Compliance Final Exam", "Quiz"]),
     "",
   ].join("\n");
@@ -163,6 +163,7 @@ const TYPE_NOUN: Record<TaskType, { one: string; many: string; a: string }> = {
   Quiz: { one: "Quiz", many: "Quizzes", a: "a" },
   "Hands-On Task": { one: "Hands-On Task", many: "Hands-On Tasks", a: "a" },
   Resource: { one: "Resource", many: "Resources", a: "a" },
+  "ID Upload": { one: "ID Upload", many: "ID Uploads", a: "an" },
 };
 
 const LIBRARY = new Map(taskLibrary.map((t) => [norm(t.name), t]));

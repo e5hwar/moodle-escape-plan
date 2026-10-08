@@ -2,6 +2,21 @@ import { useState } from "react";
 import { SelectField } from "./SelectField";
 import { DropdownCaretIcon } from "./icons";
 
+/** The units every Time to Complete offers, Task and Certification alike —
+ *  stored as the lowercase key, shown as the label. */
+export type TimeUnit = "minutes" | "hours" | "days" | "weeks" | "months";
+export const TIME_UNIT_LABEL: Record<TimeUnit, string> = {
+  minutes: "Minutes",
+  hours: "Hours",
+  days: "Days",
+  weeks: "Weeks",
+  months: "Months",
+};
+export const TIME_UNIT_OPTIONS = Object.values(TIME_UNIT_LABEL);
+export const TIME_UNIT_BY_LABEL = Object.fromEntries(
+  (Object.keys(TIME_UNIT_LABEL) as TimeUnit[]).map((u) => [TIME_UNIT_LABEL[u], u]),
+) as Record<string, TimeUnit>;
+
 /* Time to Complete — Figma 1550:2700 "Text + Dropdown - Time to Complete".
  * ONE 45px shell (1px #404040, r8) split by a hairline: the number on the left
  * (digits only), the unit on the right as a 146px dropdown cell with its caret

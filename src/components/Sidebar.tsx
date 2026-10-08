@@ -1,9 +1,9 @@
 import { useState } from "react";
 import skillcatLogo from "../assets/SkillCat-Logo.png";
 import { submissions } from "../data/proctoring";
-import { displayStatus, reviewSubmissions } from "../data/reviewSubmissions";
-import { spotlights } from "../data/spotlights";
-import { nameChangeRequests } from "../data/nameChangeRequests";
+import { usePendingHandsOnCount } from "../data/reviewSubmissions";
+import { isInReview, useLiveSpotlights } from "../data/spotlights";
+import { pendingCount, useNameChangeRequests } from "../data/nameChangeRequests";
 
 type IconProps = { className?: string };
 
@@ -98,17 +98,16 @@ type IconKey = keyof typeof I;
    Figma draws them as "99+", so anything past 99 caps the same way. */
 const cap = (n: number) => (n > 99 ? "99+" : n);
 const pendingExamReviews = cap(submissions.filter((s) => s.status === "pending").length);
-const pendingHandsOn = cap(
-  reviewSubmissions.filter((s) => displayStatus(s) === "Review Pending").length,
-);
+/* Hands-On Tasks is the one live badge: reviews are submitted inside this
+   session, so it reads the shared review store (`usePendingHandsOnCount`) and
+   drops the moment a verdict goes out — see `Sidebar` below. */
 /* Spotlights waiting on a decision — the rows the Spotlight page pills
-   "In-Review". Those are exactly the `pending` ones: an approved Spotlight
-   only ever moves on to Active or Ended, never back into the queue. */
-const spotlightsInReview = cap(spotlights.filter((s) => s.status === "pending").length);
-/* Name Change Requests are reached from the Manage Users header, so their open
-   count badges Users — the same figure that header's own pill carries. Every
-   seeded request is still open; a decided one leaves the list. */
-const openNameChanges = cap(nameChangeRequests.length);
+   "In-Review". It reads the live Spotlight list (`useLiveSpotlights`), so an
+   approval or rejection drops it at once — see `Sidebar` below. */
+/* Name Change Requests are reached from the Users page, so the count of those
+   waiting on an admin badges Users — the same figure as that page's banner. It
+   reads the live request store (`useNameChangeRequests`), so a decision drops
+   it at once — see `Sidebar` below. */
 
 type LinkItem = { key: string; label: string; icon: IconKey; navKey?: string; badge?: number | string };
 // Figma 421:1419 — every destination is a top-level entry; sections are plain
@@ -130,13 +129,13 @@ const sections: NavSection[] = [
       { key: "certifications", label: "Certifications", icon: "certifications", navKey: "certs" },
       // Hands-On Tasks joined Content 2026-08-31 (Figma 814:2685) — the
       // Operations group it used to share with Exam Reviews is gone.
-      { key: "review-hands-on", label: "Hands-On Tasks", icon: "handsOn", navKey: "review-hands-on", badge: pendingHandsOn },
+      { key: "review-hands-on", label: "Hands-On Tasks", icon: "handsOn", navKey: "review-hands-on" },
     ],
   },
   {
     label: "Customers",
     items: [
-      { key: "manage-users", label: "Users", icon: "users", navKey: "manage-users", badge: openNameChanges },
+      { key: "manage-users", label: "Users", icon: "users", navKey: "manage-users" },
       { key: "manage-companies", label: "Companies", icon: "companies", navKey: "manage-companies" },
       // Name Change Requests left the rail 2026-08-25 — it's reached from the
       // Manage Users header's "Name Changes" button now (the route stays), and
@@ -147,7 +146,7 @@ const sections: NavSection[] = [
   {
     label: "System",
     items: [
-      { key: "spotlight", label: "Spotlight", icon: "spotlight", navKey: "spotlight", badge: spotlightsInReview },
+      { key: "spotlight", label: "Spotlight", icon: "spotlight", navKey: "spotlight" },
       { key: "product-config", label: "Product Config", icon: "productConfig", navKey: "product-config" },
     ],
   },
@@ -173,6 +172,20 @@ export function Sidebar({ active = "tasks", onNavigate }: Props) {
   const [collapsed, setCollapsed] = useState(true);
   const [hovered, setHovered] = useState(false);
   const activeKey = ACTIVE_MAP[active] ?? active;
+  const pendingHandsOn = cap(usePendingHandsOnCount());
+  // No badge at all once nothing is waiting.
+  const pendingNames = pendingCount(useNameChangeRequests());
+  const openNameChanges = pendingNames > 0 ? cap(pendingNames) : undefined;
+  const inReview = useLiveSpotlights().filter(isInReview).length;
+  const spotlightsInReview = inReview > 0 ? cap(inReview) : undefined;
+  const badgeOf = (item: LinkItem) =>
+    item.key === "review-hands-on"
+      ? pendingHandsOn
+      : item.key === "manage-users"
+      ? openNameChanges
+      : item.key === "spotlight"
+      ? spotlightsInReview
+      : item.badge;
 
   const showExpanded = !collapsed || hovered;
   const isOverlay = collapsed && hovered;
@@ -248,8 +261,8 @@ export function Sidebar({ active = "tasks", onNavigate }: Props) {
                   >
                     <span className="sidebar__link-icon">{I[item.icon]}</span>
                     <span className="sidebar__link-label">{item.label}</span>
-                    {item.badge !== undefined && (
-                      <span className="sidebar__link-badge">{item.badge}</span>
+                    {badgeOf(item) !== undefined && (
+                      <span className="sidebar__link-badge">{badgeOf(item)}</span>
                     )}
                   </button>
                 ))}

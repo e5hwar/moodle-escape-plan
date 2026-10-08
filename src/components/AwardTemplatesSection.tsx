@@ -40,6 +40,7 @@ export function AwardTemplatesSection({
   onEdit,
   onDelete,
   onEditLinkedAward,
+  onModalChange,
 }: {
   templates: AwardDesignTemplate[];
   onEdit: (template: AwardDesignTemplate) => void;
@@ -47,6 +48,9 @@ export function AwardTemplatesSection({
   /** Leaves Product Config for the Awards page, on the Award that blocks a
    *  delete. Omitted when there is nowhere to go. */
   onEditLinkedAward?: (award: Award) => void;
+  /** A confirm (or a row menu) opened or closed — the page's Create shortcut
+   *  stands down while one is up. */
+  onModalChange?: (open: boolean) => void;
 }) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<{ key: string; dir: SortDir }>({ key: "name", dir: "asc" });
@@ -61,6 +65,12 @@ export function AwardTemplatesSection({
   const shown = orderedColumns(TPL_COL_DEFS, order, cols);
 
   useEffect(() => setPage(1), [query, sort]);
+  const overlayUp = modal.kind !== "none" || menu !== null;
+  useEffect(() => {
+    onModalChange?.(overlayUp);
+  }, [overlayUp, onModalChange]);
+  // Leaving the tab with one open mustn't leave the shortcut switched off.
+  useEffect(() => () => onModalChange?.(false), [onModalChange]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

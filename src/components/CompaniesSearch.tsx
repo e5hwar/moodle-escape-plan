@@ -3,12 +3,13 @@ import {
   getCompanyBilling,
   TIERS,
   SUBSCRIPTION_STATUSES,
-  INDUSTRY_FILTER_OPTIONS,
-  PARTNERSHIP_FILTER_OPTIONS,
+  industryFilterOptions,
+  partnershipFilterOptions,
   NO_INDUSTRY,
   NO_PARTNERSHIP,
   type Company,
 } from "../data/companies";
+import { useB2BConfig } from "../data/productConfig";
 import { KeyCommandIcon, SearchClearIcon, SearchIcon } from "./icons";
 import { SearchHints, stepActive, SearchNoResults, suggestFilters, SuggestionRow } from "./SearchPanelParts";
 
@@ -74,6 +75,8 @@ export function CompaniesSearch({
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => setText(query), [query]);
+  // The Industries / Partnership facets offer Product Config's lists, live.
+  const b2b = useB2BConfig();
 
   // "N companies" per value, on the rows. Status comes from derived billing, so
   // it is counted the same way the table renders it.
@@ -134,11 +137,11 @@ export function CompaniesSearch({
     {
       label: "Industries",
       kind: "Industry",
-      example: "HVAC",
+      example: b2b.trades[0] ?? "Commercial HVAC",
       desc: "Filter by Industries",
       plural: "industries",
       emptyHint: "Start typing an industry name…",
-      values: INDUSTRY_FILTER_OPTIONS,
+      values: industryFilterOptions(b2b.trades),
       applied: appliedIndustries,
       onChange: onIndustriesChange,
       counts: counts.industry,
@@ -150,7 +153,7 @@ export function CompaniesSearch({
       desc: "Filter by Partnership",
       plural: "partnerships",
       emptyHint: "All partnerships are already applied.",
-      values: PARTNERSHIP_FILTER_OPTIONS,
+      values: partnershipFilterOptions(b2b.partnerships),
       applied: appliedPartnerships,
       onChange: onPartnershipsChange,
       counts: counts.partnership,

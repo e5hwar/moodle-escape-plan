@@ -19,6 +19,7 @@ type Opt = { kind: "exam-filter" } | { kind: "exam"; name: string };
  */
 export function ProctoringSearch({
   submissions,
+  quizzes,
   exams: appliedExams,
   onExamsChange,
   query,
@@ -26,6 +27,9 @@ export function ProctoringSearch({
   secondary = false,
 }: {
   submissions: Submission[];
+  /** The Quizzes the `Quiz:` scope offers — every reviewed Quiz, whether or
+   *  not it has rows here (each still shows its count). */
+  quizzes: string[];
   exams: string[];
   onExamsChange: (next: string[]) => void;
   query: string;
@@ -49,8 +53,8 @@ export function ProctoringSearch({
   const allExams = useMemo(() => {
     const counts = new Map<string, number>();
     submissions.forEach((s) => counts.set(s.exam, (counts.get(s.exam) ?? 0) + 1));
-    return { names: [...counts.keys()].sort(), counts };
-  }, [submissions]);
+    return { names: [...quizzes].sort((a, b) => a.localeCompare(b)), counts };
+  }, [submissions, quizzes]);
 
   // The `Quiz:` prefix (case-insensitive) switches the panel into selection mode.
   const examMatch = text.match(/^\s*quiz:\s*(.*)$/i);
@@ -296,7 +300,7 @@ export function ProctoringSearch({
                   <OptionRow key={name} active={active === i} onHover={() => setActive(i)} onClick={() => activate({ kind: "exam", name })}>
                     <span className="usearch-chip">Quiz:</span>
                     <span className="usearch-row-ex">{name}</span>
-                    <span className="usearch-row-desc">{allExams.counts.get(name)} submissions</span>
+                    <span className="usearch-row-desc">{allExams.counts.get(name) ?? 0} submissions</span>
                   </OptionRow>
                 ))
               )}

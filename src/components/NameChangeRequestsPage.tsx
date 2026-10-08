@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { LockedField } from "./CriteriaLock";
 import {
-  nameChangeRequests as seed,
+  isOpen,
+  setNameChangeStatus,
+  useNameChangeRequests,
   type NameChangeRequest,
 } from "../data/nameChangeRequests";
-import { users, updateUserContact } from "../data/users";
-import { ZoomableIdCard, idCardFromRequest } from "./IdCard";
+import { matchesUserQuery, renameUser, useUsers, type User } from "../data/users";
+import { hasIdDocument, idRecordForUser, idTimelineOf, useIdDecisions } from "../data/manageIds";
+import { ZoomableIdCard } from "./IdCard";
+import { idCardOf } from "./IdModal";
+import { STATUS_LABEL as ID_STATUS_LABEL } from "./ManageIdsSearch";
+import { IdDetailsHover } from "./UserDetailsHover";
+import { NoteCard } from "./NoteCard";
 import { leave, useTouchedKeys } from "./fieldFlags";
 import { PrmModal } from "./PrmModal";
 import { LimitError } from "./CharCount";
@@ -13,6 +20,9 @@ import { LimitedInput } from "./LimitedInput";
 import { NAME_MAX, isOver } from "../data/fieldLimits";
 import { SearchIcon, SortIcon, RowChevronIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { SearchTrailing } from "./SearchPanelParts";
+import { Dropdown } from "./Dropdown";
+import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
+import { FILTER_TIPS } from "../data/filterTips";
 import { TableCols } from "./TableCols";
 import { useToast } from "./useToast";
 import { TableEmpty } from "./TableEmpty";
@@ -36,16 +46,17 @@ const TABLE_MIN =
 type SortKey = "currentName" | "requestedName" | "email" | "phone" | "submittedOn";
 type SortDir = "asc" | "desc";
 
-/** Contact details live on the user record — requests carry only the userId. */
-type Contact = { email: string; phone: string };
+/** The Status filter's options — the two states an open request can be in. */
+const STATUS_OPTIONS = ["Pending Review", "Awaiting ID Proof"];
+const statusLabel = (r: NameChangeRequest) => (r.status === "awaiting-proof" ? "Awaiting ID Proof" : "Pending Review");
 
-const CONTACTS = new Map<string, Contact>(
-  users.map((u) => [u.id, { email: u.email, phone: u.phone }]),
-);
+/** The admin every decision is recorded against (the request's history). */
+const REVIEWER = "You";
 
-function contactOf(r: NameChangeRequest): Contact | undefined {
-  return CONTACTS.get(r.userId);
-}
+/** A request with its user — name, email and phone read off the live roster,
+ *  never copied onto the request. */
+type Row = { r: NameChangeRequest; u: User | undefined };
+const nameOf = (row: Row) => row.u?.name ?? "";
 
 function formatDate(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
@@ -54,50 +65,62 @@ function formatDate(iso: string): string {
     : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-function compare(a: NameChangeRequest, b: NameChangeRequest, key: SortKey): number {
+function compare(a: Row, b: Row, key: SortKey): number {
   switch (key) {
     case "currentName":
-      return a.currentName.localeCompare(b.currentName);
+      return nameOf(a).localeCompare(nameOf(b));
     case "requestedName":
-      return a.requestedName.localeCompare(b.requestedName);
+      return a.r.requestedName.localeCompare(b.r.requestedName);
     case "email":
-      return (contactOf(a)?.email ?? "").localeCompare(contactOf(b)?.email ?? "");
+      return (a.u?.email ?? "").localeCompare(b.u?.email ?? "");
     case "phone":
-      return (contactOf(a)?.phone ?? "").localeCompare(contactOf(b)?.phone ?? "");
+      return (a.u?.phone ?? "").localeCompare(b.u?.phone ?? "");
     case "submittedOn":
-      return new Date(a.submittedOn).getTime() - new Date(b.submittedOn).getTime();
+      return new Date(a.r.submittedOn).getTime() - new Date(b.r.submittedOn).getTime();
   }
 }
 
 export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
-  const [list, setList] = useState<NameChangeRequest[]>(seed);
+  /* The queue is the open requests of the shared store (nameChangeRequests.ts):
+     a decided one leaves it for good, here and in the Users banner and badge. */
+  const all = useNameChangeRequests();
+  const roster = useUsers();
+  const list = useMemo<Row[]>(
+    () => all.filter(isOpen).map((r) => ({ r, u: roster.find((u) => u.id === r.userId) })),
+    [all, roster],
+  );
   const [query, setQuery] = useState("");
+  /* Opens on the requests waiting on a reviewer — the queue's work. Clearing
+     the pill shows the ones waiting on the user's ID proof too. */
+  const [statusFilter, setStatusFilter] = useState<string[]>(["Pending Review"]);
   /* Oldest first: the queue is worked in the order it was submitted, so the
      longest-waiting request is the one on top (and the one that opens). */
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "submittedOn", dir: "asc" });
   const [page, setPage] = useState(1);
 
   /* The page is reached by clicking the pending-count banner / header note, so
-     the reader has already said "review these" — the first request in the
-     default order (newest first) opens straight away, saving the extra click. */
-  const [reviewing, setReviewing] = useState<NameChangeRequest | null>(
-    () => [...seed].sort((a, b) => compare(a, b, "submittedOn"))[0] ?? null,
+     the reader has already said "review these" — the oldest request waiting on
+     a reviewer opens straight away, saving the extra click. */
+  const [reviewingId, setReviewingId] = useState<string | null>(
+    () =>
+      [...list]
+        .filter((x) => x.r.status === "pending")
+        .sort((a, b) => compare(a, b, "submittedOn"))[0]?.r.id ?? null,
   );
+  const reviewing = list.find((x) => x.r.id === reviewingId) ?? null;
+  const setReviewing = (row: Row | null) => setReviewingId(row?.r.id ?? null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter((r) => {
-      const c = contactOf(r);
-      return (
-        r.currentName.toLowerCase().includes(q) ||
-        r.requestedName.toLowerCase().includes(q) ||
-        r.id.toLowerCase().includes(q) ||
-        (c?.email.toLowerCase().includes(q) ?? false) ||
-        (c?.phone.toLowerCase().includes(q) ?? false)
-      );
-    });
-  }, [list, query]);
+    return list.filter(
+      (x) =>
+        (statusFilter.length === 0 || statusFilter.includes(statusLabel(x.r))) &&
+        (!q ||
+          matchesUserQuery(q, { name: nameOf(x), email: x.u?.email, phone: x.u?.phone }) ||
+          x.r.requestedName.toLowerCase().includes(q) ||
+          x.r.id.toLowerCase().includes(q)),
+    );
+  }, [list, query, statusFilter]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered].sort((a, b) => compare(a, b, sort.key));
@@ -105,7 +128,7 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
   }, [filtered, sort]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  useEffect(() => setPage(1), [query, sort]);
+  useEffect(() => setPage(1), [query, statusFilter, sort]);
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
@@ -119,40 +142,41 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
   /** Leaves the request pending and moves to the next one in view order — the
       footer's "Skip". Closes when it was the last. */
   function skipReview(id: string) {
-    const next = sorted[sorted.findIndex((r) => r.id === id) + 1];
+    const next = sorted[sorted.findIndex((x) => x.r.id === id) + 1];
     setReviewing(next ?? null);
   }
 
-  /** Removes the resolved request and immediately advances review to the next one in view order. */
+  /** The request just decided leaves the queue; review moves on to the next
+      one in view order. */
   function advanceReview(id: string) {
-    const currentIndex = sorted.findIndex((r) => r.id === id);
-    const remaining = sorted.filter((r) => r.id !== id);
-    setList((prev) => prev.filter((r) => r.id !== id));
+    const currentIndex = sorted.findIndex((x) => x.r.id === id);
+    const remaining = sorted.filter((x) => x.r.id !== id);
     setReviewing(remaining[currentIndex] ?? remaining[0] ?? null);
   }
 
   const [toast, toastNode] = useToast();
 
-  /** One confirmed decision from the review. Approve writes the (possibly
-      corrected) requested name onto the user's record before the request
-      leaves the queue; Request ID Proof leaves it in place — still pending,
-      as its confirm says — and moves on like Skip. */
-  function resolveReview(request: NameChangeRequest, decision: ReviewDecision, name: string) {
+  /** One confirmed decision from the review, written to the shared store with
+      its history. Approve also renames the user on the roster (with the
+      reviewer's correction, if any) — every page that names them follows.
+      Request ID Proof keeps the request open, awaiting the user's proof, and
+      moves on like Skip. */
+  function resolveReview(row: Row, decision: ReviewDecision, name: string) {
+    const { r } = row;
     if (decision === "proof") {
-      skipReview(request.id);
+      setNameChangeStatus(r.id, "awaiting-proof", REVIEWER);
+      skipReview(r.id);
       toast("ID Proof Requested");
       return;
     }
     if (decision === "approve") {
       const approved = name.trim();
-      // The roster is the shared session store Users / Full Profile read from.
-      const u = users.find((x) => x.id === request.userId);
-      if (u) updateUserContact(u.id, { name: approved, email: u.email, phone: u.phone });
-      setList((prev) =>
-        prev.map((r) => (r.id === request.id ? { ...r, currentName: approved, requestedName: approved } : r)),
-      );
+      setNameChangeStatus(r.id, "approved", REVIEWER, { from: nameOf(row), to: approved });
+      renameUser(r.userId, approved);
+    } else {
+      setNameChangeStatus(r.id, "rejected", REVIEWER);
     }
-    advanceReview(request.id);
+    advanceReview(r.id);
     toast(decision === "approve" ? "Name Change Approved" : "Name Change Rejected");
   }
 
@@ -182,7 +206,7 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
 
           <div className="tasks-row">
             <div className="tasks-content">
-              <div className="search-wrap ncr-search">
+              <div className="search-wrap">
                 <span className="search-icon">
                   <SearchIcon />
                 </span>
@@ -193,6 +217,35 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
                   onChange={(e) => setQuery(e.target.value)}
                 />
                 <SearchTrailing active={!!query} onClear={() => setQuery("")} />
+              </div>
+
+              {/* The shared filter pill — an open request is either waiting on a
+                  reviewer or on the user's ID proof. */}
+              <div className="filters">
+                <Dropdown
+                  width={220}
+                  trigger={({ open, toggle }) => (
+                    <PillTrigger
+                      label="Status"
+                      tip={FILTER_TIPS.nameChanges.status}
+                      value={summarize(statusFilter, STATUS_OPTIONS)}
+                      open={open}
+                      toggle={toggle}
+                      onClear={() => setStatusFilter([])}
+                    />
+                  )}
+                >
+                  {({ close }) => (
+                    <SectionedMultiSelect
+                      sections={[{ items: STATUS_OPTIONS }]}
+                      value={statusFilter}
+                      onApply={(v) => {
+                        setStatusFilter(v);
+                        close();
+                      }}
+                    />
+                  )}
+                </Dropdown>
               </div>
 
               <div
@@ -216,18 +269,26 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {paged.map((r) => {
-                      const c = contactOf(r);
+                    {paged.map((row) => {
+                      const { r, u } = row;
                       return (
-                      <tr key={r.id} onClick={() => setReviewing(r)}>
-                        <td className="col-name" data-tip={r.currentName}>
-                          {r.currentName}
+                      <tr key={r.id} onClick={() => setReviewing(row)}>
+                        <td className="col-name" data-tip={nameOf(row)}>
+                          {nameOf(row)}
                         </td>
-                        <td className="col-name" data-tip={r.requestedName}>
-                          {r.requestedName}
+                        <td
+                          className={`col-name${r.status === "awaiting-proof" ? " has-flag" : ""}`}
+                          data-tip={r.requestedName}
+                        >
+                          <span className="tsk-name">{r.requestedName}</span>
+                          {/* Waiting on the user, not a reviewer — until they
+                              upload a new ID, which sends it back to pending. */}
+                          {r.status === "awaiting-proof" && (
+                            <span className="pr-name-flag pr-name-flag--grey">Awaiting ID Proof</span>
+                          )}
                         </td>
-                        <td className="col-u-email">{c?.email ?? ""}</td>
-                        <td className="col-u-phone">{c?.phone ?? ""}</td>
+                        <td className="col-u-email">{u?.email ?? ""}</td>
+                        <td className="col-u-phone">{u?.phone ?? ""}</td>
                         <td>{formatDate(r.submittedOn)}</td>
                         {/* Same row-end affordance as the Hands-On and Pending
                             ID Re-Upload tables: a resting chevron that hides on
@@ -235,15 +296,15 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
                         <td className="col-actions">
                           <button
                             className="row-action-btn lone-dots row-chevron"
-                            aria-label={`View name change request from ${r.currentName}`}
-                            onClick={(e) => { e.stopPropagation(); setReviewing(r); }}
+                            aria-label={`View name change request from ${nameOf(row)}`}
+                            onClick={(e) => { e.stopPropagation(); setReviewing(row); }}
                           >
                             <RowChevronIcon />
                           </button>
                           <div className="row-action-bar">
                             <button
                               className="row-action-btn row-action-btn--label"
-                              onClick={(e) => { e.stopPropagation(); setReviewing(r); }}
+                              onClick={(e) => { e.stopPropagation(); setReviewing(row); }}
                             >
                               View Request
                               <RowChevronIcon />
@@ -275,7 +336,7 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
 
       {reviewing && (
         <ReviewModal
-          request={reviewing}
+          row={reviewing}
           onClose={() => setReviewing(null)}
           onSkip={(id) => skipReview(id)}
           onResolved={(decision, name) => resolveReview(reviewing, decision, name)}
@@ -324,17 +385,26 @@ function SortableHeader({
 type ReviewMode = "main" | "approve" | "proof" | "reject";
 type ReviewDecision = Exclude<ReviewMode, "main">;
 function ReviewModal({
-  request,
+  row,
   onClose,
   onSkip,
   onResolved,
 }: {
-  request: NameChangeRequest;
+  row: Row;
   onClose: () => void;
   onSkip: (id: string) => void;
   /** The confirmed decision, with the Requested Name as edited in the review. */
   onResolved: (decision: ReviewDecision, requestedName: string) => void;
 }) {
+  const request = row.r;
+  const currentName = nameOf(row);
+  /* The ID it is checked against is the one on file for this user — the
+     banner on Users says as much — not a document of the request's own. */
+  const decisions = useIdDecisions();
+  const idRecord = row.u ? idRecordForUser(row.u, decisions) : null;
+  /* The full-screen viewer owns the keyboard while it is up: there R rotates,
+     and I / R / A must not decide the request underneath. */
+  const [idFullView, setIdFullView] = useState(false);
   const [mode, setMode] = useState<ReviewMode>("main");
   const [requestedName, setRequestedName] = useState(request.requestedName);
   const valid = requestedName.trim().length > 1 && !isOver(NAME_MAX, requestedName);
@@ -352,7 +422,7 @@ function ReviewModal({
   /* The footer's keycaps (Figma 445:878) are real: I / R / A drive the three
      decisions while the main step is up and focus isn't in a field. */
   useEffect(() => {
-    if (mode !== "main") return;
+    if (mode !== "main" || idFullView) return;
     function onKey(e: KeyboardEvent) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const t = e.target as HTMLElement | null;
@@ -366,7 +436,7 @@ function ReviewModal({
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [mode, valid]);
+  }, [mode, valid, idFullView]);
 
   /* Each decision lands on a plain confirm stacked OVER the review — no reason
      to type, just the sentence and the button, with the ID still behind it.
@@ -377,17 +447,17 @@ function ReviewModal({
       : {
           approve: {
             title: "Approve Name Change",
-            description: `"${request.currentName}" will be changed to "${requestedName.trim()}" on their account.`,
+            description: `"${currentName}" will be changed to "${requestedName.trim()}" on their account.`,
             cta: "Approve & Save",
           },
           proof: {
             title: "Request Additional Proof",
-            description: `${request.currentName} will be asked for more documentation, and the request stays pending until they send it.`,
+            description: `${currentName} will be asked to upload their ID again. The request is marked Awaiting ID Proof until they do, then returns to review.`,
             cta: "Send Request",
           },
           reject: {
             title: "Reject Name Change",
-            description: `The request to change "${request.currentName}" to "${request.requestedName}" will be rejected, and they'll keep their current name.`,
+            description: `The request to change "${currentName}" to "${request.requestedName}" will be rejected, and they'll keep their current name.`,
             cta: "Reject Request",
           },
         }[mode];
@@ -399,6 +469,18 @@ function ReviewModal({
         wide
         className="ncr-modal"
         title="Review Name Change"
+        /* Whether the ID being compared against has itself been approved —
+           hover for when it was uploaded and decided (Figma 679:2039). */
+        description={
+          idRecord ? (
+            <>
+              ID Status:{" "}
+              <IdDetailsHover timeline={idTimelineOf(idRecord)}>
+                <span className="mid-head-status">{ID_STATUS_LABEL[idRecord.status]}</span>
+              </IdDetailsHover>
+            </>
+          ) : undefined
+        }
         cancelLabel="Skip"
         onCancelButton={() => onSkip(request.id)}
         onCancel={onClose}
@@ -430,7 +512,16 @@ function ReviewModal({
               caption. Hovering still magnifies into the panel beside it, and
               clicking opens the shared full-screen viewer, where Rotate lives. */}
           <div className="ncr-id-pane">
-            <ZoomableIdCard data={idCardFromRequest(request)} hideTools caption />
+            {idRecord && hasIdDocument(idRecord) ? (
+              <ZoomableIdCard
+                data={idCardOf(idRecord)}
+                onFullViewChange={setIdFullView}
+                hideTools
+                caption
+              />
+            ) : (
+              <NoteCard title="No ID on file" body="There is no reviewed document to compare this request against." />
+            )}
           </div>
 
           <div className="ncr-fields">
@@ -439,7 +530,7 @@ function ReviewModal({
               {/* The shared Locked Field (Figma 1360:1883): the banner says
                   why, the control under it is disabled. */}
               <LockedField locked sub="The name currently on the account. This can't be edited.">
-                <input className="form-input" value={request.currentName} readOnly aria-label="Current Name" />
+                <input className="form-input" value={currentName} readOnly aria-label="Current Name" />
               </LockedField>
             </div>
 

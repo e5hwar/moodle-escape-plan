@@ -456,7 +456,8 @@ export function questionsFromImport(
   const now = Date.now();
   return rows.map((row) => ({
     id: nextId(),
-    modifiedAt: now,
+    // A real v1, saved now — imported questions have never been answered.
+    sessionVersions: [{ version: 1, at: now, note: "Imported from CSV" }],
     type: row.type,
     text: row.text,
     status: "Active" as const,

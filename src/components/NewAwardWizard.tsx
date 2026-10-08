@@ -10,10 +10,13 @@ import { ConfirmModal } from "./AwardTableParts";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
 import { draftKey, useLeaveGuard } from "./LeaveGuard";
 import { type Certification } from "../data/certifications";
+import { appToday } from "../data/companies";
 import {
   MERIT_TIERS,
   MERIT_INTENT,
   fmtHolders,
+  issueAwardId,
+  completedUsersCount,
   type Award,
   type AwardDesignTemplate,
   type AwardStatus,
@@ -108,17 +111,25 @@ export function NewAwardWizard(props: Props) {
   });
 
   function handleSave() {
-    const now = "Apr 28, 2026";
+    // The app's one clock, in the Awards' "Mon DD, YYYY" stamp.
+    const now = appToday().toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
     const base = props.editingAward;
+    /* Active issues retroactively to everyone who already completed the
+       Certification (the Status help text's promise), so the holder count is
+       at least that; Archived issues to no one new. */
+    const holders =
+      data.status === "Active"
+        ? Math.max(base?.holders ?? 0, completedUsersCount(data.certificationId))
+        : base?.holders ?? 0;
     props.onSave({
-      id: base?.id ?? `AW-${props.allAwards.length + 101}`,
+      id: base?.id ?? issueAwardId(props.allAwards),
       certificationId: data.certificationId,
       meritTier: data.meritTier,
       cardTemplateId: data.cardTemplateId,
       certificateTemplateId: data.certificateTemplateId,
       status: data.status,
       createdBy: base?.createdBy ?? "SkillCat",
-      holders: base?.holders ?? 0,
+      holders,
       dateCreated: base?.dateCreated ?? now,
       dateModified: now,
     });

@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { mergeUsers, userTypeOf, type MergeUser } from "../data/mergeAccounts";
-import { users as rosterUsers, subscriptionText } from "../data/users";
+import { mergeUserOf, userTypeOf, type MergeUser } from "../data/mergeAccounts";
+import {
+  matchesUserQuery,
+  subscriptionFilterStatus,
+  subscriptionText,
+  useUsers,
+  type User,
+} from "../data/users";
 import { PrmModal } from "./PrmModal";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
@@ -30,7 +36,9 @@ const PAGE_SIZE = 50;
 const MAX_PICKED = 2;
 
 const USER_TYPES = ["B2C", "B2B"];
-const SUBSCRIPTIONS = ["Starter", "Subscriber", "Scholarship", "Free Trial"];
+/* The Users page's Subscription vocabulary — a Subscriber already cancelling
+   files under Cancelled (subscriptionFilterStatus), as it does there. */
+const SUBSCRIPTIONS = ["Subscriber", "Company Plan", "Scholarship", "Free Trial", "Cancelled", "Starter"];
 const ROLES = ["Self-Learner", "Employee", "Manager", "Admin"];
 
 type SortKey = "name" | "email" | "phone" | "company" | "role" | "subscription";
@@ -40,22 +48,16 @@ function companyOf(u: MergeUser) {
   return u.company ?? "";
 }
 
-/* The Users table's Subscription wording ("Monthly · Apple", "Free Trial
-   Ends …"). Accounts lifted from the Users roster read their own record; the
-   hand-authored merge fixtures fall back to their plan fields. */
-const ROSTER = new Map(rosterUsers.map((u) => [u.id, u] as const));
-function planText(u: MergeUser): string {
-  const roster = ROSTER.get(u.id);
-  if (roster) return subscriptionText(roster);
-  return subscriptionText({
-    subscriptionStatus: u.subscription,
-    platform: u.sub.platform as "Stripe" | "Apple" | "Google" | undefined,
-    cycle: u.sub.cycle,
-    cancelsOn: u.sub.cancelsOn,
-  });
+/** A picker row: the flows' account shape plus the live user it was read off. */
+type PickRow = MergeUser & { user: User };
+
+/* The Users table's Subscription wording ("Monthly · Apple", "Cancels …",
+   "Company Plan"), off the live user. */
+function planText(u: PickRow): string {
+  return subscriptionText(u.user);
 }
 
-function compare(a: MergeUser, b: MergeUser, key: SortKey): number {
+function compare(a: PickRow, b: PickRow, key: SortKey): number {
   switch (key) {
     case "name":
       return a.name.localeCompare(b.name) || a.email.localeCompare(b.email);
@@ -68,7 +70,7 @@ function compare(a: MergeUser, b: MergeUser, key: SortKey): number {
     case "role":
       return a.role.localeCompare(b.role);
     case "subscription":
-      return a.subscription.localeCompare(b.subscription);
+      return subscriptionFilterStatus(a.user).localeCompare(subscriptionFilterStatus(b.user));
   }
 }
 
@@ -92,6 +94,9 @@ export function SelectUsersModal({
   onCancel: () => void;
   onConfirm: (ids: string[]) => void;
 }) {
+  // Every account on the live Users roster, as these flows see it.
+  const roster = useUsers();
+  const mergeUsers = useMemo<PickRow[]>(() => roster.map((u) => ({ ...mergeUserOf(u), user: u })), [roster]);
   // The Users page's search: commit-on-Enter, so only the applied query filters.
   const [committedQuery, setCommittedQuery] = useState("");
   const [types, setTypes] = useState<string[]>([]);
@@ -125,7 +130,7 @@ export function SelectUsersModal({
       if (u.company) counts.set(u.company, (counts.get(u.company) ?? 0) + 1);
     }
     return { names: [...counts.keys()].sort(), counts };
-  }, []);
+  }, [mergeUsers]);
   const allCompanies = companyOptions.names;
 
   /* One scope, exactly as on the Users page: picking a company in the bar is a
@@ -149,22 +154,15 @@ export function SelectUsersModal({
   const filtered = useMemo(() => {
     const q = committedQuery.trim().toLowerCase();
     return mergeUsers.filter((u) => {
-      if (
-        q &&
-        !(
-          u.name.toLowerCase().includes(q) ||
-          u.email.toLowerCase().includes(q) ||
-          u.phone.toLowerCase().includes(q)
-        )
-      )
-        return false;
+      // Phone matches on digits, as on the Users page (matchesUserQuery).
+      if (q && !matchesUserQuery(q, u)) return false;
       if (types.length && !types.includes(userTypeOf(u))) return false;
-      if (subs.length && !subs.includes(u.subscription)) return false;
+      if (subs.length && !subs.includes(subscriptionFilterStatus(u.user))) return false;
       if (companies.length && !(u.company && companies.includes(u.company))) return false;
       if (roles.length && !roles.includes(u.role)) return false;
       return true;
     });
-  }, [committedQuery, types, subs, companies, roles]);
+  }, [mergeUsers, committedQuery, types, subs, companies, roles]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered].sort((a, b) => compare(a, b, sort.key));

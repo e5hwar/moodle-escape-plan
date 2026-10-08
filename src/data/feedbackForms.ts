@@ -1,4 +1,5 @@
 import { questionById, type Question } from "./questionBank";
+import { todayStamp } from "./companies";
 
 /* A form is live the moment it is created — there is no draft/activation
    step. Disabled stops it firing (mappings and responses are preserved);
@@ -61,7 +62,7 @@ export function nextFormId(taken: FeedbackForm[]): string {
    form starts on (the wizard autofocuses it, and its gate blocks until it is
    filled). */
 export function makeDuplicateForm(all: FeedbackForm[], src: FeedbackForm): FeedbackForm {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayStamp();
   return {
     id: nextFormId(all),
     name: "",
@@ -137,9 +138,10 @@ export const feedbackForms: FeedbackForm[] = [
       link("Q-10440", false, "2026-02-10", "inactive", "2026-05-04"),
     ],
     triggers: [
-      { id: "tr-1", kind: "certification", refId: "C-0421", refName: "EPA 608 Universal", mappedAt: "2026-04-12" },
-      { id: "tr-2", kind: "certification", refId: "C-0420", refName: "EPA 608 Type I", mappedAt: "2026-04-12" },
-      { id: "tr-3", kind: "certification", refId: "C-0419", refName: "EPA 608 Type II", mappedAt: "2026-04-12" },
+      /* EPA 608 Universal itself is B2B Companies Only (`audienceOf`), so it
+         can't fire a form; the Final Exam Tasks reach every learner. */
+      { id: "tr-1", kind: "task", refId: "T-1198", refName: "EPA 608 Universal Final Exam", mappedAt: "2026-04-12" },
+      { id: "tr-2", kind: "task", refId: "T-1156", refName: "EPA 608 Type I Final Exam", mappedAt: "2026-04-12" },
     ],
     createdBy: "Maya Chen",
     createdAt: "2026-02-10",
@@ -148,7 +150,7 @@ export const feedbackForms: FeedbackForm[] = [
   },
   {
     id: "FB-0006",
-    name: "HVAC Field Tools — Quick Pulse",
+    name: "HVAC Install — Quick Pulse",
     status: "active",
     questions: [
       link("Q-10455", true, "2026-04-18"),
@@ -156,7 +158,7 @@ export const feedbackForms: FeedbackForm[] = [
       link("Q-10457", false, "2026-04-30"),
     ],
     triggers: [
-      { id: "tr-4", kind: "task", refId: "T-1654", refName: "HVAC Field Tools Walkthrough", mappedAt: "2026-04-30" },
+      { id: "tr-4", kind: "task", refId: "T-2299", refName: "HVAC Install", mappedAt: "2026-04-30" },
     ],
     createdBy: "Priya Iyer",
     createdAt: "2026-04-18",
@@ -182,14 +184,14 @@ export const feedbackForms: FeedbackForm[] = [
   },
   {
     id: "FB-0004",
-    name: "NATE Ready To Work — Exam Feedback",
+    name: "NATE Ready-to-Work — Exam Feedback",
     status: "active",
     questions: [link("Q-10461", true, "2026-05-12")],
     /* Every seeded form carries at least one trigger — a form with none can
        never be shown to anyone, so the wizard refuses to finish without one
        ([[feedback-forms-architecture]]). */
     triggers: [
-      { id: "tr-12", kind: "certification", refId: "C-0411", refName: "NATE Ready To Work", mappedAt: "2026-05-12" },
+      { id: "tr-12", kind: "certification", refId: "C-0410", refName: "NATE Ready-to-Work", mappedAt: "2026-05-12" },
     ],
     createdBy: "You",
     createdAt: "2026-05-12",
@@ -198,7 +200,7 @@ export const feedbackForms: FeedbackForm[] = [
   },
   {
     id: "FB-0003",
-    name: "Plumbing Pilot — Beta Tester Feedback",
+    name: "Welding Inspector Pilot — Beta Tester Feedback",
     status: "active",
     questions: [
       link("Q-10464", true, "2026-03-30"),
@@ -206,7 +208,7 @@ export const feedbackForms: FeedbackForm[] = [
       link("Q-10436", false, "2026-04-15"),
     ],
     triggers: [
-      { id: "tr-6", kind: "certification", refId: "C-0388", refName: "Certified Plumbing Technician", mappedAt: "2026-04-02" },
+      { id: "tr-6", kind: "certification", refId: "C-0221", refName: "Welding Inspector Prep", mappedAt: "2026-04-02" },
     ],
     createdBy: "Maya Chen",
     createdAt: "2026-03-30",
@@ -220,7 +222,7 @@ export const feedbackForms: FeedbackForm[] = [
     questions: [link("Q-10450", false, "2025-11-04")],
     // Preserved but inactive while the form is disabled.
     triggers: [
-      { id: "tr-8", kind: "certification", refId: "C-0299", refName: "EPA 608 Practice Path (legacy)", mappedAt: "2025-11-06" },
+      { id: "tr-8", kind: "task", refId: "T-1876", refName: "EPA Certification Lookup", mappedAt: "2025-11-06" },
     ],
     createdBy: "Akash Patel",
     createdAt: "2025-11-04",
@@ -229,7 +231,7 @@ export const feedbackForms: FeedbackForm[] = [
   },
   {
     id: "FB-0001",
-    name: "OSHA Safety — Course Quality",
+    name: "Electrical Code — Course Quality",
     status: "active",
     questions: [
       link("Q-10462", true, "2026-01-15"),
@@ -237,7 +239,7 @@ export const feedbackForms: FeedbackForm[] = [
       link("Q-10452", false, "2026-01-18"),
     ],
     triggers: [
-      { id: "tr-7", kind: "certification", refId: "C-0301", refName: "OSHA 10 — Construction", mappedAt: "2026-01-18" },
+      { id: "tr-7", kind: "certification", refId: "C-0298", refName: "Electrical Code Refresher", mappedAt: "2026-01-18" },
     ],
     createdBy: "Priya Iyer",
     createdAt: "2026-01-15",
@@ -291,45 +293,6 @@ export function isoDaysAgo(days: number): string {
     });
   });
 })(feedbackForms);
-
-// ----- Mock available triggers (Tasks + Certifications) for the trigger picker
-
-export type TriggerOption = {
-  id: string;
-  kind: TriggerKind;
-  refId: string;
-  refName: string;
-  industry?: string;
-  // Quiz Task that requires proctoring review — feedback fires on pass,
-  // even while the attempt is still In-Review.
-  proctored?: boolean;
-};
-
-// Catalog only — which form (if any) occupies a trigger is derived from
-// live form state, so the at-most-one-form rule tracks runtime changes.
-export const AVAILABLE_TRIGGERS: TriggerOption[] = [
-  // Certifications
-  { id: "ot-c1", kind: "certification", refId: "C-0421", refName: "EPA 608 Universal", industry: "HVAC", proctored: true },
-  { id: "ot-c2", kind: "certification", refId: "C-0420", refName: "EPA 608 Type I", industry: "HVAC › Residential", proctored: true },
-  { id: "ot-c3", kind: "certification", refId: "C-0419", refName: "EPA 608 Type II", industry: "HVAC › Commercial", proctored: true },
-  { id: "ot-c4", kind: "certification", refId: "C-0418", refName: "EPA 609 Motor Vehicle A/C", industry: "Automotive", proctored: true },
-  { id: "ot-c5", kind: "certification", refId: "C-0388", refName: "Certified Plumbing Technician", industry: "Plumbing" },
-  { id: "ot-c6", kind: "certification", refId: "C-0301", refName: "OSHA 10 — Construction", industry: "Safety" },
-  { id: "ot-c7", kind: "certification", refId: "C-0302", refName: "OSHA 30 — Construction", industry: "Safety" },
-  { id: "ot-c8", kind: "certification", refId: "C-0411", refName: "NATE Ready To Work", industry: "HVAC" },
-  { id: "ot-c9", kind: "certification", refId: "C-0412", refName: "NATE Core", industry: "HVAC" },
-  { id: "ot-c10", kind: "certification", refId: "C-0500", refName: "Solar Installer (Pilot)", industry: "Solar" },
-  { id: "ot-c11", kind: "certification", refId: "C-0511", refName: "Welding Certification", industry: "Welding" },
-
-  // Tasks
-  { id: "ot-t1", kind: "task", refId: "T-1432", refName: "Field Visit – Brazing Joints", industry: "HVAC" },
-  { id: "ot-t2", kind: "task", refId: "T-1654", refName: "HVAC Field Tools Walkthrough", industry: "HVAC" },
-  { id: "ot-t3", kind: "task", refId: "T-1543", refName: "Refrigerant Pressure Chart", industry: "HVAC" },
-  { id: "ot-t4", kind: "task", refId: "T-1876", refName: "EPA Certification Lookup", industry: "HVAC" },
-  { id: "ot-t5", kind: "task", refId: "T-2104", refName: "Tool Inventory Photo", industry: "General" },
-  { id: "ot-t6", kind: "task", refId: "T-1908", refName: "Pipe Threading Practical", industry: "Plumbing" },
-  { id: "ot-t7", kind: "task", refId: "T-1722", refName: "Multimeter Safety Quiz", industry: "Electrical", proctored: true },
-];
 
 // ----- Mock responses ----------
 

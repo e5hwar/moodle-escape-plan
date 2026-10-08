@@ -25,9 +25,11 @@ import {
   COMPANY_OPTIONAL_COLUMNS,
   type CompanyColumn,
   getStripeCustomerId,
-  stripePaymentLink,
+  freshPaymentLink,
+  changeAccountHolder,
+  canDeleteCompany,
+  UNASSIGNED,
   CURRENCY_SYMBOL,
-  CANCELLATION_REASONS,
   type Company,
   type CompanyBilling,
   type Tier,
@@ -62,20 +64,20 @@ import {
   type CompanyFilterState,
   type CompanyColumnState,
 } from "./CompanyFilters";
-import { useColumnOrder, orderedColumns } from "./Filters";
+import { orderedColumns } from "./Filters";
 import { CompaniesSearch } from "./CompaniesSearch";
 import { defaultDateRange, dateRangeIncludes, type DateRangeState } from "./DateRangeFilter";
 import { useCollapsingHeader } from "../hooks/useCollapsingHeader";
 import { PrmModal } from "./PrmModal";
 import { CopiedToast } from "./CopiedToast";
 import { NoteCard } from "./NoteCard";
-import { MultiSelect, RadioCard, CompanyReviewCards, planFor } from "./NewCompanyWizard";
-import { PreviewPanel } from "./PreviewPanel";
-import { ConfirmCard } from "./ConfirmCard";
+import { MultiSelect, RadioCard } from "./NewCompanyWizard";
 import { SelectField } from "./SelectField";
 import { UserDetailsHover } from "./UserDetailsHover";
 import { TableCols } from "./TableCols";
 import { TableEmpty } from "./TableEmpty";
+import { writeClipboard } from "./CopyCells";
+import { useB2BConfig } from "../data/productConfig";
 
 const PAGE_SIZE = 50;
 
@@ -246,9 +248,30 @@ function compare(a: Company, b: Company, key: SortKey, range: DateRangeState): n
   }
 }
 
+/** Everything a reader set up on the list. App keeps the last one while a
+ *  Create / Edit Company Details / Manage Subscription page is open and hands
+ *  it back on return, so the list comes back exactly as it was left. */
+export type CompaniesListState = {
+  query: string;
+  filters: CompanyFilterState;
+  dateRange: DateRangeState;
+  columns: CompanyColumnState;
+  order: CompanyColumn[];
+  sort: { key: SortKey; dir: SortDir };
+  page: number;
+  scrollTop: number;
+};
+
 type Props = {
   companies: Company[];
   initialQuery?: string;
+  /** Companies created this session, newest first. They lead the list,
+   *  whatever the sort, as long as they match the search and filters. */
+  pinnedIds?: string[];
+  /** The list as it was left — restored on mount instead of the defaults. */
+  restore?: CompaniesListState | null;
+  /** Called as the page unmounts with the state to restore next time. */
+  onSaveState?: (state: CompaniesListState) => void;
   onNewCompany: () => void;
   // Opens the full-page Edit Company view (the create wizard's details step).
   onEditCompany: (company: Company) => void;
@@ -267,42 +290,34 @@ type Props = {
   onFlashDone?: () => void;
 };
 
-export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEditCompany, onManageSubscription, onUpdateCompany, onDeleteCompany, onViewEmployees, onNavigateToProductConfig, flash, onFlashDone }: Props) {
-  // The Company whose row was clicked — read back in the side drawer, the way
-  // a Task or Certification row opens its own. Held by id so the drawer follows
-  // the record through an update.
-  const [drawerId, setDrawerId] = useState<string | null>(null);
-  const drawerCompany = drawerId ? companies.find((c) => c.id === drawerId) : undefined;
-  // A row menu opened from the preview panel's kebab: every item that opens a
-  // modal or another view closes the panel first, so nothing is left under it.
-  function closePanelThen(run: () => void) {
-    setDrawerId(null);
-    run();
-  }
-  // "C" stands down while the drawer is open — the wizard would open behind it.
-  useCreateShortcut(onNewCompany, !drawerId);
-  const [query, setQuery] = useState(initialQuery);
+export function CompaniesPage({ companies, initialQuery = "", pinnedIds = [], restore = null, onSaveState, onNewCompany, onEditCompany, onManageSubscription, onUpdateCompany, onDeleteCompany, onViewEmployees, onNavigateToProductConfig, flash, onFlashDone }: Props) {
+  const [query, setQuery] = useState(initialQuery || restore?.query || "");
   /* Opens UNFILTERED — every company is listed until the user narrows it. The
      table used to default to Status: Active, which quietly hid trials, grants
      and cancelled accounts from the first screen. This matches what Clear
      Filters resets to, so the opening view and the cleared view agree. */
-  const [filters, setFilters] = useState<CompanyFilterState>({
-    tiers: [],
-    industries: [],
-    partnerships: [],
-    statuses: [],
-    ...EMPTY_MORE_FILTERS,
-  });
+  const [filters, setFilters] = useState<CompanyFilterState>(
+    () =>
+      restore?.filters ?? {
+        tiers: [],
+        industries: [],
+        partnerships: [],
+        statuses: [],
+        ...EMPTY_MORE_FILTERS,
+      },
+  );
   /* The Date Range does NOT narrow the row set — every company is always
      listed. It scopes the Seat Changes column: that cell sums only the seat
      movements inside this window. The range always has a value (default Last
      30 Days), so the column always has a window to report on. */
-  const [dateRange, setDateRange] = useState<DateRangeState>(() => defaultDateRange());
-  const [columns, setColumns] = useState<CompanyColumnState>(COMPANY_DEFAULT_COLUMNS);
+  const [dateRange, setDateRange] = useState<DateRangeState>(() => restore?.dateRange ?? defaultDateRange());
+  const [columns, setColumns] = useState<CompanyColumnState>(restore?.columns ?? COMPANY_DEFAULT_COLUMNS);
   /* Display order of the optional columns, independent of which are switched
      on. It starts at the data module's order, which is what puts Last Access
      last in the default view. */
-  const [order, setOrder] = useColumnOrder(COLS);
+  const [order, setOrder] = useState<CompanyColumn[]>(
+    () => restore?.order ?? COLS.map((c) => c.key),
+  );
   const visibleCols = useMemo(() => orderedColumns(COLS, order, columns), [order, columns]);
 
   /* Switching a column ON moves it to the END of the row — that is where you
@@ -321,11 +336,10 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
 
   // Most recently active first — ascending days-since-access; companies that
   // have never opened the dashboard fall to the bottom.
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
-    key: "dashboardLastAccess",
-    dir: "asc",
-  });
-  const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>(
+    restore?.sort ?? { key: "dashboardLastAccess", dir: "asc" },
+  );
+  const [page, setPage] = useState(restore?.page ?? 1);
   const [menu, setMenu] = useState<{ company: Company; rect: DOMRect } | null>(null);
   const [holderModal, setHolderModal] = useState<Company | null>(null);
   const [billingModal, setBillingModal] = useState<Company | null>(null);
@@ -339,7 +353,15 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
      the same toast a flow's `flash` uses on arrival. */
   const [toast, setToast] = useState<string | null>(null);
 
-  useEffect(() => setQuery(initialQuery), [initialQuery]);
+  /* C opens Create Company — but not through an open modal, confirm or row
+     menu (the hook also refuses while any overlay is in the DOM). */
+  const overlayOpen =
+    !!menu || !!holderModal || !!billingModal || !!invoicesModal || !!cancelModal || !!deleteModal;
+  useCreateShortcut(onNewCompany, !overlayOpen);
+
+  // A later deep link (Users → View Company) re-searches; the first render
+  // already has it, and running this on mount would wipe a restored query.
+  useOnChange([initialQuery], () => setQuery(initialQuery));
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -370,8 +392,9 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
         const shown = paymentLabel(getCompanyBilling(c));
         if (!filters.paymentMethods.includes(shown)) return false;
       }
-      if (filters.csms.length && !filters.csms.includes(getAssignedCsm(c))) return false;
-      if (filters.salesReps.length && !filters.salesReps.includes(getAssignedSalesRep(c))) {
+      // Nobody assigned matches the filters' "Unassigned" option.
+      if (filters.csms.length && !filters.csms.includes(getAssignedCsm(c) || UNASSIGNED)) return false;
+      if (filters.salesReps.length && !filters.salesReps.includes(getAssignedSalesRep(c) || UNASSIGNED)) {
         return false;
       }
       return true;
@@ -383,14 +406,22 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
 
   const sorted = useMemo(() => {
     const arr = [...filtered].sort((a, b) => compare(a, b, sort.key, dateRange));
-    return sort.dir === "desc" ? arr.reverse() : arr;
-  }, [filtered, sort, dateRange]);
+    if (sort.dir === "desc") arr.reverse();
+    // Companies created this session lead, newest first, so a new one is in
+    // view the moment the list opens. Only those still matching the search
+    // and filters — the rest follow in the chosen sort.
+    if (pinnedIds.length === 0) return arr;
+    const rank = new Map(pinnedIds.map((id, i) => [id, i]));
+    const pinned = arr.filter((c) => rank.has(c.id)).sort((a, b) => rank.get(a.id)! - rank.get(b.id)!);
+    return [...pinned, ...arr.filter((c) => !rank.has(c.id))];
+  }, [filtered, sort, dateRange, pinnedIds]);
 
   const colContext = useMemo<ColContext>(() => ({ dateRange }), [dateRange]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
 
-  useEffect(() => setPage(1), [query, sort, filters, dateRange]);
+  // Not on mount: a restored list keeps the page it was left on.
+  useOnChange([query, sort, filters, dateRange], () => setPage(1));
 
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
@@ -406,10 +437,27 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
 
   // A new query, filter, sort, date range or page starts the list at its first
   // row (the same set that resets the page to 1). A collapsed header stays
-  // collapsed; one still open is left as it is.
+  // collapsed; one still open is left as it is. On mount a restored list goes
+  // back to where it was scrolled instead.
+  const scrollTopRef = useRef(0);
   useLayoutEffect(() => {
-    scrollToFirstRow();
-  }, [query, filters, sort, dateRange, visiblePage, scrollToFirstRow]);
+    const sc = head.scrollRef.current;
+    if (sc && restore && !initialQuery) {
+      sc.scrollTop = restore.scrollTop;
+      scrollTopRef.current = sc.scrollTop;
+    }
+  }, []);
+  useOnChange([query, filters, sort, dateRange, visiblePage], scrollToFirstRow, useLayoutEffect);
+
+  // Hand the list's state back to App as the page unmounts.
+  const snapshot = useRef<CompaniesListState | null>(null);
+  snapshot.current = { query, filters, dateRange, columns, order, sort, page: visiblePage, scrollTop: 0 };
+  useEffect(
+    () => () => {
+      if (snapshot.current) onSaveState?.({ ...snapshot.current, scrollTop: scrollTopRef.current });
+    },
+    [],
+  );
 
   // The landing's summary line — the whole book of companies, not the filtered
   // rows (the pagination footer counts those), and how many of their
@@ -448,6 +496,7 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
           <div className="co-table-col">
             <div
               ref={head.scrollRef}
+              onScroll={(e) => { scrollTopRef.current = e.currentTarget.scrollTop; }}
               className="table-xscroll clh-scroll"
               style={{ "--table-min": `${tableMin}px` } as React.CSSProperties}
             >
@@ -542,9 +591,6 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
                           company={c}
                           cols={visibleCols}
                           ctx={colContext}
-                          onOpen={() => setDrawerId(c.id)}
-                          onEdit={() => onEditCompany(c)}
-                          onManageSubscription={() => onManageSubscription(c)}
                           onOpenMenu={(rect) => setMenu({ company: c, rect })}
                           menuOpen={menu?.company.id === c.id}
                         />
@@ -574,31 +620,24 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
           company={menu.company}
           rect={menu.rect}
           onClose={() => setMenu(null)}
-          onEditCompany={() => closePanelThen(() => onEditCompany(menu.company))}
-          onManageSubscription={() => closePanelThen(() => onManageSubscription(menu.company))}
-          onEditAccountHolder={() => closePanelThen(() => setHolderModal(menu.company))}
-          onAddBillingEmails={() => closePanelThen(() => setBillingModal(menu.company))}
-          onCancelSubscription={() => closePanelThen(() => setCancelModal(menu.company))}
-          onViewEmployees={() => closePanelThen(() => onViewEmployees(menu.company))}
-          onViewInvoices={() => closePanelThen(() => setInvoicesModal(menu.company))}
+          onEditCompany={() => onEditCompany(menu.company)}
+          onManageSubscription={() => onManageSubscription(menu.company)}
+          onEditAccountHolder={() => setHolderModal(menu.company)}
+          onAddBillingEmails={() => setBillingModal(menu.company)}
+          onCancelSubscription={() => setCancelModal(menu.company)}
+          onViewEmployees={() => onViewEmployees(menu.company)}
+          onViewInvoices={() => setInvoicesModal(menu.company)}
           onCopyPaymentLink={() => {
-            navigator.clipboard?.writeText(
-              stripePaymentLink(menu.company.email, menu.company.name),
-            ).catch(() => {});
-            // Raised on the click, not on the promise: a browser that refuses
-            // the write would otherwise give no sign the item did anything.
-            setCopiedAt(Date.now());
+            /* The stored link, unless it has passed its 24 hours — then a new
+               one is generated, stored on the company, and copied instead. */
+            const { company: next, url, renewed } = freshPaymentLink(menu.company);
+            if (renewed) onUpdateCompany(next);
+            // The toast only says "Copied" when the write went through.
+            void writeClipboard(url).then((ok) => {
+              if (ok) setCopiedAt(Date.now());
+            });
           }}
-          onDeleteCompany={() => closePanelThen(() => setDeleteModal(menu.company))}
-        />
-      )}
-
-      {drawerCompany && (
-        <CompanyDrawer
-          key={drawerCompany.id}
-          company={drawerCompany}
-          onClose={() => setDrawerId(null)}
-          onMore={(rect) => setMenu({ company: drawerCompany, rect })}
+          onDeleteCompany={() => setDeleteModal(menu.company)}
         />
       )}
 
@@ -606,8 +645,8 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
         <EditAccountHolderModal
           company={holderModal}
           onClose={() => setHolderModal(null)}
-          onSave={(patch) => {
-            onUpdateCompany({ ...holderModal, ...patch });
+          onSave={(newHolderId, mode) => {
+            onUpdateCompany(changeAccountHolder(holderModal, newHolderId, mode));
             setHolderModal(null);
             setToast("Account Holder Updated");
           }}
@@ -683,6 +722,19 @@ export function CompaniesPage({ companies, initialQuery = "", onNewCompany, onEd
       )}
     </div>
   );
+}
+
+/** Runs `fn` when any of `deps` changes AFTER the first render — never on
+ *  mount, StrictMode's second run included, so a restored list keeps the
+ *  page, query and scroll it came back with. */
+function useOnChange(deps: unknown[], fn: () => void, useEff = useEffect) {
+  const prev = useRef<unknown[] | null>(null);
+  useEff(() => {
+    const p = prev.current;
+    prev.current = deps;
+    if (p && p.some((d, i) => !Object.is(d, deps[i]))) fn();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
 }
 
 function ColGroup({ cols }: { cols: CompanyCol[] }) {
@@ -850,27 +902,26 @@ function SignUpPill({ signUp }: { signUp: SignUpChannel }) {
 }
 
 function CompanyRow({
-  company, cols, ctx, onOpen, onEdit, onManageSubscription, onOpenMenu, menuOpen,
+  company, cols, ctx, onOpenMenu, menuOpen,
 }: {
   company: Company;
   /** Page state the date-scoped cells report within. */
   ctx: ColContext;
   /** The visible optional columns, in the user's order. */
   cols: CompanyCol[];
-  /** Row click — opens the Company's drawer. The row's buttons stop propagation. */
-  onOpen: () => void;
-  onEdit: () => void; onManageSubscription: () => void; onOpenMenu: (rect: DOMRect) => void;
+  onOpenMenu: (rect: DOMRect) => void;
   /** This row's 3-dot menu is open — hold the hover treatment. */
   menuOpen: boolean;
 }) {
   const billing = getCompanyBilling(company);
-  /* A company waiting on its payment method has no subscription to manage yet,
-     so its hover bar drops the card glyph and offers only Edit. The kebab stays
-     — it is the bar's last cell, aligned to sit exactly on the resting lone
-     kebab, and without it the menu would be unreachable while hovering. */
+  /* View Company Dashboard is the bar's only quick action, shown exactly when
+     the menu offers it — a company waiting on its payment method has neither,
+     so its bar is the kebab alone. The kebab always stays: it is the bar's last
+     cell, aligned to sit exactly on the resting lone kebab, and without it the
+     menu would be unreachable while hovering. */
   const pendingSetup = billing.status === "Pending Payment Setup";
   return (
-    <tr className={menuOpen ? "menu-open" : ""} onClick={onOpen}>
+    <tr className={`is-static${menuOpen ? " menu-open" : ""}`}>
       <td className="col-name">{company.name}</td>
       <td className="col-status"><StatusPill billing={billing} /></td>
       {cols.map((c) => (
@@ -891,12 +942,9 @@ function CompanyRow({
           <RowKebabIcon />
         </button>
         <div className="row-action-bar">
-          <button className="row-action-btn" aria-label="Edit" title="Edit company details" onClick={(e) => { e.stopPropagation(); onEdit(); }}>
-            <RowEditIcon />
-          </button>
           {!pendingSetup && (
-            <button className="row-action-btn" aria-label="Manage subscription" title="Manage subscription" onClick={(e) => { e.stopPropagation(); onManageSubscription(); }}>
-              <RowCardIcon />
+            <button className="row-action-btn" aria-label="View company dashboard" title="View Company Dashboard" onClick={(e) => { e.stopPropagation(); viewDashboard(company); }}>
+              <MenuEnterIcon />
             </button>
           )}
           <button
@@ -909,88 +957,6 @@ function CompanyRow({
         </div>
       </td>
     </tr>
-  );
-}
-
-/* ─────────────── Row drawer ─────────────── */
-
-/* The review values a Company's panel shows. Seed records store few of the
- * fields, so the owners, the account holder and the billing terms come from
- * the same derivations the table and the hover card use, and Tax Behaviour
- * from the Edit form's own default. */
-function reviewCompany(company: Company): Omit<Company, "id"> {
-  const billing = getCompanyBilling(company);
-  const holder = currentHolder(company);
-  return {
-    ...company,
-    taxStatus: company.taxStatus ?? "Taxable",
-    assignedCsm: getAssignedCsm(company),
-    assignedSalesRep: getAssignedSalesRep(company),
-    contactName: holder.name,
-    phone: holder.phone,
-    billingCycle: billing.billingCycle,
-    currency: billing.currency,
-    ratePerSeat: billing.ratePerSeat,
-    payment: billing.payment,
-  };
-}
-
-/** A Company's row preview panel (Figma 1514:2860): the Overview and the
- *  New Company wizard's own Review cards as accordions, then the seats and
- *  the dashboard's last visit as Activity. No learner preview to come: an
- *  account isn't content. */
-function CompanyDrawer({
-  company,
-  onClose,
-  onMore,
-}: {
-  company: Company;
-  onClose: () => void;
-  onMore: (rect: DOMRect) => void;
-}) {
-  const billing = getCompanyBilling(company);
-  const free = Math.max(0, billing.seatsTotal - billing.seatsUsed);
-  const lastDays = getDashboardLastAccessDays(company);
-  return (
-    <PreviewPanel
-      title={company.name}
-      subtitle={company.email}
-      onMore={onMore}
-      stats={[
-        { count: String(billing.seatsUsed), title: "Seats in Use", sub: `Of ${billing.seatsTotal}` },
-        { count: String(free), title: "Seats Free", sub: free > 0 ? "To assign" : "All taken" },
-        {
-          count: lastDays === null ? "—" : String(lastDays),
-          title: "Last Login",
-          sub: lastDays === null ? "Never" : lastDays === 1 ? "Day ago" : "Days ago",
-        },
-      ]}
-      onClose={onClose}
-    >
-      <CompanySummary company={company} />
-    </PreviewPanel>
-  );
-}
-
-/* The panel's review cards: an Overview of what the table knows about the
- * account that no form sets (its status, how it signed up, when, the
- * dashboard's last visit), then the New Company wizard's own Review cards. */
-function CompanySummary({ company }: { company: Company }) {
-  const billing = getCompanyBilling(company);
-  return (
-    <div className="confirm-cards">
-      <ConfirmCard
-        title="Overview"
-        fillBlanks
-        rows={[
-          ["Status", <StatusPill billing={billing} />],
-          ["Sign-Up Method", billing.signUp],
-          ["Created On", billing.createdOn],
-          ["Dashboard Last Access", getDashboardLastAccess(company)],
-        ]}
-      />
-      <CompanyReviewCards company={reviewCompany(company)} plan={planFor(company)} tier={company.tier} compact />
-    </div>
   );
 }
 
@@ -1094,7 +1060,9 @@ function CompanyActionsMenu({
         <>
           {item(<RowEditIcon />, "Edit Company Details", onEditCompany)}
           {item(<CopyIcon />, "Copy Payment Link", onCopyPaymentLink)}
-          {item(<RowDeleteIcon />, "Delete Company", onDeleteCompany, true)}
+          {/* Only a company created as Pending with nobody in it yet — not a
+              trial, grant or cancelled account that moved here. */}
+          {canDeleteCompany(company) && item(<RowDeleteIcon />, "Delete Company", onDeleteCompany, true)}
         </>
       ) : (
       <>
@@ -1104,8 +1072,8 @@ function CompanyActionsMenu({
       {item(<RowCardIcon />, "Manage Subscription", onManageSubscription)}
       {item(<MenuUserVipIcon />, "Change Account Holder", onEditAccountHolder)}
       {showBillingEmails && item(<MenuMailIcon />, "Manage Billing Emails", onAddBillingEmails)}
-      {item(<MenuUsersIcon />, "View All Employees", onViewEmployees)}
       {showInvoices && item(<MenuInvoiceIcon />, "View Invoices", onViewInvoices)}
+      {item(<MenuUsersIcon />, "View All Employees", onViewEmployees)}
       {item(<MenuEnterIcon />, "View Company Dashboard", () => viewDashboard(company))}
       {canCancel && item(<MenuCancelSubIcon />, "Cancel Subscription", onCancelSubscription, true)}
       </>
@@ -1144,15 +1112,19 @@ function EditAccountHolderModal({
 }: {
   company: Company;
   onClose: () => void;
-  onSave: (patch: { contactName: string; email: string; phone?: string }) => void;
+  /** The employee picked as the new holder, and what becomes of the old one:
+   *  "change" keeps them on as an Admin, "replace" removes them. */
+  onSave: (newHolderId: string, mode: HolderMode) => void;
 }) {
   const original = useMemo(() => currentHolder(company), [company]);
   // The company's employees — the pool the new account holder is chosen from.
   // A holder must already belong to the company (see the field subtext).
   const employees = useMemo(() => getCompanyUsers(company), [company]);
   // Candidates exclude whoever currently holds the account.
+  // Active employees only: an Invited one hasn't signed in yet and a
+  // Deactivated one can't, so neither can hold the account.
   const candidates = useMemo(
-    () => employees.filter((u) => u.email !== original.email),
+    () => employees.filter((u) => u.email !== original.email && u.status === "Active"),
     [employees, original.email],
   );
   // SelectField options are plain strings; fall back to "name (email)" only if
@@ -1173,7 +1145,7 @@ function EditAccountHolderModal({
 
   function save() {
     if (!selected) return;
-    onSave({ contactName: selected.name, email: selected.email });
+    onSave(selected.id, mode);
   }
 
   return (
@@ -1363,6 +1335,8 @@ function CancelSubscriptionModal({
      they were picked. */
   const [reasons, setReasons] = useState<string[]>([]);
   const reasonText = reasons.join(", ");
+  // Product Config's saved list, live.
+  const { cancelReasons } = useB2BConfig();
 
   // Seats ADDED this cycle still bill (prorated) on the upcoming invoice; a
   // company that shed seats has nothing pending. Same source as the balance
@@ -1422,7 +1396,7 @@ function CancelSubscriptionModal({
           {/* `popupMenu` puts the panel on the popup-context surface, the way
               the Change Account Holder picker does inside the same shell. */}
           <MultiSelect
-            options={CANCELLATION_REASONS}
+            options={cancelReasons}
             value={reasons}
             onChange={setReasons}
             placeholder="Select a reason…"

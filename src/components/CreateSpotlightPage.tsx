@@ -6,7 +6,15 @@ import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
 import defaultSpotlightBg from "../assets/spotlight-default-bg.png";
 import { formatShortDate } from "../formatDate";
-import { SPOTLIGHT_TITLE_MAX, SPOTLIGHT_DESCRIPTION_MAX, type Spotlight } from "../data/spotlights";
+import {
+  SPOTLIGHT_TITLE_MAX,
+  SPOTLIGHT_DESCRIPTION_MAX,
+  addDaysIso,
+  addMonthsIso,
+  maxEndDate,
+  spotlightToday,
+  type Spotlight,
+} from "../data/spotlights";
 import { CharCount } from "./CharCount";
 import { leave, useMovedPast, useTouchedKeys } from "./fieldFlags";
 import { DateField, type DateShortcut } from "./DateField";
@@ -22,7 +30,9 @@ export type SpotlightDraft = {
   ctaTextEs: string;
   ctaUrl: string;
   endDate: string;
+  /** The background image after this edit — undefined when there is none. */
   imageHint?: string;
+  imageUrl?: string;
 };
 
 type Props = {
@@ -45,25 +55,38 @@ type Props = {
   startPosition: number;
 };
 
-/* End-date bounds, derived from today so the picker, its shortcuts, and the
-   validation all agree: the earliest end date is tomorrow, the latest is 6
-   months out. */
-const TODAY = startOfToday();
-const MIN_END = toISO(addDays(TODAY, 1));
-const MAX_END = toISO(addMonths(TODAY, 6));
-
 /* Duration shortcuts on the date picker's left rail (Figma 1554:2735), each
    resolved from today. */
-const END_DATE_SHORTCUTS: DateShortcut[] = [
-  { label: "1 week", value: toISO(addDays(TODAY, 7)) },
-  { label: "2 weeks", value: toISO(addDays(TODAY, 14)) },
-  { label: "1 month", value: toISO(addMonths(TODAY, 1)) },
-  { label: "3 months", value: toISO(addMonths(TODAY, 3)) },
-];
+function endDateShortcuts(today: string): DateShortcut[] {
+  return [
+    { label: "1 week", value: addDaysIso(today, 7) },
+    { label: "2 weeks", value: addDaysIso(today, 14) },
+    { label: "1 month", value: addMonthsIso(today, 1) },
+    { label: "3 months", value: addMonthsIso(today, 3) },
+  ];
+}
 
-/* The uploaded background, kept as an object URL so the preview shows the real
-   image the admin picked. */
-type PickedImage = { name: string; size: number; url: string };
+/* The background image. A fresh upload is kept as an object URL so the
+   preview shows the real image the admin picked; an edit opens on the
+   Spotlight's saved one — just its file name (`imageHint`) for a seed, which
+   shows the default artwork as the table does. */
+type PickedImage = { name: string; size?: number; url?: string };
+
+/* What the drop zone's hint advertises, and enforces — on the file dialog and
+   on a drop alike. HEIC / HEIF often arrive with no MIME type, so the
+   extension counts too. */
+const IMAGE_TYPES = ["image/png", "image/jpeg", "image/heic", "image/heif"];
+const IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".heic", ".heif"];
+const IMAGE_ACCEPT = [...IMAGE_TYPES, ...IMAGE_EXTS].join(",");
+const IMAGE_MAX_BYTES = 20 * 1024 * 1024;
+
+function imageProblem(file: File): string | null {
+  const name = file.name.toLowerCase();
+  const typeOk = IMAGE_TYPES.includes(file.type) || IMAGE_EXTS.some((x) => name.endsWith(x));
+  if (!typeOk) return "Use a JPEG, PNG, HEIC or HEIF image";
+  if (file.size > IMAGE_MAX_BYTES) return "Image must be 20MB or smaller";
+  return null;
+}
 
 /* Two steps: the Spotlight itself, then where it sits in the Home-Screen
    queue. The preview rail stays beside both. */
@@ -99,8 +122,23 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
   const [ctaTextEs, setCtaTextEs] = useState(seed?.ctaTextEs ?? "");
   const [ctaUrl, setCtaUrl] = useState(seed?.ctaUrl ?? "");
   const [endDate, setEndDate] = useState(enabling ? "" : seed?.endDate ?? "");
-  const [image, setImage] = useState<PickedImage | null>(null);
+  // An edit opens on the Spotlight's current image, to keep, replace or remove.
+  const [image, setImage] = useState<PickedImage | null>(
+    seed?.imageHint ? { name: seed.imageHint, url: seed.imageUrl } : null,
+  );
+  // Why the last pick or drop was refused (wrong type, over 20MB).
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
   const [deepLinksOpen, setDeepLinksOpen] = useState(false);
+
+  /* End-date bounds, from the app's one clock: the earliest end date is
+     tomorrow; the latest is 6 months from the day the Spotlight was created —
+     an edit doesn't restart that window. Enabling starts a new run, so its
+     window counts from today. */
+  const today = spotlightToday();
+  const minEnd = addDaysIso(today, 1);
+  const maxEnd = maxEndDate(seed && !enabling ? seed.createdAt : today);
+  const shortcuts = endDateShortcuts(today).filter((x) => x.value >= minEnd && x.value <= maxEnd);
 
   /* The form as it opened — an edit's saved Spotlight included, so only a
      real change counts. Anything the admin changes (a field, the image, the
@@ -118,7 +156,7 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
     ctaTextEs,
     ctaUrl,
     endDate,
-    image: image?.url ?? null,
+    image: image ? `${image.name}|${image.url ?? ""}` : null,
   });
   const pristine = useRef(snapshot);
   const dirty = snapshot !== pristine.current;
@@ -134,6 +172,9 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
   }, []);
 
   function pickImage(file: File) {
+    const problem = imageProblem(file);
+    setImageError(problem);
+    if (problem) return;
     if (imageUrlRef.current) URL.revokeObjectURL(imageUrlRef.current);
     const url = URL.createObjectURL(file);
     imageUrlRef.current = url;
@@ -144,6 +185,7 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
     if (imageUrlRef.current) URL.revokeObjectURL(imageUrlRef.current);
     imageUrlRef.current = null;
     setImage(null);
+    setImageError(null);
   }
 
   // The limits are soft (Figma 1369:1478): the field lets you run past them,
@@ -176,8 +218,8 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
        (it was set months ago); only a CHANGED date has to fall inside it. An
        enable is always a change — the old date is exactly what expired. */
     {
-      valid: !endDate || (!enabling && endDate === seed?.endDate) || (endDate >= MIN_END && endDate <= MAX_END),
-      label: `End Date between ${formatShortDate(MIN_END)} and ${formatShortDate(MAX_END)}`,
+      valid: !endDate || (!enabling && endDate === seed?.endDate) || (endDate >= minEnd && endDate <= maxEnd),
+      label: `End Date between ${formatShortDate(minEnd)} and ${formatShortDate(maxEnd)}`,
     },
   ];
   const valid = checks.every((c) => c.valid);
@@ -223,11 +265,11 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
   useWizardEnterShortcut(next, undefined, !deepLinksOpen);
 
   /* Queue Position's row for this Spotlight, built from what was typed. An edit
-     keeps its status; a re-enabled one comes back Active unless it had been
-     rejected; a new one waits for review. */
+     keeps its status; a re-enabled one comes back Active (everyone in the
+     prototype can approve); a new one waits for review. */
   const status: Spotlight["status"] = editing
     ? enabling
-      ? editing.status === "rejected" ? "pending" : "approved"
+      ? "approved"
       : editing.status
     : "pending";
   const self = {
@@ -241,6 +283,9 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
   const finalLabel = enabling ? "Enable Spotlight" : editing ? "Save Changes" : "Submit for Review";
 
   function handleSubmit() {
+    // The saved Spotlight keeps this image's object URL — don't revoke it as
+    // the page unmounts.
+    if (image?.url === imageUrlRef.current) imageUrlRef.current = null;
     onSubmit(
       {
         headingEn,
@@ -254,6 +299,7 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
         ctaUrl: ctaEnabled ? ctaUrl : "",
         endDate,
         imageHint: image?.name,
+        imageUrl: image?.url,
       },
       position,
     );
@@ -366,15 +412,21 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
                     </div>
 
                     <div className="form-group">
-                      <label className="form-label">Background Image</label>
+                      <label className="form-label">
+                        Background Image
+                        {imageError && <span className="form-label-error">{imageError}</span>}
+                      </label>
                       {image ? (
                         <div className="file-row spc-file-row">
                           <span className="spc-file-thumb">
-                            <img src={image.url} alt="" />
+                            <img src={image.url ?? defaultSpotlightBg} alt="" />
                           </span>
                           <div className="file-meta">
                             <FileNameLink name={image.name} url={image.url} />
-                            <div className="file-sub">{formatSize(image.size)}</div>
+                            {/* A saved image has no byte size on record. */}
+                            {image.size !== undefined && (
+                              <div className="file-sub">{formatSize(image.size)}</div>
+                            )}
                           </div>
                           <button
                             className="file-remove"
@@ -388,9 +440,21 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
                         <ImagePicker onPick={pickImage}>
                           {(open) => (
                             <button
-                              className="drop-big drop-big--tall"
+                              className={`drop-big drop-big--tall${imageError ? " has-error" : ""}${dragOver ? " is-over" : ""}`}
                               type="button"
                               onClick={open}
+                              onDragOver={(e) => {
+                                e.preventDefault();
+                                e.dataTransfer.dropEffect = "copy";
+                                setDragOver(true);
+                              }}
+                              onDragLeave={() => setDragOver(false)}
+                              onDrop={(e) => {
+                                e.preventDefault();
+                                setDragOver(false);
+                                const file = e.dataTransfer.files?.[0];
+                                if (file) pickImage(file);
+                              }}
                             >
                               <span className="drop-big-icon">
                                 <UploadTrayIcon />
@@ -512,12 +576,13 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
                         onChange={setEndDate}
                         placeholder="Select End Date"
                         hasError={endDateMissing}
-                        min={MIN_END}
-                        max={MAX_END}
-                        shortcuts={END_DATE_SHORTCUTS}
+                        min={minEnd}
+                        max={maxEnd}
+                        shortcuts={shortcuts}
                       />
                       <p className="form-help">
                         Maximum duration for a Spotlight is 6 months
+                        {seed && !enabling ? `, counted from when it was created (latest ${formatShortDate(maxEnd)})` : ""}
                       </p>
                     </div>
                   </>
@@ -657,16 +722,18 @@ export function SpotlightCardPreview({
 
 /* ─────────────── Backdrop thumbnail ───────────────
    The 144×76 artwork tile (558:2070) — the Spotlight table's Backdrop column
-   and the Queue Position step's. The prototype keeps no per-Spotlight image
-   file, only an `imageHint` filename, so a saved Spotlight shows the default
-   artwork (tinted by `backgroundColor` when it was authored without an image);
-   `imageUrl` is the one being created, whose uploaded file is still in hand. */
+   and the Queue Position step's. A Spotlight whose image was uploaded this
+   session shows it (`spotlight.imageUrl`); a seed keeps only an `imageHint`
+   filename, so it shows the default artwork (tinted by `backgroundColor` when
+   it was authored without an image). `imageUrl` is the one being edited,
+   whose file is still in hand. */
 export function SpotlightThumb({ spotlight, imageUrl }: { spotlight?: Spotlight; imageUrl?: string }) {
-  const tint = !imageUrl ? spotlight?.backgroundColor : undefined;
+  const src = imageUrl ?? spotlight?.imageUrl;
+  const tint = !src ? spotlight?.backgroundColor : undefined;
   return (
     <div className="sp-thumb" style={tint ? { background: tint } : undefined}>
       {!tint || spotlight?.imageHint ? (
-        <img className="sp-thumb-img" src={imageUrl ?? defaultSpotlightBg} alt="" />
+        <img className="sp-thumb-img" src={src ?? defaultSpotlightBg} alt="" />
       ) : null}
     </div>
   );
@@ -707,6 +774,14 @@ function QueuePositionStep({
     s,
   }));
   rows.splice(position, 0, { kind: "self" });
+  /* ORDER numbers count Active rows only, as on the Spotlight table: an
+     In-Review row (a new Spotlight included) has no position until it is
+     approved. */
+  let activeSeen = 0;
+  const orderNums = rows.map((row) => {
+    const st = row.kind === "self" ? self.status : row.s.status;
+    return st === "approved" ? ++activeSeen : null;
+  });
 
   const slotUnder = (y: number) => {
     let target: number | null = null;
@@ -778,7 +853,7 @@ function QueuePositionStep({
               {isSelf ? (
                 <button
                   className="qz-drag"
-                  aria-label={`Position ${i + 1} of ${rows.length}. Drag, or use the arrow keys, to move it`}
+                  aria-label={`Row ${i + 1} of ${rows.length}. Drag, or use the arrow keys, to move it`}
                   onPointerDown={startDrag}
                   onKeyDown={onKey}
                 >
@@ -789,7 +864,7 @@ function QueuePositionStep({
                   <MoveIcon />
                 </span>
               )}
-              <span className="qz-ord">{i + 1}</span>
+              <span className="qz-ord">{orderNums[i] ?? ""}</span>
             </span>
             {isSelf ? <SpotlightThumb imageUrl={self.imageUrl} /> : <SpotlightThumb spotlight={row.s} />}
             <div className="qz-q">
@@ -889,7 +964,7 @@ function ImagePicker({
       <input
         ref={ref}
         type="file"
-        accept="image/png,image/jpeg"
+        accept={IMAGE_ACCEPT}
         style={{ display: "none" }}
         onChange={(e) => {
           const file = e.target.files?.[0];
@@ -900,28 +975,6 @@ function ImagePicker({
       {children(() => ref.current?.click())}
     </>
   );
-}
-
-function startOfToday(): Date {
-  const n = new Date();
-  return new Date(n.getFullYear(), n.getMonth(), n.getDate());
-}
-
-function toISO(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function addDays(d: Date, n: number): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
-}
-
-// Clamps to the last day of the target month, so Aug 31 + 1 month is Sep 30
-// rather than rolling into October.
-function addMonths(d: Date, n: number): Date {
-  const target = new Date(d.getFullYear(), d.getMonth() + n, 1);
-  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
-  target.setDate(Math.min(d.getDate(), lastDay));
-  return target;
 }
 
 function formatSize(bytes: number): string {

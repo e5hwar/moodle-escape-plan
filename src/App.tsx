@@ -1,43 +1,62 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { HoverTooltip } from "./components/HoverTooltip";
 import { CopyCells } from "./components/CopyCells";
 import { PageEnd } from "./components/PageEnd";
-import { TasksPage } from "./components/TasksPage";
+import { TasksPage, type TasksListState } from "./components/TasksPage";
 import { type TaskTypeKey } from "./components/Footer";
 import { NewTaskWizard, taskTypeKey } from "./components/NewTaskWizard";
 import { AttemptsPage } from "./components/AttemptsPage";
 import { AttemptViewerPage } from "./components/AttemptViewerPage";
 import { type Attempt, type AttemptStatus } from "./data/attempts";
 import { QuizPurchasersPage } from "./components/QuizPurchasersPage";
-import { tasks, type Task, type TaskType } from "./data/tasks";
+import { tasks, setLiveTasks, type Task, type TaskType } from "./data/tasks";
 import { CertificationsPage } from "./components/CertificationsPage";
 import { CertPurchasersPage } from "./components/CertPurchasersPage";
 import { NewCertificationWizard, ArchiveCertificationPage } from "./components/NewCertificationWizard";
 import { SkillsPage } from "./components/SkillsPage";
+import { skills as seedSkills, masterySkills as seedMastery, type MasterySkill, type Skill } from "./data/skills";
 import { NewAwardWizard } from "./components/NewAwardWizard";
 import { nextFormId } from "./data/feedbackForms";
 import type { SetupBannerState, SetupSteps } from "./components/CertificationsPage";
-import { certifications as seedCerts, type Certification } from "./data/certifications";
+import { certifications as seedCerts, isSkillCatCert, setLiveCerts, certReferences, type Certification } from "./data/certifications";
+import {
+  certIndustryText,
+  industries as seedIndustries,
+  setLiveIndustries,
+  syncIndustryOrder,
+  type Industry,
+} from "./data/industries";
 import { type CertImportReport } from "./data/certImport";
 import {
   awards as seedAwards,
-  designTemplates,
+  designTemplates as seedTemplates,
   certForAward,
+  appearanceSummary,
   type Award,
+  type AwardDesignTemplate,
 } from "./data/awards";
+import { setB2BConfig } from "./data/productConfig";
 import { ContentLinksPage } from "./components/ContentLinksPage";
 import {
-  nodes as contentNodes,
+  authoredLinks,
+  certNode,
   links as seedLinks,
   type ContentNode,
-  type Level,
   type Link,
 } from "./data/contentLinks";
 import { QuestionBankPage, type QbViewState } from "./components/QuestionBankPage";
 import { NewQuestionWizard } from "./components/NewQuestionWizard";
-import { questions as seedQuestions, type Question, type QuestionType } from "./data/questionBank";
+import {
+  categories as seedQuestionCategories,
+  questions as seedQuestions,
+  setLiveCategories,
+  type Category as QuestionCategory,
+  type Question,
+  type QuestionType,
+} from "./data/questionBank";
 import { SpotlightsPage } from "./components/SpotlightsPage";
+import { setLiveSpotlights, spotlights as seedSpotlights, type Spotlight } from "./data/spotlights";
 import { ProctoringPage } from "./components/ProctoringPage";
 import { ManageIdsPage } from "./components/ManageIdsPage";
 import { ScholarshipsPage } from "./components/ScholarshipsPage";
@@ -46,18 +65,25 @@ import { FeedbackFormWizard } from "./components/FeedbackFormWizard";
 import { IndustriesPage } from "./components/IndustriesPage";
 import { CompaniesPage } from "./components/CompaniesPage";
 import { NewCompanyWizard } from "./components/NewCompanyWizard";
-import { UsersPage } from "./components/UsersPage";
+import { UsersPage, type UsersListState } from "./components/UsersPage";
 import { ReviewHandsOnPage } from "./components/ReviewHandsOnPage";
 import { NameChangeRequestsPage } from "./components/NameChangeRequestsPage";
-import { PendingIdReuploadsPage } from "./components/PendingIdReuploadsPage";
+import { PendingIdReuploadsPage, type PendingIdListState } from "./components/PendingIdReuploadsPage";
 import { ContentOverridesPage } from "./components/ContentOverridesPage";
-import { buildData, attemptsForTask } from "./data/certLookup";
-import { ProductConfigPage } from "./components/ProductConfigPage";
+import { buildData, attemptsForTask, fmtDT, liveCells } from "./data/certLookup";
+import { getSubmissions, hasProctoringFootage } from "./data/proctoring";
+import {
+  DEFAULT_PRODUCT_SETTINGS,
+  ProductConfigPage,
+  type B2BListKey,
+  type B2BValueUsage,
+  type ProductSettings,
+} from "./components/ProductConfigPage";
 import { MergeAccountsPage } from "./components/MergeAccountsPage";
 import { TransferSubscriptionPage } from "./components/TransferSubscriptionPage";
 import { UserProfilePage } from "./components/UserProfilePage";
 import { PlaceholderPage } from "./components/PlaceholderPage";
-import { users as allUsers } from "./data/users";
+import { findUser } from "./data/users";
 import { submissionForLearner, type TaskSubmission } from "./data/reviewSubmissions";
 import {
   activeLinks,
@@ -68,52 +94,57 @@ import {
 } from "./data/feedbackForms";
 import { buildRows, exportFormCsv } from "./data/feedbackExport";
 import { LeaveGuardHost, confirmLeave, hasUnsavedChanges } from "./components/LeaveGuard";
-import { companies as seedCompanies, findCompanyUserProfile, type Company } from "./data/companies";
+import { companies as seedCompanies, setLiveCompanies, todayStamp, type Company } from "./data/companies";
+import { AUDIENCE_ALL_USERS, audienceOf } from "./data/filters";
+import type { CompaniesListState } from "./components/CompaniesPage";
 
-// Map a certification onto a content-graph focus node. If the certification
-// already exists in the mock graph (matched by name) we use that node — so its
-// seeded prerequisite / recommended / related links show up. Otherwise we
-// synthesize a node from the certification so the Content Links page still
-// opens focused on it, with empty columns ready to populate.
+// Map a certification onto its content-graph node. The graph is keyed by
+// Certification id (node id === cert id), so seeded, session-created and
+// pending Certifications are all linkable, and a rename keeps the links.
 function certToFocusNode(cert: Certification): ContentNode {
-  const match = contentNodes.find((n) => n.name === cert.name);
-  if (match) return match;
-  const level: Level =
-    cert.careerStage === "Master"
-      ? "Advanced"
-      : cert.careerStage === "Journeyman"
-      ? "Intermediate"
-      : "Beginner";
-  return {
-    id: cert.id,
-    name: cert.name,
-    kind: "Certification",
-    level,
-    tasksCount: cert.tasks,
-    industry: cert.industry,
-  };
+  return certNode(cert);
 }
 
 /** The next "C-nnnn" after the highest one in the list. */
-function nextCertId(certs: Certification[]): string {
-  const max = certs.reduce((m, c) => Math.max(m, Number(c.id.replace(/\D/g, "")) || 0), 0);
-  return `C-${String(max + 1).padStart(4, "0")}`;
+/* Certification ids are never re-issued, even after a delete: the next id
+   is one past the HIGH-WATER MARK — the largest id ever in the list or ever
+   issued — not just the current list's largest. The mark is also kept in
+   localStorage, so a reload (which resets the list to the seed) can't hand
+   a new Certification an id an earlier session used; per-id flags such as
+   "Mark as Done" would otherwise carry over. */
+const CERT_ID_HIGH_WATER_KEY = "cert-id-high-water";
+function readCertIdHighWater(): number {
+  try {
+    return Number(window.localStorage.getItem(CERT_ID_HIGH_WATER_KEY)) || 0;
+  } catch {
+    return 0;
+  }
+}
+function maxCertIdNumber(certs: Certification[], floor = 0): number {
+  return certs.reduce((m, c) => Math.max(m, Number(c.id.replace(/\D/g, "")) || 0), floor);
+}
+function nextCertId(certs: Certification[], highWater: number): { id: string; n: number } {
+  const n = maxCertIdNumber(certs, highWater) + 1;
+  return { id: `C-${String(n).padStart(4, "0")}`, n };
 }
 
 type View =
-  | { name: "tasks"; certificationFilter?: string }
+  /** `restore`: coming back from Quiz Attempts or Who Paid — the list reopens
+   *  exactly as it was left. */
+  | { name: "tasks"; certificationFilter?: string; restore?: boolean }
   | { name: "certs" }
   | { name: "new-task"; taskType: TaskTypeKey }
   | { name: "edit-task"; task: Task }
   | {
       name: "attempts";
-      quizName: string;
+      /** The Quiz, by id — a renamed Quiz keeps its attempts. */
+      taskId: string;
       /** Deep link from Manage Completions: one learner's attempts. */
       nameFilter?: string;
       statusFilter?: AttemptStatus;
       extraAttempts?: Attempt[];
     }
-  | { name: "attempt-viewer"; attempt: Attempt; quizName: string }
+  | { name: "attempt-viewer"; attempt: Attempt; taskId: string }
   | { name: "quiz-purchasers"; task: Task }
   /* `imported` is a checked CSV Upload: the wizard opens with the file's
      Courses, Lessons, and Tasks already built. */
@@ -148,7 +179,9 @@ type View =
     }
   | { name: "edit-question"; question: Question; returnTo?: QbViewState }
   | { name: "spotlight" }
-  | { name: "proctoring"; openSubmissionId?: string }
+  /* `originQueue`: the Pending ID Re-Uploads rows the console was opened on,
+     in that page's order — its queue while it works them. */
+  | { name: "proctoring"; openSubmissionId?: string; originQueue?: string[] }
   | { name: "manage-ids" }
   | { name: "scholarship" }
   | { name: "feedback" }
@@ -157,11 +190,15 @@ type View =
      Back returns to the Certifications table, not the Feedback Forms list. */
   | { name: "feedback-detail"; formId: string; creating?: boolean; forCertId?: string }
   | { name: "industries" }
-  | { name: "companies"; query?: string }
+  /** `restore`: coming back from Create / Edit Company Details / Manage
+   *  Subscription — the list reopens exactly as it was left. */
+  | { name: "companies"; query?: string; restore?: boolean }
   | { name: "new-company" }
   | { name: "edit-company"; company: Company }
   | { name: "manage-subscription"; company: Company }
-  | { name: "users"; companyFilter?: string }
+  /** `restore`: coming back from a page Users opened (Scholarships, Name
+   *  Changes, Manage Completions, Merge, Transfer) — the list reopens as left. */
+  | { name: "users"; companyFilter?: string; restore?: boolean }
   /* `taskFilter` deep-links the page with one Task pre-selected — a Hands-On
      Task's "View All Attempts" lands here (its attempts ARE submissions),
      where a Quiz/xAPI lands on Quiz Attempts. */
@@ -173,7 +210,8 @@ type View =
       extraSubmissions?: TaskSubmission[];
     }
   | { name: "name-change-requests" }
-  | { name: "pending-id-reuploads" }
+  /* `restore`: back from the console — put the filters it was opened from back. */
+  | { name: "pending-id-reuploads"; restore?: boolean }
   /* Manage Completions is not a nav landing page — it is only reached scoped,
      from a row's "Manage User Progress" action. `origin` is the page that
      opened it: it lights that sidebar entry and is the crumb back. */
@@ -262,7 +300,7 @@ const CONTENT_OVERRIDES_BACK: Record<
 > = {
   tasks: { label: "Tasks", view: { name: "tasks" } },
   certs: { label: "Certifications", view: { name: "certs" } },
-  users: { label: "Users", view: { name: "users" } },
+  users: { label: "Users", view: { name: "users", restore: true } },
   companies: { label: "Companies", view: { name: "companies" } },
 };
 
@@ -320,9 +358,8 @@ export default function App() {
     );
   }
   if (profileId) {
-    // Company employees live outside the Manage Users roster but their profile
-    // links resolve too — see findCompanyUserProfile.
-    const u = allUsers.find((x) => x.id === profileId) ?? findCompanyUserProfile(profileId);
+    // The live roster — company employees included (users.ts getUsers).
+    const u = findUser(profileId);
     // The Full Profile keeps the admin shell: it is a real admin screen, so the
     // left rail stays with it even in its own tab.
     return (
@@ -332,7 +369,7 @@ export default function App() {
     );
   }
   if (portfolioId) {
-    const u = allUsers.find((x) => x.id === portfolioId) ?? findCompanyUserProfile(portfolioId);
+    const u = findUser(portfolioId);
     return u ? <PlaceholderPage name="Public Portfolio" /> : <StandaloneNotFound />;
   }
   if (stripeCustomerId) {
@@ -342,7 +379,7 @@ export default function App() {
     return <PlaceholderPage name="Login As (Company Library)" />;
   }
   if (loginAsUserId) {
-    const u = allUsers.find((x) => x.id === loginAsUserId) ?? findCompanyUserProfile(loginAsUserId);
+    const u = findUser(loginAsUserId);
     return u ? <PlaceholderPage name="Login As (Learner)" /> : <StandaloneNotFound />;
   }
   /* Own-tab placeholders with nothing to look up: the company's B2B dashboard
@@ -408,11 +445,12 @@ function deepLinkView(params: URLSearchParams): View | null {
   const employee = data.employeesById[uid];
   const task = data.tasksById[taskId];
   if (!employee || !task) return null;
-  const cell = data.cells[uid + "_" + taskId];
+  // As Manage Completions last left it (completions.ts), not the bare seed.
+  const cell = liveCells(data)[uid + "_" + taskId];
 
   if (handsOnUid && handsOnTaskId) {
     const libraryTask = tasks.find((t) => t.name === task.name);
-    const user = allUsers.find((u) => u.id === uid);
+    const user = findUser(uid);
     return {
       name: "review-hands-on",
       taskFilter: task.name,
@@ -437,13 +475,51 @@ function deepLinkView(params: URLSearchParams): View | null {
     };
   }
 
+  const generated = attemptsForTask(uid, employee.name, employee.contact, task, cell);
   return {
     name: "attempts",
-    quizName: task.name,
+    taskId: task.id,
     nameFilter: employee.name,
     statusFilter: (params.get("attemptsStatus") as AttemptStatus | null) ?? undefined,
-    extraAttempts: attemptsForTask(uid, employee.name, employee.contact, task, cell),
+    extraAttempts: [...generated, ...rejectedReviewAttempts(uid, task, generated.length)],
   };
+}
+
+/** The learner's attempts Exam Reviews rejected on this Quiz, as Attempts
+ *  rows — what the console's "Caught Cheating in Past Quizzes" card opens
+ *  (filtered to Rejected). The generated history above only knows Passed and
+ *  Failed, so without these that link landed on an empty list. Numbered after
+ *  the generated attempts. */
+function rejectedReviewAttempts(
+  uid: string,
+  task: { id: string; name: string },
+  after: number,
+): Attempt[] {
+  return getSubmissions()
+    .filter(
+      (s) => s.userId === uid && s.status === "rejected" && s.taskId === task.id,
+    )
+    .map((s, i) => {
+      const done = Date.parse(s.submittedAt.replace(/(\d+)(st|nd|rd|th)/, "$1"));
+      return {
+        id: `${uid}_${task.id}_${s.id}`,
+        taskId: task.id,
+        userId: uid,
+        name: s.candidateName,
+        email: s.candidateEmail,
+        phone: s.candidatePhone,
+        quizName: task.name,
+        attemptNumber: after + i + 1,
+        status: "Rejected" as const,
+        startedAt: fmtDT(done - 45 * 60_000),
+        completedAt: fmtDT(done),
+        // Exam Reviews grades out of 10; Attempts reads a percentage.
+        grade: Math.round(parseFloat(s.grade) * 10),
+        review: hasProctoringFootage(s) ? ("proctored" as const) : ("id-only" as const),
+        reviewedAt: fmtDT(done + 24 * 3_600_000),
+        rejectionReason: s.rejectionReasons?.join(", "),
+      };
+    });
 }
 
 /** Opens one employee's attempts on a task in a new tab — the Quiz Attempts
@@ -485,11 +561,53 @@ function AdminApp() {
     () => deepLinkView(new URLSearchParams(window.location.search)) ?? viewFromUrl(),
   );
   const [forms, setForms] = useState<FeedbackForm[]>(seedForms);
+  /* The Feedback Form open in the editor, STAGED: every edit lands here, and
+     only the editor's Save Changes / Create commits it to `forms`. Held at
+     this level so it survives the editor's detour to Create New Question. */
+  const [formDraft, setFormDraft] = useState<FeedbackForm | null>(null);
   /* The Certifications list. It lived on the Certifications page until the
      post-creation setup landed (2026-10-01): the wizard's Create now appends
      to it, and the Content Links / Award / Feedback Form flows each read it to
      say which Certifications still have setup left. */
   const [certs, setCerts] = useState<Certification[]>(seedCerts);
+  // The largest Certification id number ever issued (see nextCertId).
+  const certIdHighWater = useRef<number>(0);
+  if (certIdHighWater.current === 0) {
+    certIdHighWater.current = maxCertIdNumber(seedCerts, readCertIdHighWater());
+  }
+  // Every id that was ever in the list counts, so deleting the newest
+  // Certification can't free its id for the next one.
+  useEffect(() => {
+    certIdHighWater.current = maxCertIdNumber(certs, certIdHighWater.current);
+  }, [certs]);
+  function issueCertId(): string {
+    const { id, n } = nextCertId(certs, certIdHighWater.current);
+    certIdHighWater.current = n;
+    try {
+      window.localStorage.setItem(CERT_ID_HIGH_WATER_KEY, String(n));
+    } catch {
+      /* storage unavailable — the ref still holds the mark for the session */
+    }
+    return id;
+  }
+  /* The Industries (names, icons, visibility, order). Tag MEMBERSHIP lives on
+     each Certification (`industries`); the Industries page edits both lists. */
+  const [industryList, setIndustryList] = useState<Industry[]>(seedIndustries);
+  // Mirrored for pickers, filters and builders that aren't handed the lists.
+  useLayoutEffect(() => setLiveCerts(certs), [certs]);
+  /* The saved Spotlights — here, not on the page, so approvals, edits and
+     saved reorders survive navigating away. Mirrored for the sidebar badge. */
+  const [spotlights, setSpotlights] = useState<Spotlight[]>(seedSpotlights);
+  useLayoutEffect(() => setLiveSpotlights(spotlights), [spotlights]);
+  useLayoutEffect(() => setLiveIndustries(industryList), [industryList]);
+  /* Keep each Industry's display order in step with the tags: a Certification
+     tagged anywhere (the Certifications page, the wizard) is appended to that
+     scope's order, an untagged or deleted one drops out of it. */
+  useLayoutEffect(() => setIndustryList((prev) => syncIndustryOrder(prev, certs)), [certs]);
+  /* Skills and Mastery Skills live here, as Certifications do, so a record
+     created, edited, archived or deleted survives leaving the Skills page. */
+  const [skills, setSkills] = useState<Skill[]>(seedSkills);
+  const [mastery, setMastery] = useState<MasterySkill[]>(seedMastery);
   /* The Content Links graph as last saved — the Content Links page edits a
      working copy and hands it back on Save, so a Certification's "Content
      Links" setup step can flip to done. */
@@ -506,13 +624,39 @@ function AdminApp() {
      create. Held here because the page unmounts on every trip through a
      flow. */
   const [setupBanner, setSetupBanner] = useState<SetupBannerState>({ dismissed: false });
-  // Question Bank + questions created from the Feedback Form flow.
+  // Question Bank + questions created from the Feedback Form flow. The bank
+  // page unmounts on every trip into the editor or another page, so its
+  // questions and category tree live here — archive, delete, category edits
+  // and CSV imports all write straight into these.
   const [bank, setBank] = useState<Question[]>(seedQuestions);
+  const [qbCategories, setQbCategories] = useState<QuestionCategory[]>(seedQuestionCategories);
+  // Mirrored for the question editor's Category picker, wherever it opens.
+  useEffect(() => setLiveCategories(qbCategories), [qbCategories]);
   /* Awards used to live on the Awards page's own state. That page is gone, so
      the list sits here: the Certifications table reads it to label each row's
      menu, and the Award form writes back into it. */
   const [awards, setAwards] = useState<Award[]>(seedAwards);
+  /* Product Config's SAVED settings and the Award Design Templates live here,
+     so they outlast a visit to another page. Templates feed the Award
+     wizard's pickers; the B2B lists and trial length are also published to
+     the shared store the Company / Certification / Task wizards read. */
+  const [productSettings, setProductSettings] = useState<ProductSettings>(DEFAULT_PRODUCT_SETTINGS);
+  const [awardTemplates, setAwardTemplates] = useState<AwardDesignTemplate[]>(seedTemplates);
   const [companies, setCompanies] = useState<Company[]>(seedCompanies);
+  // Mirrored for the pages that read companies without being handed them (the
+  // Users page's Company filter, employee profile links).
+  useEffect(() => setLiveCompanies(companies), [companies]);
+  /* The Companies list as it was last left. The page unmounts while a company
+     flow is open, so this is what brings back its search, filters, sort,
+     columns, date range, page and scroll on return. */
+  const companiesListRef = useRef<CompaniesListState | null>(null);
+  /* The Users list as it was last left — brought back when returning from a
+     page it opened. Saved through a stable callback (see UsersPage). */
+  const usersListRef = useRef<UsersListState | null>(null);
+  const saveUsersList = useCallback((state: UsersListState) => {
+    usersListRef.current = state;
+  }, []);
+  const backToUsers = () => goToView({ name: "users", restore: true });
   /* A one-line success handed back by a flow that finished and navigated away
      — raised as a toast on the page it returns to. */
   const [flash, setFlash] = useState<string | null>(null);
@@ -530,6 +674,41 @@ function AdminApp() {
       setTaskEdits((prev) => ({ ...prev, [task.id]: task }));
     }
   }
+
+  /* Hidden and deleted are App state too, beside the edits: TasksPage
+     re-seeds from here every time it mounts, so a hide or a delete outlasts
+     a trip to another page. Hiding is an edit — it stamps Date Modified and
+     drops the seed's free-text `updated` line. */
+  const [deletedTaskIds, setDeletedTaskIds] = useState<ReadonlySet<string>>(() => new Set());
+  function setTaskHidden(task: Task, hidden: boolean) {
+    const dateModified = new Date().toLocaleDateString("en-US", {
+      month: "short",
+      day: "2-digit",
+      year: "numeric",
+    });
+    saveTask({ ...task, hidden, dateModified, updated: undefined });
+  }
+  function deleteTask(task: Task) {
+    setDeletedTaskIds((prev) => new Set(prev).add(task.id));
+  }
+
+  /* The working Task list every page reads — published to data/tasks so the
+     pages that aren't handed it (Quiz Attempts, Who Paid, Manage User
+     Progress, the wizard's pickers) see the same Tasks. */
+  const liveTasks = useMemo(
+    () =>
+      [...createdTasks, ...tasks.map((t) => taskEdits[t.id] ?? t)].filter(
+        (t) => !deletedTaskIds.has(t.id),
+      ),
+    [createdTasks, taskEdits, deletedTaskIds],
+  );
+  useLayoutEffect(() => setLiveTasks(liveTasks), [liveTasks]);
+  /* The Tasks list as it was last left — brought back by Back from Quiz
+     Attempts and Who Paid. */
+  const tasksListRef = useRef<TasksListState | null>(null);
+  /* Pending ID Re-Uploads' filters + sort, kept while its row is open in the
+     Exam Reviews console so the way back lands on the same list. */
+  const pendingIdListRef = useRef<PendingIdListState | null>(null);
 
   function addTask(task: Omit<Task, "id">) {
     setCreatedTasks((prev) => [
@@ -684,8 +863,15 @@ function AdminApp() {
     window.history.pushState({}, "", urlForView(next));
   }
 
+  /* Every company created this session, newest first — they lead the
+     Companies list on every visit, whatever the sort. Ids count up from the
+     highest in use: a count of rows would hand out an id that's already taken
+     once anything has been deleted (or past CO-090). */
+  const [createdCompanyIds, setCreatedCompanyIds] = useState<string[]>([]);
   function addCompany(company: Omit<Company, "id">) {
-    const id = `CO-${String(companies.length + 1).padStart(3, "0")}`;
+    const top = Math.max(0, ...companies.map((c) => parseInt(c.id.replace(/\D/g, ""), 10) || 0));
+    const id = `CO-${String(top + 1).padStart(3, "0")}`;
+    setCreatedCompanyIds((prev) => [id, ...prev]);
     setCompanies((prev) => [{ id, ...company }, ...prev]);
   }
 
@@ -695,6 +881,44 @@ function AdminApp() {
 
   function deleteCompany(company: Company) {
     setCompanies((prev) => prev.filter((c) => c.id !== company.id));
+  }
+
+  /* Product Config's B2B lists, and what carries each value: Partnerships and
+     Trades sit on companies (partnership / industry) and on Tasks and
+     Certifications as tags; Cancellation Reasons on companies only (the
+     comma-joined `cancellationReason`). */
+  const reasonsOf = (c: Company) => (c.cancellationReason ? c.cancellationReason.split(", ") : []);
+  const companyValues = (c: Company, list: B2BListKey) =>
+    list === "partnerships" ? c.partnership : list === "trades" ? c.industry : reasonsOf(c);
+  function b2bValueUsage(list: B2BListKey, value: string): B2BValueUsage {
+    const tagged = list !== "cancelReasons";
+    return {
+      companies: companies.filter((c) => companyValues(c, list).includes(value)).length,
+      tasks: tagged ? liveTasks.filter((t) => t.tags?.includes(value)).length : 0,
+      certifications: tagged ? certs.filter((c) => c.tags?.includes(value)).length : 0,
+    };
+  }
+  /* A confirmed removal: off the SAVED list (published to every picker and
+     filter) and off every record that carries it. */
+  function removeB2BValue(list: B2BListKey, value: string) {
+    const nextSettings = {
+      ...productSettings,
+      [list]: productSettings[list].filter((v) => v !== value),
+    };
+    setProductSettings(nextSettings);
+    setB2BConfig({ [list]: nextSettings[list] });
+    const drop = (vs: string[]) => vs.filter((v) => v !== value);
+    setCompanies((prev) =>
+      prev.map((c) => {
+        if (!companyValues(c, list).includes(value)) return c;
+        if (list === "partnerships") return { ...c, partnership: drop(c.partnership) };
+        if (list === "trades") return { ...c, industry: drop(c.industry) };
+        return { ...c, cancellationReason: drop(reasonsOf(c)).join(", ") || undefined };
+      }),
+    );
+    if (list === "cancelReasons") return;
+    liveTasks.filter((t) => t.tags?.includes(value)).forEach((t) => saveTask({ ...t, tags: drop(t.tags ?? []) }));
+    setCerts((prev) => prev.map((c) => (c.tags?.includes(value) ? { ...c, tags: drop(c.tags) } : c)));
   }
 
   function upsertForm(form: FeedbackForm) {
@@ -709,57 +933,145 @@ function AdminApp() {
 
   /* The four post-creation setup steps (Claude Design "Certification
      Post-Creation Setup"), each derived from the data that flow writes rather
-     than tracked on its own: an Industry path on the record, an edge touching
-     the Certification's node in the Content Links graph, an Award for it, a
-     Feedback Form triggered by it. The Certifications page turns this into
+     than tracked on its own: an Industry path on the record, a Content Link
+     this Certification AUTHORED (added on its own Content Links page — links
+     other Certifications made that point at it don't count), an Award for it,
+     a Feedback Form triggered by it. The Certifications page turns this into
      the banner count, the row pills and the Setup card. */
   function setupStepsFor(cert: Certification): SetupSteps {
     const nodeId = certToFocusNode(cert).id;
     const byKind = { prerequisite: 0, recommended: 0, related: 0 };
-    for (const l of contentLinks) {
-      if (l.from === nodeId || l.to === nodeId) byKind[l.kind] += 1;
-    }
+    for (const l of authoredLinks(nodeId, contentLinks)) byKind[l.kind] += 1;
     const linkDetail = (Object.keys(byKind) as (keyof typeof byKind)[])
       .filter((k) => byKind[k] > 0)
       .map((k) => `${byKind[k]} ${k}`)
       .join(" · ");
-    const award = awards.find((a) => a.certificationId === cert.id);
-    const form = forms.find(
-      (f) =>
-        f.status !== "deleted" &&
-        f.triggers.some(
-          (t) => t.kind === "certification" && (t.refId === cert.id || t.refName === cert.name),
-        ),
-    );
+    // An Archived Award isn't issued to anyone new, so it doesn't count as set up.
+    const award = awards.find((a) => a.certificationId === cert.id && a.status === "Active");
+    const form = feedbackFormFor(cert);
     return {
-      industries: { done: cert.industry.trim().length > 0, detail: cert.industry },
-      links: { done: linkDetail.length > 0, detail: linkDetail },
+      // Only SkillCat-created Certifications carry Industry tags, so a
+      // company-created one has no Industries step at all.
+      industries: isSkillCatCert(cert)
+        ? { done: cert.industries.length > 0, detail: certIndustryText(cert.industries) }
+        : { done: false, na: true },
+      // Content Links are SkillCat-catalog only, so a company-created
+      // Certification has no Content Links step (nor the menu entry).
+      links: isSkillCatCert(cert)
+        ? { done: linkDetail.length > 0, detail: linkDetail }
+        : { done: false, na: true },
       award: award
         ? {
             done: true,
-            detail: `${award.certificateTemplateId ? "Card + Certificate" : "Card"} · ${award.meritTier}`,
+            detail: `${appearanceSummary(award)} · ${award.meritTier}`,
           }
         : { done: false },
-      feedback: form
-        ? {
-            done: true,
-            detail: `${form.name.trim() || "Untitled form"} · ${form.questions.length} ${
-              form.questions.length === 1 ? "question" : "questions"
-            }`,
-          }
-        : { done: false },
+      // A Certification the trigger picker won't offer (B2B Companies Only,
+      // or company-made) can't have a Feedback Form, so the step isn't
+      // offered for it at all.
+      feedback: !canHaveFeedbackForm(cert)
+        ? { done: false, na: true }
+        : form
+          ? {
+              done: true,
+              detail: `${form.name.trim() || "Untitled form"} · ${activeLinks(form).length} ${
+                activeLinks(form).length === 1 ? "question" : "questions"
+              }`,
+            }
+          : { done: false },
     };
   }
 
-  function linkCount(nodeId: string, links: Link[]): number {
-    return links.filter((l) => l.from === nodeId || l.to === nodeId).length;
+  /* The trigger picker's rule (SelectRequirementModal `allUsersOnly`): only a
+     SkillCat-made, All Users Certification can fire a Feedback Form. */
+  function canHaveFeedbackForm(cert: Certification): boolean {
+    return isSkillCatCert(cert) && audienceOf(cert.tags) === AUDIENCE_ALL_USERS;
   }
 
-  /* "Add Feedback Form" from a Certification's Setup card: a new form that
-     already fires on that Certification, opened in the one-page editor. The
-     editor's own gate still wants a name before Done. */
+  /* The ACTIVE Feedback Form this Certification fires — matched by id, never
+     by name. A deactivated form doesn't fire, so it doesn't count as set up. */
+  function feedbackFormFor(cert: Certification): FeedbackForm | undefined {
+    return forms.find(
+      (f) =>
+        f.status === "active" &&
+        f.triggers.some((t) => t.kind === "certification" && t.refId === cert.id),
+    );
+  }
+
+  /* Open a saved form in the editor on a staged copy of it. `forCertId`: opened
+     from that Certification's Setup card, so leaving returns there. */
+  function openFeedbackForm(id: string, forCertId?: string) {
+    const form = forms.find((f) => f.id === id);
+    if (!form) return;
+    setFormDraft(form);
+    setView({ name: "feedback-detail", formId: id, forCertId });
+  }
+
+  /* Delete a Certification and everything tied to it, as its confirm says:
+     the record, every Content Link touching its graph node (either end), its
+     Award, and the Feedback Form triggers that fire on it (the forms stay).
+     Other Certifications stop naming it as a replacement. The page clears
+     its own "Mark as Done" flag. A Certification other Certifications build
+     on (Condition Sets, imported Courses — certReferences) is never deleted,
+     whatever path asks; the Certifications page explains why first. */
+  function deleteCertEverywhere(cert: Certification) {
+    if (certReferences(cert.id, certs).length > 0) return;
+    const nodeId = certToFocusNode(cert).id;
+    setCerts((prev) =>
+      prev
+        .filter((c) => c.id !== cert.id)
+        .map((c) =>
+          c.replacementIds?.includes(cert.id)
+            ? {
+                ...c,
+                replacementIds: c.replacementIds.filter((r) => r !== cert.id).length
+                  ? c.replacementIds.filter((r) => r !== cert.id)
+                  : undefined,
+              }
+            : c,
+        ),
+    );
+    setContentLinks((prev) => prev.filter((l) => l.from !== nodeId && l.to !== nodeId));
+    setAwards((prev) => prev.filter((a) => a.certificationId !== cert.id));
+    setForms((prev) =>
+      prev.map((f) =>
+        f.triggers.some((t) => t.kind === "certification" && t.refId === cert.id)
+          ? {
+              ...f,
+              triggers: f.triggers.filter(
+                (t) => !(t.kind === "certification" && t.refId === cert.id),
+              ),
+            }
+          : f,
+      ),
+    );
+  }
+
+  /** Links this Certification authored — the setup step's own count. */
+  function linkCount(nodeId: string, links: Link[]): number {
+    return authoredLinks(nodeId, links).length;
+  }
+
+  /* "Add Feedback Form" from a Certification's Setup card: a new form,
+     prefilled to fire on that Certification, opened in the one-page editor.
+     It is only STAGED — nothing is created or mapped until the editor's
+     Create (which wants a name and a question first); leaving drops it. */
   function addFeedbackFormFor(cert: Certification) {
-    const today = new Date().toISOString().slice(0, 10);
+    if (!canHaveFeedbackForm(cert)) return;
+    /* A deactivated form still holds its mappings (one form per
+       Certification), so when one already fires on this Certification "Add"
+       opens it — to activate it from the list, or re-map — rather than
+       starting a second form the trigger lock would refuse. */
+    const holder = forms.find(
+      (f) =>
+        f.status !== "deleted" &&
+        f.triggers.some((t) => t.kind === "certification" && t.refId === cert.id),
+    );
+    if (holder) {
+      openFeedbackForm(holder.id, cert.id);
+      return;
+    }
+    const today = todayStamp();
     const form: FeedbackForm = {
       id: nextFormId(forms),
       name: "",
@@ -779,7 +1091,7 @@ function AdminApp() {
       updatedAt: today,
       responseCount: 0,
     };
-    upsertForm(form);
+    setFormDraft(form);
     setView({ name: "feedback-detail", formId: form.id, creating: true, forCertId: cert.id });
   }
 
@@ -798,23 +1110,23 @@ function AdminApp() {
   const fileQuizQuestion = (q: Question) => setBank((prev) => [q, ...prev]);
 
   function handleQuestionCreated(q: Question, forFormId?: string) {
-    const form = forFormId ? forms.find((f) => f.id === forFormId) : undefined;
-    // A question linked straight into a form goes in front of users
-    // immediately. It arrives Active either way — the wizard writes no other
-    // status — so only the form link has to be applied here.
+    // The form being edited is a staged copy: the new question joins THAT,
+    // and reaches users only when the form's Save Changes / Create commits it.
+    const form = forFormId && formDraft?.id === forFormId ? formDraft : undefined;
+    // It arrives Active either way — the wizard writes no other status — so
+    // only the form link has to be applied here.
     setBank((prev) => [
-      { ...q, forms: form ? [form.name] : q.forms },
+      { ...q, forms: form?.name.trim() ? [form.name] : q.forms },
       ...prev,
     ]);
     if (form) {
-      upsertForm({
+      setFormDraft({
         ...form,
         questions: [
           ...activeLinks(form),
-          { questionId: q.id, mandatory: false, status: "active", linkedAt: "2026-07-09" },
+          { questionId: q.id, mandatory: false, status: "active", linkedAt: todayStamp() },
           ...inactiveLinks(form),
         ],
-        updatedAt: "2026-07-09",
       });
     }
     // Raised on whichever page the editor hands back to — the bank or the form.
@@ -823,8 +1135,16 @@ function AdminApp() {
     createdPathRef.current = q.categoryPath;
   }
 
+  /* The editor works on the staged copy; `savedForm` is the stored record
+     (absent for a new form) that "No changes to save" is measured against. */
+  const savedForm =
+    view.name === "feedback-detail" ? forms.find((f) => f.id === view.formId) : undefined;
   const activeForm =
-    view.name === "feedback-detail" ? forms.find((f) => f.id === view.formId) : null;
+    view.name === "feedback-detail"
+      ? formDraft?.id === view.formId
+        ? formDraft
+        : savedForm ?? null
+      : null;
 
   return (
     <div className="app">
@@ -849,7 +1169,7 @@ function AdminApp() {
                    that Task instead. */
                 task.type === "Hands-On Task"
                   ? setView({ name: "review-hands-on", taskFilter: task.name })
-                  : setView({ name: "attempts", quizName: task.name })
+                  : setView({ name: "attempts", taskId: task.id })
               }
               onViewPayers={(task) => setView({ name: "quiz-purchasers", task })}
               onManageProgress={(task) =>
@@ -857,8 +1177,13 @@ function AdminApp() {
               }
               onOpenQuestionBank={() => navigate("question-bank")}
               onOpenSkills={() => navigate("skills")}
-              extraTasks={createdTasks}
-              taskEdits={taskEdits}
+              tasks={liveTasks}
+              onSetHidden={setTaskHidden}
+              onDeleteTask={deleteTask}
+              restore={view.restore ? tasksListRef.current : null}
+              onSaveState={(state) => {
+                tasksListRef.current = state;
+              }}
               flash={flash}
               onFlashDone={() => setFlash(null)}
             />
@@ -866,19 +1191,19 @@ function AdminApp() {
         </div>
       ) : view.name === "attempts" ? (
         <AttemptsPage
-          quizName={view.quizName}
+          taskId={view.taskId}
           initialNameFilter={view.nameFilter}
           initialStatusFilter={view.statusFilter}
           extraAttempts={view.extraAttempts}
-          onBack={() => setView({ name: "tasks" })}
+          onBack={() => setView({ name: "tasks", restore: true })}
         />
       ) : view.name === "attempt-viewer" ? (
         <AttemptViewerPage
           attempt={view.attempt}
-          onBack={() => setView({ name: "attempts", quizName: view.quizName })}
+          onBack={() => setView({ name: "attempts", taskId: view.taskId })}
         />
       ) : view.name === "quiz-purchasers" ? (
-        <QuizPurchasersPage task={view.task} onBack={() => setView({ name: "tasks" })} />
+        <QuizPurchasersPage task={view.task} onBack={() => setView({ name: "tasks", restore: true })} />
       ) : view.name === "certs" ? (
         <CertificationsPage
           certs={certs}
@@ -902,10 +1227,17 @@ function AdminApp() {
             setView({ name: "content-overrides", certId: cert.id, origin: "certs" })
           }
           onArchiveCert={(cert) => setView({ name: "archive-cert", cert })}
+          onDeleteCert={deleteCertEverywhere}
           onManageAward={(cert) => setView({ name: "cert-award", cert })}
           awardForCert={(cert) => awards.find((a) => a.certificationId === cert.id)}
           onOpenIndustries={() => navigate("industries")}
-          onOpenFeedback={() => navigate("feedback")}
+          /* With a Certification (its done Setup step): that Certification's
+             own form. Without (the header button): the Feedback Forms list. */
+          onOpenFeedback={(cert) => {
+            const form = cert ? feedbackFormFor(cert) : undefined;
+            if (form && cert) openFeedbackForm(form.id, cert.id);
+            else navigate("feedback");
+          }}
         />
       ) : view.name === "cert-purchasers" ? (
         <CertPurchasersPage cert={view.cert} onBack={() => setView({ name: "certs" })} />
@@ -937,7 +1269,13 @@ function AdminApp() {
           backLabel="Certifications"
         />
       ) : view.name === "skills" ? (
-        <SkillsPage onBackToTasks={() => navigate("tasks")} />
+        <SkillsPage
+          skills={skills}
+          setSkills={setSkills}
+          mastery={mastery}
+          setMastery={setMastery}
+          onBackToTasks={() => navigate("tasks")}
+        />
       ) : view.name === "cert-award" ? (
         (() => {
           const existing = awards.find((a) => a.certificationId === view.cert.id);
@@ -947,7 +1285,7 @@ function AdminApp() {
               certification={view.cert}
               editingAward={existing}
               allAwards={awards}
-              templates={designTemplates}
+              templates={awardTemplates}
               onClose={() => navigate("certs")}
               onSave={(a) => {
                 // A first Award is a setup step done — the Certifications
@@ -975,8 +1313,10 @@ function AdminApp() {
         })()
       ) : view.name === "question-bank" ? (
         <QuestionBankPage
-          key={bank.length}
-          initialQuestions={bank}
+          questions={bank}
+          setQuestions={setBank}
+          categories={qbCategories}
+          setCategories={setQbCategories}
           onNewQuestion={(categoryPath, initialType, returnTo) =>
             setView({ name: "new-question", categoryPath, initialType, returnTo })
           }
@@ -1066,13 +1406,17 @@ function AdminApp() {
           );
         })()
       ) : view.name === "spotlight" ? (
-        <SpotlightsPage />
+        <SpotlightsPage spotlights={spotlights} setSpotlights={setSpotlights} />
       ) : view.name === "proctoring" ? (
         <ProctoringPage
           key={view.openSubmissionId ?? "queue"}
           onPendingIdReuploads={() => setView({ name: "pending-id-reuploads" })}
           initialSubmissionId={view.openSubmissionId}
-          onExitToOrigin={() => goToView({ name: "pending-id-reuploads" })}
+          originQueueIds={view.originQueue}
+          onExitToOrigin={(toast) => {
+            if (toast) setFlash(toast);
+            goToView({ name: "pending-id-reuploads", restore: true });
+          }}
           originLabel="Pending ID Re-Uploads"
         />
       ) : /* Currently unreachable: the Proctoring header's "View All IDs" button was
@@ -1081,9 +1425,15 @@ function AdminApp() {
       view.name === "manage-ids" ? (
         <ManageIdsPage onBack={() => setView({ name: "proctoring" })} />
       ) : view.name === "scholarship" ? (
-        <ScholarshipsPage onBack={() => navigate("manage-users")} />
+        <ScholarshipsPage onBack={backToUsers} />
       ) : view.name === "industries" ? (
-        <IndustriesPage onBackToCerts={() => navigate("certs")} />
+        <IndustriesPage
+          industries={industryList}
+          setIndustries={setIndustryList}
+          certs={certs}
+          setCerts={setCerts}
+          onBackToCerts={() => navigate("certs")}
+        />
       ) : view.name === "companies" ? (
         <CompaniesPage
           companies={companies}
@@ -1091,6 +1441,9 @@ function AdminApp() {
           onFlashDone={() => setFlash(null)}
           onDeleteCompany={deleteCompany}
           initialQuery={view.query}
+          pinnedIds={createdCompanyIds}
+          restore={view.restore ? companiesListRef.current : null}
+          onSaveState={(state) => { companiesListRef.current = state; }}
           onNewCompany={() => setView({ name: "new-company" })}
           onEditCompany={(company) => setView({ name: "edit-company", company })}
           onManageSubscription={(company) => setView({ name: "manage-subscription", company })}
@@ -1100,8 +1453,11 @@ function AdminApp() {
         />
       ) : view.name === "new-company" ? (
         <NewCompanyWizard
-          onClose={() => setView({ name: "companies" })}
+          onClose={() => setView({ name: "companies", restore: true })}
           onCreate={addCompany}
+          /* A finished create opens the list fresh — default sort, no search
+             or filters — with the new company pinned at the top. Cancel
+             (onClose) still goes back to the list as it was. */
           onCreated={(message) => {
             setFlash(message);
             setView({ name: "companies" });
@@ -1112,11 +1468,11 @@ function AdminApp() {
         <NewCompanyWizard
           editCompany={view.company}
           detailsOnly
-          onClose={() => setView({ name: "companies" })}
+          onClose={() => setView({ name: "companies", restore: true })}
           onSave={updateCompany}
           onCreated={(message) => {
             setFlash(message);
-            setView({ name: "companies" });
+            setView({ name: "companies", restore: true });
           }}
           onNavigateToProductConfig={() => setView({ name: "product-config", tab: "b2b" })}
         />
@@ -1124,11 +1480,11 @@ function AdminApp() {
         <NewCompanyWizard
           editCompany={view.company}
           subscriptionOnly
-          onClose={() => setView({ name: "companies" })}
+          onClose={() => setView({ name: "companies", restore: true })}
           onSave={updateCompany}
           onCreated={(message) => {
             setFlash(message);
-            setView({ name: "companies" });
+            setView({ name: "companies", restore: true });
           }}
         />
       ) : view.name === "users" ? (
@@ -1142,6 +1498,8 @@ function AdminApp() {
           onOpenMergeAccounts={() => navigate("merge-accounts")}
           onOpenTransferSubscription={() => navigate("transfer-subscription")}
           initialCompanyFilter={view.companyFilter}
+          restore={view.restore ? usersListRef.current : null}
+          onSaveState={saveUsersList}
           flash={flash}
           onFlashDone={() => setFlash(null)}
         />
@@ -1154,10 +1512,16 @@ function AdminApp() {
       ) : view.name === "pending-id-reuploads" ? (
         <PendingIdReuploadsPage
           onBack={() => setView({ name: "proctoring" })}
-          onReview={(id) => goToView({ name: "proctoring", openSubmissionId: id })}
+          onReview={(id, queueIds, state) => {
+            pendingIdListRef.current = state;
+            goToView({ name: "proctoring", openSubmissionId: id, originQueue: queueIds });
+          }}
+          restore={view.restore ? pendingIdListRef.current : null}
+          flash={flash}
+          onFlashDone={() => setFlash(null)}
         />
       ) : view.name === "name-change-requests" ? (
-        <NameChangeRequestsPage onBack={() => navigate("manage-users")} />
+        <NameChangeRequestsPage onBack={backToUsers} />
       ) : view.name === "content-overrides" ? (
         <ContentOverridesPage
           onViewAttempts={openAttemptsForUser}
@@ -1170,6 +1534,21 @@ function AdminApp() {
       ) : view.name === "product-config" ? (
         <ProductConfigPage
           initialTab={view.tab}
+          navKey={view}
+          saved={productSettings}
+          onSave={(next) => {
+            setProductSettings(next);
+            setB2BConfig({
+              partnerships: next.partnerships,
+              trades: next.trades,
+              cancelReasons: next.cancelReasons,
+              trialDays: parseInt(next.b2bTrialDays, 10),
+            });
+          }}
+          templates={awardTemplates}
+          setTemplates={setAwardTemplates}
+          usageOf={b2bValueUsage}
+          onRemoveValue={removeB2BValue}
           onEditAward={(award) => {
             const cert = certForAward(award);
             if (cert) setView({ name: "cert-award", cert });
@@ -1177,28 +1556,28 @@ function AdminApp() {
         />
       ) : view.name === "merge-accounts" ? (
         <MergeAccountsPage
-          onClose={() => navigate("manage-users")}
+          onClose={backToUsers}
           /* A finished merge has no screen of its own: it lands back on Manage
              Users and says what happened there. */
           onMerged={(message) => {
             setFlash(message);
-            navigate("manage-users");
+            backToUsers();
           }}
         />
       ) : view.name === "transfer-subscription" ? (
         <TransferSubscriptionPage
-          onClose={() => navigate("manage-users")}
+          onClose={backToUsers}
           /* Like a finished merge: no screen of its own, it lands back on
              Manage Users and says what happened there. */
           onTransferred={(message) => {
             setFlash(message);
-            navigate("manage-users");
+            backToUsers();
           }}
         />
       ) : view.name === "feedback" ? (
         <FeedbackFormsPage
           forms={forms}
-          onOpen={(id, creating) => setView({ name: "feedback-detail", formId: id, creating })}
+          onOpen={(id) => openFeedbackForm(id)}
           /* The responses viewer is shelved for now — the menu action just
              downloads the form's responses as CSV. */
           onExportResponses={(id) => {
@@ -1206,7 +1585,12 @@ function AdminApp() {
             if (!form) return;
             exportFormCsv(form, buildRows(form, bank), formResponses[form.id] ?? []);
           }}
-          onCreate={(form) => upsertForm(form)}
+          /* A new form (blank, or a Duplicate's copy) opens STAGED — it joins
+             the list only on the editor's Create. */
+          onCreate={(form) => {
+            setFormDraft(form);
+            setView({ name: "feedback-detail", formId: form.id, creating: true });
+          }}
           onUpdate={(form) => upsertForm(form)}
           /* Deleting is a tombstone, not a purge: the record stays so its
              responses keep resolving, and the list hides Deleted forms. */
@@ -1225,36 +1609,24 @@ function AdminApp() {
           creating={view.creating}
           allForms={forms}
           bank={bank}
+          saved={savedForm}
           onBack={(finished) => {
-            // Started from a Certification's Setup card: Back is the table it
-            // came from, with the toast when the form really exists (named,
-            // triggered — the editor discards an unfinished one before this).
-            if (view.forCertId) {
-              // The same three the editor's gate needs — a form short of any of
-              // them was discarded on the way out, so it gets no toast.
-              if (
-                activeForm.name.trim() &&
-                activeForm.triggers.length > 0 &&
-                activeForm.questions.length > 0
-              ) {
-                setFlash("Feedback Form Created");
-              }
-              navigate("certs");
-              return;
-            }
+            /* Create / Save Changes commit the staged copy, stamped with the
+               real day so it sorts to the top of Last Modified. Cancel and
+               the crumbs just drop it — a new form never reaches the list. */
+            if (finished) upsertForm({ ...activeForm, updatedAt: todayStamp() });
+            setFormDraft(null);
             // Only Create / Save Changes say so — Cancel and the crumbs don't.
             if (finished) setFlash(view.creating ? "Feedback Form Created" : "Feedback Form Updated");
-            setView({ name: "feedback" });
+            // Opened from a Certification's Setup card: Back is the table it
+            // came from.
+            if (view.forCertId) navigate("certs");
+            else setView({ name: "feedback" });
           }}
           onBackToCerts={() => navigate("certs")}
-          /* A never-finished new form is purged outright, not tombstoned: it
-             has no responses to keep resolving. */
-          onDiscard={() => {
-            const id = activeForm.id;
-            setForms((prev) => prev.filter((f) => f.id !== id));
-            setView({ name: "feedback" });
-          }}
-          onUpdate={upsertForm}
+          // Nothing was stored, so a discard only drops the staged copy.
+          onDiscard={() => setFormDraft(null)}
+          onUpdate={setFormDraft}
           onCreateQuestion={() =>
             // No category pre-picked: the admin chooses where it lives (user,
             // 2026-10-03 — was "Learner Feedback").
@@ -1299,18 +1671,56 @@ function AdminApp() {
             setCerts((prev) => prev.map((c) => (c.id === cert.id ? cert : c)));
             setFlash("Certification Updated");
           }}
+          onTasksCreated={(list) => list.forEach(addTask)}
           onQuestionCreated={fileQuizQuestion}
         />
       ) : view.name === "archive-cert" ? (
         <ArchiveCertificationPage
-          cert={view.cert}
+          cert={certs.find((c) => c.id === view.cert.id) ?? view.cert}
           onClose={() => setView({ name: "certs" })}
-          onArchive={() => {
+          onUnarchive={() => {
+            // Back to the visibility it had before it was archived (Visible
+            // when that was never recorded). The replacement settings only
+            // mean anything while archived, so they are cleared with it.
             const id = view.cert.id;
             setCerts((prev) =>
-              prev.map((c) => (c.id === id ? { ...c, visibility: "Archived" as const } : c)),
+              prev.map((c) =>
+                c.id === id
+                  ? {
+                      ...c,
+                      visibility: c.visibilityBeforeArchive ?? "Visible",
+                      visibilityBeforeArchive: undefined,
+                      replacementIds: undefined,
+                      replacementAlert: undefined,
+                    }
+                  : c,
+              ),
             );
-            setFlash("Certification Archived");
+            setFlash("Certification Unarchived");
+            setView({ name: "certs" });
+          }}
+          onArchive={({ replacementIds, replacementAlert }) => {
+            const id = view.cert.id;
+            const current = certs.find((c) => c.id === id) ?? view.cert;
+            const wasArchived = current.visibility === "Archived";
+            // The replacements and alert are stored on the record (absent when
+            // empty). A first archive also remembers the visibility it had,
+            // which Unarchive restores; re-saving an archived one keeps it.
+            setCerts((prev) =>
+              prev.map((c) => {
+                if (c.id !== id) return c;
+                const prevVis = c.visibility ?? "Visible";
+                return {
+                  ...c,
+                  visibility: "Archived" as const,
+                  visibilityBeforeArchive:
+                    prevVis === "Archived" ? c.visibilityBeforeArchive : prevVis,
+                  replacementIds: replacementIds.length > 0 ? replacementIds : undefined,
+                  replacementAlert,
+                };
+              }),
+            );
+            setFlash(wasArchived ? "Certification Updated" : "Certification Archived");
             setView({ name: "certs" });
           }}
         />
@@ -1319,11 +1729,15 @@ function AdminApp() {
           imported={view.name === "new-cert" ? view.imported : undefined}
           restored={view.name === "new-cert" ? view.restored : undefined}
           onCreate={(record) => {
-            setCerts((prev) => [{ id: nextCertId(prev), ...record }, ...prev]);
+            // Never an id a deleted (or earlier-session) Certification had.
+            const id = issueCertId();
+            setCerts((prev) => [{ id, ...record }, ...prev]);
             setFlash("Certification Created");
             // A fresh Certification re-opens a banner put off with "Set up later".
             setSetupBanner((prev) => ({ ...prev, dismissed: false }));
           }}
+          // Tasks made inside the builder join the Task library with it.
+          onTasksCreated={(list) => list.forEach(addTask)}
           onClose={() => setView({ name: "certs" })}
           onQuestionCreated={fileQuizQuestion}
         />

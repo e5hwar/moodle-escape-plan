@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Task } from "../data/tasks";
-import { CERTIFICATIONS, TASK_TYPES } from "../data/filters";
+import { taskCertifications, type Task } from "../data/tasks";
+import { TASK_TYPES, useCertificationOptions } from "../data/filters";
 import { KeyCommandIcon, SearchIcon, SearchClearIcon } from "./icons";
 import { SearchHints, SearchScopeChip, stepActive, SearchNoResults, suggestFilters, SuggestionRow } from "./SearchPanelParts";
 
@@ -33,6 +33,7 @@ export function TasksSearch({
   query: string;
   onCommit: (q: string) => void;
 }) {
+  const CERTIFICATIONS = useCertificationOptions();
   const [text, setText] = useState(query);
   // Certifications picked in THIS search session (not yet applied). On Enter they
   // move into the applied filter (the Filters row pill) and clear from the bar.
@@ -48,7 +49,11 @@ export function TasksSearch({
 
   const certCounts = useMemo(() => {
     const m = new Map<string, number>();
-    tasks.forEach((t) => t.usedIn.forEach((c) => m.set(c, (m.get(c) ?? 0) + 1)));
+    // By canonical name, the way the filter matches — "NATE RTW" counts
+    // toward NATE Ready-to-Work.
+    tasks.forEach((t) =>
+      taskCertifications(t).forEach((c) => m.set(c.name, (m.get(c.name) ?? 0) + 1)),
+    );
     return m;
   }, [tasks]);
 
@@ -78,7 +83,7 @@ export function TasksSearch({
     return CERTIFICATIONS.filter(
       (c) => !draft.includes(c) && !applied.includes(c) && c.toLowerCase().includes(q),
     ).slice(0, MAX_RESULTS);
-  }, [certQuery, draft, applied]);
+  }, [CERTIFICATIONS, certQuery, draft, applied]);
 
   const typeResults = useMemo(() => {
     const q = typeQuery.trim().toLowerCase();
@@ -97,7 +102,7 @@ export function TasksSearch({
             { kind: "Certification", chip: CERT_PREFIX, values: CERTIFICATIONS, exclude: [...draft, ...applied] },
             { kind: "Task Type", chip: TYPE_PREFIX, values: TASK_TYPES, exclude: appliedTypes },
           ], MAX_RESULTS),
-    [inMode, taskQuery, draft, applied, appliedTypes],
+    [CERTIFICATIONS, inMode, taskQuery, draft, applied, appliedTypes],
   );
   const showPanel = open && !(!inMode && hasQuery && suggestions.length === 0);
 

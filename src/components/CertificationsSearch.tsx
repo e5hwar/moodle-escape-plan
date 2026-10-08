@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { Certification } from "../data/certifications";
 import { NO_CAREER_STAGE, NO_TYPE } from "../data/certifications";
+import { industryTagLabels, useLiveIndustries } from "../data/industries";
 import { EntitySearch, type SearchScope } from "./UsersSearch";
 
 /** The Certifications page bar: the shared commit-on-Enter `EntitySearch` with
@@ -28,18 +29,17 @@ export function CertificationsSearch({
   query: string;
   onCommit: (q: string) => void;
 }) {
-  /* An Industry pill option is either a top-level Industry or an
-     "Industry › Sub-Industry" path, and a certification tagged with the path
-     counts for both — mirror `matchesIndustry` when counting. */
+  /* An Industry option is a top-level Industry or an "Industry › Sub-Industry"
+     label, counted by exact tag — tagging a Sub-Industry does not tag its
+     parent (mirrors `matchesIndustry`). */
+  const inds = useLiveIndustries();
   const industryOpts = useMemo(() => {
     const counts = new Map<string, number>();
     certifications.forEach((c) => {
-      const parent = c.industry.split(" › ")[0];
-      counts.set(c.industry, (counts.get(c.industry) ?? 0) + 1);
-      if (parent !== c.industry) counts.set(parent, (counts.get(parent) ?? 0) + 1);
+      industryTagLabels(c.industries, inds).forEach((l) => counts.set(l, (counts.get(l) ?? 0) + 1));
     });
     return { names: [...counts.keys()].sort(), counts };
-  }, [certifications]);
+  }, [certifications, inds]);
 
   const stageOpts = useMemo(
     () => countBy(certifications, (c) => c.careerStage ?? NO_CAREER_STAGE),

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { FileNameLink } from "./FileNameLink";
 import { DocumentIcon, SmallXIcon, UploadTrayIcon } from "./icons";
 
@@ -10,14 +10,16 @@ export type PickedImage = { name: string; size: number; ext: string; url?: strin
    width. One image only, so a picked file swaps the zone for a same-height
    card (1529:3890) rather than stacking an "add more" strip.
 
-   Shared by the Skill wizard's badge image and the Certification wizard's
-   thumbnail — both are single, optional images with the same accepted types. */
+   Shared by the Skill wizard's icon (required), the Certification wizard's
+   thumbnail and the Industry / Product Config icons — single images with the
+   same accepted types. */
 export function ImageUploadField({
   value,
   onChange,
   accept = "image/jpeg,image/png,image/gif",
   types = "JPEG, PNG, GIF",
   maxSize = "20MB",
+  error = false,
 }: {
   value: PickedImage | null;
   onChange: (v: PickedImage | null) => void;
@@ -26,6 +28,9 @@ export function ImageUploadField({
   types?: string;
   /** Maximum-size line inside the zone. */
   maxSize?: string;
+  /** Required and still empty — the zone's dashes turn red; the message lives
+   *  in the caller's label row. */
+  error?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -71,7 +76,7 @@ export function ImageUploadField({
     <>
       <button
         type="button"
-        className="drop-big"
+        className={`drop-big${error ? " has-error" : ""}`}
         onClick={() => inputRef.current?.click()}
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
@@ -95,10 +100,4 @@ export function ImageUploadField({
       />
     </>
   );
-}
-
-/** Uncontrolled wrapper for call sites that don't persist the picked file. */
-export function ImagePicker(props: Omit<Parameters<typeof ImageUploadField>[0], "value" | "onChange">) {
-  const [file, setFile] = useState<PickedImage | null>(null);
-  return <ImageUploadField {...props} value={file} onChange={setFile} />;
 }

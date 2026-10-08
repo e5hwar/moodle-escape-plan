@@ -3,9 +3,14 @@ import {
   reviewSubmissions as seed,
   matchesQuery,
   displayStatus,
+  isPendingReview,
   NO_ACTION_STATUS,
+  useSubmittedReviews,
+  withLiveTask,
+  withSubmittedReview,
   type TaskSubmission,
 } from "../data/reviewSubmissions";
+import { useLiveTasks } from "../data/tasks";
 import { ReviewSearch } from "./ReviewSearch";
 import { ReviewRunsStrip, ReviewRunCard } from "./ReviewRuns";
 import { ReviewConsole } from "./ReviewConsole";
@@ -225,8 +230,20 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
    *  the first thing under the filters. */
   extraSubmissions?: TaskSubmission[];
 } = {}) {
-  const [list, setList] = useState<TaskSubmission[]>(() =>
+  const [rows, setList] = useState<TaskSubmission[]>(() =>
     extraSubmissions?.length ? [...extraSubmissions, ...seed] : seed,
+  );
+  /* Reviews submitted in the console land in the shared store, not here: a
+     reviewed row stays in the table under its new status (and reopens
+     read-only), and every pending count reads the same store. */
+  const reviews = useSubmittedReviews();
+  /* Read through the live Task list too, so a wizard edit — a new Passing
+     Grade, a Task switched to "Submission Made", a rename — reaches the
+     table, its filters and the console. */
+  const liveTasks = useLiveTasks();
+  const list = useMemo(
+    () => rows.map((s) => withSubmittedReview(withLiveTask(s, liveTasks), reviews)),
+    [rows, reviews, liveTasks],
   );
   const [columns, setColumns] = useState<ColState>(DEFAULT_COLUMNS);
   const [toast, toastNode] = useToast();
@@ -270,7 +287,7 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
      cards describe the whole pending queue whatever the filter row is set
      to. ── */
   const pending = useMemo(
-    () => list.filter((s) => displayStatus(s) === "Review Pending"),
+    () => list.filter(isPendingReview),
     [list],
   );
   const certRanked = useMemo(() => rankedCounts(pending, (s) => s.certifications), [pending]);
@@ -412,16 +429,15 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
 
 
   // Clicking a row opens the review console with the table's current
-  // filtered+sorted list as the queue. Reviews submitted in the console come
-  // back on exit, and reviewed submissions leave the pending list.
+  // filtered+sorted list as the queue. A submitted review updates the shared
+  // store at once, so a reviewed row leaves the Review Pending queue (and the
+  // run cards' counts) while the console is still open.
   if (openId) {
     return (
       <ReviewConsole
         queue={sorted}
         initialId={openId}
-        onExit={(reviewed, verdict) => {
-          const ids = Object.keys(reviewed);
-          if (ids.length) setList((prev) => prev.filter((s) => !ids.includes(s.id)));
+        onExit={(verdict) => {
           setOpenId(null);
           if (verdict) toast(verdict);
         }}

@@ -8,7 +8,8 @@ import { type Question, type QuestionType } from "../data/questionBank";
 import { InfoTipIcon, MoveIcon, RowCloseIcon, TreeAddIcon } from "./icons";
 import { SelectQuestionsModal } from "./SelectQuestionsModal";
 import { formatDate } from "./FeedbackFormsPage";
-import { useCreateShortcut } from "../hooks/useCreateShortcut";
+import { modalOpen, useCreateShortcut } from "../hooks/useCreateShortcut";
+import { todayStamp } from "../data/companies";
 
 type Props = {
   form: FeedbackForm;
@@ -17,9 +18,10 @@ type Props = {
   onCreateQuestion: () => void;
   /** The field is flagged — the card takes the error outline (1570:3366). */
   flagged?: boolean;
+  /** Another picker on the page is open (the Triggers field's) — Q stands down. */
+  blocked?: boolean;
 };
 
-const TODAY = "2026-07-09";
 
 /* The row's second line names the question's shape in full (Figma 810:1285) —
    the Bank's short codes (T/F, Scale, Short) read as jargon here. */
@@ -39,7 +41,7 @@ const TYPE_LABEL: Record<QuestionType, string> = {
  * features genuinely disagree on — a form has no points and no random pools, so
  * the POINTS column becomes a MANDATORY toggle (810:1285), and the menu drops
  * "Add Random Set". */
-export function FeedbackFormEditor({ form, bank, onUpdate, onCreateQuestion, flagged = false }: Props) {
+export function FeedbackFormEditor({ form, bank, onUpdate, onCreateQuestion, flagged = false, blocked = false }: Props) {
   const [picking, setPicking] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const addWrapRef = useRef<HTMLDivElement>(null);
@@ -72,7 +74,7 @@ export function FeedbackFormEditor({ form, bank, onUpdate, onCreateQuestion, fla
     if (!l) return;
     commit(
       actives.filter((x) => x.questionId !== questionId),
-      [...inactives, { ...l, status: "inactive", deactivatedAt: TODAY }],
+      [...inactives, { ...l, status: "inactive", deactivatedAt: todayStamp() }],
     );
   }
 
@@ -84,7 +86,7 @@ export function FeedbackFormEditor({ form, bank, onUpdate, onCreateQuestion, fla
         questionId: id,
         mandatory: false,
         status: "active" as const,
-        linkedAt: TODAY,
+        linkedAt: todayStamp(),
       }));
     commit([...actives, ...fresh], inactives);
   }
@@ -145,14 +147,20 @@ export function FeedbackFormEditor({ form, bank, onUpdate, onCreateQuestion, fla
     setPicking(true);
   };
 
-  useCreateShortcut(() => setMenuOpen(true), !menuOpen && !picking, "q");
+  /* Q opens the Add Questions menu — never while this table's own picker or
+     any other dialog (the Triggers field's picker, a confirm) is up:
+     `useCreateShortcut` stands down under an open overlay, and `blocked`
+     covers this component's own. */
+  useCreateShortcut(() => setMenuOpen(true), !menuOpen && !picking && !blocked, "q");
 
   // While the menu is open: C / Q fire its rows, Escape and outside clicks
-  // dismiss. Escape is captured so it can't also cancel the wizard.
+  // dismiss. Escape is captured so it can't also cancel the wizard. A dialog
+  // opened over it owns the keyboard, so the rows' keys stand down then.
   useEffect(() => {
     if (!menuOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (modalOpen()) return;
       const k = e.key.toLowerCase();
       if (k === "escape") {
         e.preventDefault();

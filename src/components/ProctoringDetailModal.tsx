@@ -196,7 +196,7 @@ export function ProctoringDetailModal({
               </button>
             </div>
             <div className="pr-modal-meta">
-              <span>{submission.examShort}</span>
+              <span>{submission.exam}</span>
               <span className="pr-meta-dot" />
               <span>{submission.submittedAt}</span>
               <span className="pr-meta-dot" />

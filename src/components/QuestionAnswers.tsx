@@ -1,4 +1,4 @@
-import type { Question } from "../data/questionBank";
+import { fileRulesOf, supportsGrading, type Question } from "../data/questionBank";
 import { CheckIcon } from "./icons";
 
 /** A question's prompt and whatever answer data its type carries — options
@@ -7,6 +7,10 @@ import { CheckIcon } from "./icons";
  *  the Question Bank's row preview panel. `hideText` drops the prompt where the
  *  surface already titles itself with it. */
 export function QuestionAnswers({ question, hideText = false }: { question: Question; hideText?: boolean }) {
+  // An ungraded True/False has no correct value to tick.
+  const tfAnswer =
+    question.gradingEnabled && supportsGrading(question.type) ? question.tfAnswer : undefined;
+  const files = question.type === "File upload" ? fileRulesOf(question) : null;
   return (
     <div className="qpv">
       {!hideText && <p className="qpv-text">{question.text}</p>}
@@ -25,10 +29,10 @@ export function QuestionAnswers({ question, hideText = false }: { question: Ques
           {[true, false].map((v) => (
             <li
               key={String(v)}
-              className={`qpv-opt${question.tfAnswer === v ? " is-correct" : ""}`}
+              className={`qpv-opt${tfAnswer === v ? " is-correct" : ""}`}
             >
               <span className="qpv-opt-mark">
-                {question.tfAnswer === v ? <CheckIcon /> : null}
+                {tfAnswer === v ? <CheckIcon /> : null}
               </span>
               <span>{v ? "True" : "False"}</span>
             </li>
@@ -53,14 +57,14 @@ export function QuestionAnswers({ question, hideText = false }: { question: Ques
             : ""}
         </p>
       )}
-      {question.fileRules && (
+      {files && (
         <p className="qpv-note">
-          Up to {question.fileRules.maxFiles} file
-          {question.fileRules.maxFiles === 1 ? "" : "s"}, {question.fileRules.maxSizeMb} MB each
+          Up to {files.maxFiles} file
+          {files.maxFiles === 1 ? "" : "s"}, {files.maxSizeMb} MB each · {files.fileTypes.join(", ")}
         </p>
       )}
       {question.type === "Short answer" && (
-        <p className="qpv-note">Free-text answer — graded by a reviewer.</p>
+        <p className="qpv-note">Free-text answer — ungraded; responses are collected, not scored.</p>
       )}
     </div>
   );

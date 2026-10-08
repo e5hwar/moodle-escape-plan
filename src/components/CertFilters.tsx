@@ -8,7 +8,7 @@ import {
   CascadingMultiSelect,
   CreatedByPill,
 } from "./Filters";
-import { industries } from "../data/industries";
+import { industryTagLabels, industryTagOptions, useLiveIndustries } from "../data/industries";
 import { TAG_GROUPS, matchesTagFilter } from "../data/filters";
 import {
   CAREER_STAGES,
@@ -49,11 +49,11 @@ export function setupMatches(pending: boolean, selected: string[]): boolean {
 export type CertColumnState = Record<CertColumn, boolean>;
 
 /* An Industry option is a top-level Industry or an "Industry › Sub-Industry"
-   path; a certification tagged with the path counts for both. */
+   label, and matches only Certifications carrying exactly that tag — tagging
+   a Sub-Industry does not tag its parent (the backend tagging model). */
 function matchesIndustry(cert: Certification, selected: string[]): boolean {
-  return selected.some(
-    (opt) => cert.industry === opt || cert.industry.startsWith(`${opt} ›`),
-  );
+  const labels = industryTagLabels(cert.industries);
+  return selected.some((opt) => labels.includes(opt));
 }
 
 /** Whether a Certification passes the search query and every filter — the one
@@ -64,7 +64,7 @@ export function certMatches(c: Certification, query: string, filters: CertFilter
   if (q && !(
     c.id.toLowerCase().includes(q) ||
     c.name.toLowerCase().includes(q) ||
-    c.industry.toLowerCase().includes(q)
+    industryTagLabels(c.industries).some((l) => l.toLowerCase().includes(q))
   )) return false;
   if (filters.industries.length && !matchesIndustry(c, filters.industries)) return false;
   if (filters.careerStages.length) {
@@ -149,18 +149,10 @@ export function CertFilters({ filters, setFilters }: Props) {
 
 /* ─────────────────────────────────────────────────────────────── */
 
-/* Industry options come from the Industries page data: every Industry followed
-   by its Sub-Industries. Sub-Industries aren't indented — each reads as its own
-   full path ("HVAC › Residential HVAC"), which is also how certs store them, so
-   one flat searchable list covers both levels (Figma 774:1243). */
-const INDUSTRY_OPTIONS: string[] = [...industries]
-  .sort((a, b) => a.displayPosition - b.displayPosition)
-  .flatMap((ind) => [
-    ind.name,
-    ...[...ind.subIndustries]
-      .sort((a, b) => a.displayPosition - b.displayPosition)
-      .map((sub) => `${ind.name} › ${sub.name}`),
-  ]);
+/* Industry options come from the live Industries (the Industries page edits
+   them): every Industry followed by its Sub-Industries. Sub-Industries aren't
+   indented — each reads as its own full path ("HVAC › Residential"), so one
+   flat searchable list covers both levels (Figma 774:1243). */
 
 /** Exported for pickers that reuse the Certifications filter row (Add
  *  Triggers / Add Requirement); `tip` swaps in the picker's own hover line. */
@@ -173,6 +165,8 @@ export function IndustryPill({
   onApply: (v: string[]) => void;
   tip?: string;
 }) {
+  const inds = useLiveIndustries();
+  const INDUSTRY_OPTIONS = useMemo(() => industryTagOptions(inds).map((o) => o.label), [inds]);
   const summary = summarize(value, INDUSTRY_OPTIONS);
   return (
     <Dropdown

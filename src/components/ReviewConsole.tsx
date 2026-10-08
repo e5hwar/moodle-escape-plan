@@ -1,14 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  isReadOnly,
+  completesOnSubmission,
+  isPendingReview,
   mediaUrl,
+  passScoreOf,
   pastReviewOf,
   pastVersionOf,
+  submitReview,
+  taskRecordOf,
+  useSubmittedReviews,
+  withSubmittedReview,
   type TaskSubmission,
 } from "../data/reviewSubmissions";
 import { CaretDownIcon, ChevronLeftIcon, ChevronRightIcon, DownloadIcon12, EditOffIcon, InfoIcon14, KeyArrowDownIcon, KeyArrowLeftIcon, KeyArrowRightIcon, KeyArrowUpIcon, KeyEnterIcon, RowExternalLinkIcon } from "./icons";
 import { WizardKeyHint } from "./wizardKeys";
-import { tasks } from "../data/tasks";
+import { useLiveTasks } from "../data/tasks";
 import { UserDetailsHover } from "./UserDetailsHover";
 import { ShortcutHint } from "./ShortcutHint";
 import { PrmModal } from "./PrmModal";
@@ -28,12 +34,42 @@ import { DESCRIPTION_MAX, isOver, limitClass, limitMessage } from "../data/field
    primary/secondary buttons, wizard footer and inline links. See the block
    comment above `.rvc-root` in index.css for the full mapping. ── */
 
-const PASS_MIN = 5; // app-wide Hands-On semantic: 1–4 rejected, 5–10 pass
-
 type Draft = { score: number | null; feedback: string };
-type Reviewed = { score: number; feedback: string };
 
 const EMPTY_DRAFT: Draft = { score: null, feedback: "" };
+
+/** The Reviewer's Checklist as the author wrote it in the wizard's one
+ *  rich-text field: bulleted lines ("•", "-", "*") run together into a list,
+ *  any other line is a paragraph, and a blank line just separates blocks. */
+function ChecklistBody({ text }: { text: string }) {
+  const blocks: ({ list: string[] } | { para: string })[] = [];
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    const bullet = line.match(/^[•\-*]\s*(.*)$/);
+    const last = blocks[blocks.length - 1];
+    if (bullet) {
+      if (last && "list" in last) last.list.push(bullet[1]);
+      else blocks.push({ list: [bullet[1]] });
+    } else blocks.push({ para: line });
+  }
+  return (
+    <div className="rvc-checklist">
+      {blocks.map((b, i) =>
+        "list" in b ? (
+          <ul key={i}>
+            {b.list.map((item, j) => <li key={j}>{item}</li>)}
+          </ul>
+        ) : (
+          <p key={i}>{b.para}</p>
+        ),
+      )}
+    </div>
+  );
+}
+
+/** "1-4", or just "1" when the band is a single score. */
+const scoreRange = (lo: number, hi: number) => (lo === hi ? `${lo}` : `${lo}-${hi}`);
 
 /** "Sep 12, 2026" — the attempts dropdown's SUBMITTED column (Figma 1169:2137). */
 function shortDate(iso: string): string {
@@ -120,10 +156,10 @@ export function ReviewConsole({
   /** The table's filtered + sorted submissions — becomes the review queue. */
   queue: TaskSubmission[];
   initialId: string;
-  /** Back to the table. Reviewed ids + results are handed up so the table can
-   * drop them from the pending list; `toast` is the verdict toast when the exit
-   * IS the last submit, for the table to show on arrival. */
-  onExit: (reviewed: Record<string, Reviewed>, toast?: string) => void;
+  /** Back to the table. Verdicts are already in the shared review store;
+   * `toast` is the verdict toast when the exit IS the last submit, for the
+   * table to show on arrival. */
+  onExit: (toast?: string) => void;
   /** Renamed from the submitter's user-details card — the queue owns the list,
    * so the new name comes back down through `queue`. */
   onRenameUser?: (userId: string, name: string) => void;
@@ -145,14 +181,21 @@ export function ReviewConsole({
   const attWrapRef = useRef<HTMLDivElement>(null);
   const [mediaIndex, setMediaIndex] = useState(0);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
-  const [submitted, setSubmitted] = useState<Record<string, Reviewed>>({});
+  /* Verdicts live in the shared store, so a submission reviewed here (or
+     earlier this session) reads as decided everywhere. */
+  const reviews = useSubmittedReviews();
+  const liveTasks = useLiveTasks();
 
   /* Filters can be changed from the queue popover, which may drop the
      submission being reviewed out of the queue — keep showing it rather than
      yanking the screen out from under the reviewer. */
   const lastSub = useRef<TaskSubmission>(queue.find((s) => s.id === initialId) ?? queue[0]);
-  const sub = queue.find((s) => s.id === currentId) ?? lastSub.current;
+  const sub = withSubmittedReview(queue.find((s) => s.id === currentId) ?? lastSub.current, reviews);
   lastSub.current = sub;
+  /* The open Task's Passing Grade (set in the Hands-On wizard): below it is
+     Rejected, at or above it Passes — the score cells, legend, confirm, toast
+     and stored status all read this one number. */
+  const passMin = passScoreOf(sub);
 
   /* ── attempt being viewed ── */
   const attemptCount = sub.versions.length;
@@ -207,21 +250,27 @@ export function ReviewConsole({
    * without leaving a grade behind. */
   const toggleScore = (n: number) => setDraft({ score: draft.score === n ? null : n });
 
-  /* The task behind this submission, so its name can open the task editor. */
-  const taskRecord = tasks.find((t) => t.name === sub.taskName);
+  /* The task behind this submission, live — its name opens the task editor,
+     and its checklist is the one the wizard last saved. */
+  const taskRecord = taskRecordOf(sub, liveTasks);
 
   const ownedByCompany = sub.createdBy !== "SkillCat";
-  const isDone = !!submitted[sub.id];
-  const reviewable = !isPast && !ownedByCompany && !isDone;
+  /* A "Submission Made" Task completed when the learner submitted — it is
+     listed for reference, with nothing to grade. */
+  const noGrading = completesOnSubmission(sub);
+  /* Completed or Rejected — already graded, whether seeded or submitted this
+     session — opens read-only, exactly like a past attempt. */
+  const isDecided = sub.status !== "Review Pending";
+  const reviewable = !isPast && !ownedByCompany && !noGrading && !isDecided;
 
-  /* Which rail to show. A graded attempt (an older version, or one just
-     submitted) and company-created tasks are all read-only, per Figma
-     298:1049 / 298:1924 / 298:1973. */
-  const gradedReview = isPast ? pastReview : isDone ? submitted[sub.id] : null;
+  /* Which rail to show. A graded attempt (an older version, or a current one
+     that is Completed / Rejected) and company-created tasks are all
+     read-only, per Figma 298:1049 / 298:1924 / 298:1973. */
+  const gradedReview = isPast ? pastReview : sub.review ?? null;
   const railReadOnly = !reviewable;
   const shownScore = railReadOnly ? gradedReview?.score ?? null : draft.score;
   const shownFeedback = railReadOnly ? gradedReview?.feedback ?? "" : draft.feedback;
-  const shownPassed = shownScore != null && shownScore >= PASS_MIN;
+  const shownPassed = shownScore != null && shownScore >= passMin;
 
   function showToast(msg: string) {
     setToast((t) => ({ msg, n: (t?.n ?? 0) + 1 }));
@@ -233,19 +282,25 @@ export function ReviewConsole({
     setMediaIndex(0);
   }
 
-  /* The queue only moves forward (user, 2026-10-07): "next" is the first
-     submission AFTER this one that still waits on a review here — SkillCat's
-     own Task, status Review Pending, not reviewed this session. It never wraps,
-     so a skipped submission is behind you and leaves the count. */
-  const awaitsReview = (x: TaskSubmission, map: Record<string, Reviewed>) =>
-    !isReadOnly(x) && x.status === "Review Pending" && !map[x.id];
-  function pendingAfter(map: Record<string, Reviewed>): TaskSubmission[] {
-    const i = queue.findIndex((x) => x.id === sub.id);
-    return queue.slice(i + 1).filter((x) => awaitsReview(x, map));
-  }
-  function nextUnsubmitted(map: Record<string, Reviewed>): string | null {
-    return pendingAfter(map)[0]?.id ?? null;
-  }
+  /* NEXT vs PENDING — the console's general rule (user, 2026-10-08):
+     - Next (Skip, and Submit & Next) steps to the very next row of the queue,
+       whatever its status — read-only, already graded, no grading needed. On
+       the queue's last row Skip becomes Back (to the table); it is never
+       hidden or disabled.
+     - The "· n Pending" count only counts the rows after this one that still
+       wait on a review — the same `isPendingReview` test the sidebar badge and
+       run cards use, read through the shared review store. So "Skip to Next ·
+       0 Pending" stays enabled while there are rows left to look at.
+     The queue only moves forward and never wraps (user, 2026-10-07). If the
+     open submission has dropped out of the queue (a verdict moved it out of a
+     Review Pending filter), the row that slid into its place is next. */
+  const lastIdx = useRef(0);
+  const queueIdx = queue.findIndex((x) => x.id === sub.id);
+  if (queueIdx >= 0) lastIdx.current = queueIdx;
+  const afterIdx = queueIdx >= 0 ? queueIdx + 1 : lastIdx.current;
+  const nextId = queue[afterIdx]?.id ?? null;
+  const pendingAfter = () =>
+    queue.slice(afterIdx).filter((x) => isPendingReview(withSubmittedReview(x, reviews)));
 
   /* Clamped, not wrapping — the stage's nav buttons hide at each end. */
   function stepMedia(d: number) {
@@ -266,23 +321,26 @@ export function ReviewConsole({
   function commitSubmit() {
     setConfirmSubmit(false);
     if (!reviewable || draft.score == null) return;
-    const next = { ...submitted, [sub.id]: { score: draft.score, feedback: draft.feedback } };
-    setSubmitted(next);
-    // The toast names the verdict that was just sent — the same 5+ split the
-    // score scale and the confirm use.
-    const verdict = draft.score >= PASS_MIN ? "Submission Passed" : "Submission Rejected";
-    const nid = nextUnsubmitted(next);
-    // Nothing pending after this one: the last Submit goes back to the table
-    // (user, 2026-10-07), which shows the toast.
-    if (!nid) { onExit(next, verdict); return; }
+    // Read the next row off the queue as it stands — once the verdict is in
+    // the store, this submission leaves a Review Pending queue.
+    const nid = nextId;
+    submitReview(sub.id, draft.score, draft.feedback);
+    // The toast names the verdict that was just sent — the same Passing Grade
+    // split the score scale and the confirm use.
+    const verdict = draft.score >= passMin ? "Submission Passed" : "Submission Rejected";
+    // The queue's last row: Submit goes back to the table (user, 2026-10-07),
+    // which shows the toast.
+    if (!nid) { onExit(verdict); return; }
     showToast(verdict);
     goto(nid);
   }
 
-  /* No toast (user, 2026-10-07) — the screen changing is the feedback. */
+  /* No toast (user, 2026-10-07) — the screen changing is the feedback. On the
+     last row there is nothing to skip to, so the same button (and N) goes
+     back to the table. */
   function doSkip() {
-    const nid = nextUnsubmitted(submitted);
-    if (nid) goto(nid);
+    if (nextId) goto(nextId);
+    else onExit();
   }
 
   /* ── keyboard shortcuts (latest-state via ref so the listener binds once) ── */
@@ -350,11 +408,10 @@ export function ReviewConsole({
   }, [attOpen]);
 
   /* ── derived display bits ── */
-  /* "· n Pending" counts what still waits on a review AFTER this one — not the
-     queue's length, and not this submission. Skip hides at 0, and the primary
-     drops "& Next" (nothing to go to). */
-  const pendingCount = pendingAfter(submitted).length;
-  const submitLabel = pendingCount > 0 ? "Submit & Next" : "Submit";
+  /* See NEXT vs PENDING above: the count is pending rows after this one; the
+     buttons follow whether there is any row after it at all. */
+  const pendingCount = pendingAfter().length;
+  const submitLabel = nextId ? "Submit & Next" : "Submit";
   // The CTA dims until a score is picked and the feedback fits its limit; its
   // tip names whatever is still in the way.
   const feedbackOver = isOver(DESCRIPTION_MAX, draft.feedback);
@@ -458,7 +515,7 @@ export function ReviewConsole({
                     </div>
                     <div className="rvc-alist">
                       {attemptRows.map((r) => {
-                        const passed = r.score != null && r.score >= PASS_MIN;
+                        const passed = r.score != null && r.score >= passMin;
                         return (
                           <button
                             key={r.v}
@@ -618,7 +675,9 @@ export function ReviewConsole({
                   icon={<EditOffIcon />}
                   title="Read-Only"
                   body={
-                    ownedByCompany
+                    noGrading
+                      ? "No grading needed. This Task is completed as soon as the learner makes a submission"
+                      : ownedByCompany
                       ? `Grading done by ${sub.createdBy} for company-created Hands-On Tasks`
                       : "Grades and feedback once submitted, cannot be edited"
                   }
@@ -644,23 +703,9 @@ export function ReviewConsole({
                       </span>
                     </span>
                   </div>
-                  <div className="rvc-checklist">
-                    <ul>
-                      {sub.criteria.map((c) => (
-                        <li key={c.id}>{c.label}</li>
-                      ))}
-                    </ul>
-                    {sub.failCriteria.length > 0 && (
-                      <>
-                        <p className="rvc-checklist-fail">Fail if:</p>
-                        <ul>
-                          {sub.failCriteria.map((c) => (
-                            <li key={c.id}>{c.label}</li>
-                          ))}
-                        </ul>
-                      </>
-                    )}
-                  </div>
+                  {/* The Task's own field once its wizard has saved one;
+                      seed Tasks fall back to the submission's copy. */}
+                  <ChecklistBody text={taskRecord?.handsOnSetup?.checklistEn || sub.checklist} />
                 </div>
               )}
               {/* The rail's ONE rule, 28px clear of both neighbours — Score and
@@ -683,7 +728,7 @@ export function ReviewConsole({
                         <button
                           key={n}
                           className={`rvc-score ${
-                            shownScore === n ? (n >= PASS_MIN ? "is-pass" : "is-fail") : ""
+                            shownScore === n ? (n >= passMin ? "is-pass" : "is-fail") : ""
                           }`}
                           aria-pressed={shownScore === n}
                           disabled={railReadOnly}
@@ -694,15 +739,18 @@ export function ReviewConsole({
                       ))}
                     </div>
                     <div className={`rvc-scale-legend${railReadOnly ? " is-locked" : ""}`}>
-                      <span
-                        className={`rvc-legend-fail ${
-                          shownScore != null && !shownPassed ? "is-on" : ""
-                        }`}
-                      >
-                        1-{PASS_MIN - 1}: Rejected
-                      </span>
+                      {/* A Passing Grade of 1 leaves nothing to reject. */}
+                      {passMin > 1 && (
+                        <span
+                          className={`rvc-legend-fail ${
+                            shownScore != null && !shownPassed ? "is-on" : ""
+                          }`}
+                        >
+                          {scoreRange(1, passMin - 1)}: Rejected
+                        </span>
+                      )}
                       <span className={`rvc-legend-pass ${shownPassed ? "is-on" : ""}`}>
-                        {PASS_MIN}-10: Pass
+                        {scoreRange(passMin, 10)}: Pass
                       </span>
                     </div>
                   </div>
@@ -745,23 +793,25 @@ export function ReviewConsole({
               the left, then Skip and the primary CTA 16px apart. The queue
               popover (and its Q key) is gone — user, 2026-10-07. ── */}
           <div className="wizard-footer rvc-footer">
-            <button className="wizard-cancel" onClick={() => onExit(submitted)}>
+            <button className="wizard-cancel" onClick={() => onExit()}>
               Back
             </button>
             <div className="rvc-foot-actions">
               {/* Skip prints its own N keycap now (756:3836), so it no longer
-                  needs the hover hint that used to name the shortcut. With
-                  nothing pending after this one it stays, disabled (user,
-                  2026-10-07) — on a company Task's read-only screen it is the
-                  footer's only button. */}
-              <button
-                className="btn-save-draft rvc-skip"
-                onClick={doSkip}
-                disabled={pendingCount === 0}
-              >
+                  needs the hover hint that used to name the shortcut. It walks
+                  every row, even at "0 Pending" (NEXT vs PENDING, above), and
+                  reads "Back" on the queue's last one. On a read-only screen
+                  it is the footer's only button. */}
+              <button className="btn-save-draft rvc-skip" onClick={doSkip}>
                 <span className="rvc-skip-label">
-                  Skip to Next{" "}
-                  <span className="rvc-skip-count">· {pendingCount} Pending</span>
+                  {nextId ? (
+                    <>
+                      Skip to Next{" "}
+                      <span className="rvc-skip-count">· {pendingCount} Pending</span>
+                    </>
+                  ) : (
+                    "Back"
+                  )}
                 </span>
                 <span className="cta-kbd">N</span>
               </button>
@@ -803,9 +853,9 @@ export function ReviewConsole({
           <p className="prm-content">
             {sub.userName}&rsquo;s submission will be marked{" "}
             <strong>
-              {draft.score >= PASS_MIN ? "Passed" : "Rejected"} · {draft.score}/10
+              {draft.score >= passMin ? "Passed" : "Rejected"} · {draft.score}/10
             </strong>
-            {draft.score >= PASS_MIN
+            {draft.score >= passMin
               ? "."
               : ` and returned to ${sub.userName.split(" ")[0]} to resubmit.`}{" "}
             {draft.feedback.trim()

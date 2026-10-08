@@ -1,16 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { TimeField } from "./TimeField";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { TimeField, TIME_UNIT_BY_LABEL, TIME_UNIT_LABEL, TIME_UNIT_OPTIONS, type TimeUnit } from "./TimeField";
 import { createPortal } from "react-dom";
 import type { TaskTypeKey } from "./Footer";
-import { tasks as ALL_TASKS, type Task, type TaskType } from "../data/tasks";
-import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
+import { HANDS_ON_MAX_SCORE, handsOnGrading, inPaidCertification, quizGradingOf, taskCertifications, useLiveTasks, type HandsOnSetup, type Task, type TaskType } from "../data/tasks";
+import { useB2BConfig } from "../data/productConfig";
 import { PriceIdFields, PriceIdMatrix, PRICE_CHANNELS, newPriceIds, samplePriceId, type PriceIds } from "./PriceIdFields";
-import { AUDIENCE_B2B_ONLY, PARTNERSHIP_TAGS, TRADE_TAGS, pickTags } from "../data/filters";
+import { AUDIENCE_B2B_ONLY, PARTNERSHIP_TAGS, TRADE_TAGS, audienceOf, pickTags } from "../data/filters";
 import { ConfirmCard, type ConfirmField } from "./ConfirmCard";
 import { UploadTrayIcon, DocumentIcon, SmallXIcon, MoveIcon, InfoTipIcon, InfoIcon14, PlusThinIcon, TreeAddIcon, RowCloseIcon } from "./icons";
 import { FileNameLink } from "./FileNameLink";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
-import { useCreateShortcut } from "../hooks/useCreateShortcut";
+import { modalOpen, useCreateShortcut } from "../hooks/useCreateShortcut";
 import { RichTextField } from "./RichTextField";
 import { CharCount, LimitError } from "./CharCount";
 import { Stepper } from "./Stepper";
@@ -21,7 +21,7 @@ import { leave, useMovedPast, useTouchedKeys } from "./fieldFlags";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { SelectField } from "./SelectField";
 import { MultiSelect } from "./NewCompanyWizard";
-import { questions as QUESTION_BANK, type Question } from "../data/questionBank";
+import { questions as QUESTION_BANK, supportsGrading, type Question } from "../data/questionBank";
 import { SelectQuestionsModal } from "./SelectQuestionsModal";
 import { NewQuestionWizard, type Crumb } from "./NewQuestionWizard";
 import { PrmModal } from "./PrmModal";
@@ -51,6 +51,9 @@ export function taskTypeKey(type: TaskType): TaskTypeKey {
     case "Quiz": return "quiz";
     case "Hands-On Task": return "hands-on";
     case "Resource": return "file";
+    // Never opened in the wizard (ID Upload Tasks aren't editable); the row
+    // panel reads it as the upload it is.
+    case "ID Upload": return "hands-on";
   }
 }
 
@@ -60,21 +63,10 @@ type CompletionMode = "none" | "on-view" | "manual" | "xapi";
 type Visibility = "visible" | "hidden";
 type ContentTagType = "trade" | "partnership" | "userType";
 type ContentTag = { id: string; type: ContentTagType; value: string };
-type TimeUnit = "minutes" | "hours" | "days" | "weeks";
 
 /* The unit picker is the design system's single-select (Figma 101:281 trigger +
    591:1382 menu) rather than a native <select>, so it reads and behaves like
    every other dropdown on the form. The stored value stays the lowercase key. */
-const TIME_UNIT_LABEL: Record<TimeUnit, string> = {
-  minutes: "Minutes",
-  hours: "Hours",
-  days: "Days",
-  weeks: "Weeks",
-};
-const TIME_UNIT_OPTIONS = Object.values(TIME_UNIT_LABEL);
-const TIME_UNIT_BY_LABEL = Object.fromEntries(
-  (Object.keys(TIME_UNIT_LABEL) as TimeUnit[]).map((u) => [TIME_UNIT_LABEL[u], u]),
-) as Record<string, TimeUnit>;
 type OpenIn = "external" | "in-app";
 type FileOpenIn = "in-app-viewer" | "external-app";
 type ResourceType = "file" | "link";
@@ -119,11 +111,15 @@ type RandomPool = {
   seq?: number;
 };
 
+/** The one "graded" rule, the Question Bank's own (SelectQuestionsModal's
+ *  `isGraded`): grading switched on AND a type that can be graded. */
+function isGradedQuestion(q: Question): boolean {
+  return q.gradingEnabled && supportsGrading(q.type);
+}
+
 // Only Active, graded Bank questions are eligible for Quizzes — both as
 // hand-picked statics and as random-pool members.
-const GRADED_BANK = QUESTION_BANK.filter(
-  (q) => q.status === "Active" && q.gradingEnabled,
-);
+const GRADED_BANK = QUESTION_BANK.filter((q) => q.status === "Active" && isGradedQuestion(q));
 
 type QuizSection = {
   id: string;
@@ -190,7 +186,6 @@ type WizardData = {
    * the Free Trial. Distinct from the Task's `finalExam` flag. `null` until the
    * admin answers — a mandatory field with no default. */
   requiresSubscription: boolean | null;
-  tags: string[];
 
   // xAPI
   packageEn: UploadedFile[];
@@ -309,7 +304,6 @@ const INITIAL_DATA: WizardData = {
   /* No default for any Task type: a mandatory answer, so free-trial access is
      always a decision rather than whatever the control happened to start on. */
   requiresSubscription: null,
-  tags: [],
 
   packageEn: [],
   packageEs: [],
@@ -343,7 +337,9 @@ const INITIAL_DATA: WizardData = {
   hoMediaTypes: { images: true, videos: true, audio: false },
   hoCompletion: "reviewer_grade",
   hoPassingGrade: "5",
-  discoverable: true,
+  /* Discoverable is a Hands-On setting; every other type is never
+     discoverable, and a Hands-On Task starts as not discoverable too. */
+  discoverable: false,
   contentTags: [],
 
   // A new Quiz starts empty — no prefilled Sections, questions, or pools;
@@ -448,6 +444,12 @@ function stepsForType(type: TaskTypeKey): StepDef[] {
 
 /* ─────────────────────  Wizard shell  ───────────────────── */
 
+/* The Task being edited (null while creating), for the fields whose rules
+   depend on the record rather than the form: Visibility (a Task in an Access
+   Restriction chain can't be hidden), Discoverable (never inside a paid
+   Certification) and the auto-unlock trigger picker (not the Quiz itself). */
+const EditingTaskContext = createContext<Task | null>(null);
+
 type Props = {
   taskType: TaskTypeKey;
   onClose: () => void;
@@ -461,7 +463,14 @@ type Props = {
    * its Time to Complete, "~45 minutes" or undefined when blank) instead of
    * `onClose`, and shows `primaryLabel`. */
   primaryLabel?: string;
-  onPrimary?: (taskName: string, requiresSubscription: boolean, timeToComplete: string | undefined) => void;
+  onPrimary?: (
+    taskName: string,
+    requiresSubscription: boolean,
+    timeToComplete: string | undefined,
+    /** The finished Task record, as `onCreate` would get it — the builder
+     *  files it in the Task library with the Certification. */
+    task: Omit<Task, "id">,
+  ) => void;
   /** Publishing hook for a brand-new Task. Called with the finished Task (the
    * caller assigns the id, the way `addCompany` does) once every mandatory
    * field on every step is filled. Without it, publishing just closes — the
@@ -488,7 +497,7 @@ type QuestionHost = {
 /** Pull the leading number out of a "~45 minutes" / "2 hours" style string. */
 function parseTimeToComplete(value: string | undefined): { timeValue: string; timeUnit: TimeUnit } | null {
   if (!value) return null;
-  const m = value.match(/(\d+)\s*(minute|hour|day|week)/i);
+  const m = value.match(/(\d+)\s*(minute|hour|day|week|month)/i);
   if (!m) return null;
   const unit = (m[2].toLowerCase() + "s") as TimeUnit;
   return { timeValue: m[1], timeUnit: unit };
@@ -504,6 +513,11 @@ function samplePriceIds(task: Task): PriceIds {
     stripeB2b: samplePriceId(`${task.id}-b2b`),
   };
 }
+
+/** Every tag the Audience fields own — the rest of a record's tags pass
+ *  through. Read at call time: the Trade / Partnership lists follow Product
+ *  Config's saved values. */
+const audienceValues = () => new Set([AUDIENCE_B2B_ONLY, ...TRADE_TAGS, ...PARTNERSHIP_TAGS]);
 
 /** The record's tags as the Audience fields: "B2B Companies Only" is the User
  *  Type value, and the rest split into Trades and Partnerships. */
@@ -521,6 +535,52 @@ function recordContentTags(tags: string[] | undefined): ContentTag[] {
   ];
 }
 
+/** The Audience fields back as record tags — the inverse of
+ *  {@link recordContentTags}. `other` is the record's non-audience tags
+ *  ("Field", "Brazing"), which the wizard doesn't edit and keeps as they are. */
+function contentTagsToTags(contentTags: ContentTag[], other: string[] = []): string[] {
+  const of = (type: ContentTagType) => contentTags.filter((t) => t.type === type).map((t) => t.value);
+  const owned = audienceValues();
+  return [
+    ...(of("userType").length ? [AUDIENCE_B2B_ONLY] : []),
+    ...of("trade"),
+    ...of("partnership"),
+    ...other.filter((t) => !owned.has(t)),
+  ];
+}
+
+/** A Hands-On Task's saved setup and scoring as wizard fields. Seed Tasks have
+ *  no setup and keep the defaults; their scoring is always on the record. */
+function handsOnFields(task: Task): Partial<WizardData> {
+  const g = handsOnGrading(task);
+  const h = task.handsOnSetup;
+  return {
+    ...(g?.graded
+      ? { hoCompletion: "reviewer_grade" as const, hoPassingGrade: String(g.passScore) }
+      : g
+        ? { hoCompletion: "submission_made" as const }
+        : {}),
+    ...(h
+      ? {
+          hoToolsEn: h.toolsEn,
+          hoToolsEs: h.toolsEs,
+          hoInstrEn: h.instructionsEn,
+          hoInstrEs: h.instructionsEs,
+          hoReviewerChecklistEn: h.checklistEn,
+          hoReviewerChecklistEs: h.checklistEs,
+          hoFilesEn: h.filesEn,
+          hoFilesEs: h.filesEs,
+          hoProjectDescLimit: String(h.supportingTextLimit),
+          hoMediaMax: String(h.mediaMax),
+          hoMediaTypes: { ...h.mediaTypes },
+          ...(h.maxAttempts === null
+            ? { maxAttemptsMode: "unlimited" as const }
+            : { maxAttemptsMode: "limited" as const, maxAttempts: String(h.maxAttempts) }),
+        }
+      : {}),
+  };
+}
+
 /** Build the wizard's starting state, prefilling from an existing Task in edit mode. */
 function buildInitialData(taskType: TaskTypeKey, editingTask?: Task): WizardData {
   let base: WizardData;
@@ -535,9 +595,9 @@ function buildInitialData(taskType: TaskTypeKey, editingTask?: Task): WizardData
   // Quizzes default to unlimited attempts.
   else if (taskType === "quiz")
     base = { ...INITIAL_DATA, maxAttemptsMode: "unlimited" };
-  // Hands-On Tasks default to unlimited attempts and are not discoverable.
+  // Hands-On Tasks default to unlimited attempts.
   else if (taskType === "hands-on")
-    base = { ...INITIAL_DATA, maxAttemptsMode: "unlimited", discoverable: false };
+    base = { ...INITIAL_DATA, maxAttemptsMode: "unlimited" };
   else base = INITIAL_DATA;
 
   if (!editingTask) return base;
@@ -545,47 +605,152 @@ function buildInitialData(taskType: TaskTypeKey, editingTask?: Task): WizardData
   const time = parseTimeToComplete(editingTask.timeToComplete);
   return {
     ...base,
+    // Seed Tasks carry only the typed record; a Task this wizard saved also
+    // carries everything it authored, which wins.
+    ...(taskType === "quiz" ? seedQuizFields(editingTask) : {}),
+    ...(taskType === "xapi" && editingTask.scoreCapture !== undefined
+      ? { scoreCapture: editingTask.scoreCapture }
+      : {}),
+    ...(editingTask.wizardConfig as Partial<WizardData> | undefined),
     nameEn: editingTask.name,
+    nameEs: editingTask.nameEs ?? base.nameEs,
     descEn: editingTask.description ?? base.descEn,
-    tags: editingTask.tags ?? base.tags,
+    descEs: editingTask.descriptionEs ?? base.descEs,
     visibility: editingTask.hidden ? "hidden" : "visible",
     requiresSubscription: editingTask.requiresSubscription ?? null,
-    discoverable: editingTask.discoverable ?? base.discoverable,
-    contentTags: recordContentTags(editingTask.tags),
+    discoverable: taskType === "hands-on" && !!editingTask.discoverable,
+    contentTags: taskType === "hands-on" ? recordContentTags(editingTask.tags) : [],
     ...(time ? { timeValue: time.timeValue, timeUnit: time.timeUnit } : {}),
-    // The list record only flags that a paywall exists; its store IDs aren't
-    // stored, so a paid Quiz opens on plausible sample IDs — one price for
-    // every attempt — the way a paid Certification does.
-    ...(taskType === "quiz" && editingTask.paywall
-      ? { paywallOn: true, commonPriceIds: samplePriceIds(editingTask) }
+    ...(taskType === "hands-on" ? handsOnFields(editingTask) : {}),
+  };
+}
+
+/** A seed Quiz's record as wizard fields: its Sections (each drawing from its
+ *  own slice of the Bank, so no question repeats across Sections), grading
+ *  model and pass mark, attempt limit, and paywall shape. The record keeps no
+ *  store IDs, so a paid Quiz opens on plausible sample ones — per attempt
+ *  when that is how it is priced. */
+function seedQuizFields(t: Task): Partial<WizardData> {
+  const grading = quizGradingOf(t);
+  const SLICE = 40;
+  const ids = samplePriceIds(t);
+  const numbered = t.paywallAttempts ?? 1;
+  return {
+    gradingModel: t.quizSections?.length ? grading.model : "quiz_level",
+    quizPassingPct: String(grading.passPct),
+    proctoring: !!t.proctoring,
+    ...(t.maxAttempts !== undefined
+      ? t.maxAttempts === null
+        ? { maxAttemptsMode: "unlimited" as const }
+        : { maxAttemptsMode: "limited" as const, maxAttempts: String(t.maxAttempts) }
       : {}),
-    // A Quiz Task carrying section config opens in the sectioned structure with
-    // section-level grading; each Section draws its questions from a Bank pool.
-    ...(editingTask.quizSections
+    ...(t.paywall
+      ? t.paywallMode === "per_attempt"
+        ? {
+            paywallOn: true,
+            paywallMode: "per_attempt" as const,
+            attemptPrices: Array.from({ length: numbered }, (_, i) => ({
+              id: `ap${i + 1}`,
+              attempt: String(i + 1),
+              priceIds: withSuffix(ids, `a${i + 1}`),
+            })),
+            subsequentPriceIds: withSuffix(ids, "next"),
+          }
+        : { paywallOn: true, commonPriceIds: ids }
+      : {}),
+    ...(t.quizSections?.length
       ? {
           structure: "sectioned" as const,
-          gradingModel: "section_level" as const,
           quizCompletion: "passing_grade" as const,
-          sections: editingTask.quizSections.map((s, i) => ({
-            id: `sec${i + 1}`,
-            name: s.name,
-            nameEs: s.nameEs,
-            passingPct: String(s.passingPct),
-            requiredToPass: s.requiredToPass,
-            staticQuestions: [],
-            randomPools: [
-              {
-                id: `pool${i + 1}`,
-                name: `${s.name} question bank`,
-                questionIds: GRADED_BANK.map((q) => q.id),
-                draw: String(Math.min(s.questionCount, GRADED_BANK.length)),
-                weight: "1",
-              },
-            ],
-          })),
+          sections: t.quizSections.map((s, i) => {
+            const slice = GRADED_BANK.slice(i * SLICE, (i + 1) * SLICE).map((q) => q.id);
+            return {
+              id: `sec${i + 1}`,
+              name: s.name,
+              nameEs: s.nameEs,
+              passingPct: String(s.passingPct),
+              requiredToPass: s.requiredToPass,
+              staticQuestions: [],
+              randomPools: [
+                {
+                  id: `pool${i + 1}`,
+                  name: `${s.name} question bank`,
+                  questionIds: slice,
+                  draw: String(Math.min(s.questionCount, slice.length)),
+                  weight: "1",
+                },
+              ],
+            };
+          }),
         }
       : {}),
   };
+}
+
+/** One store-ID set per price column, told apart by a suffix. */
+function withSuffix(ids: PriceIds, suffix: string): PriceIds {
+  return {
+    appleB2c: `${ids.appleB2c}.${suffix}`,
+    googleB2c: `${ids.googleB2c}_${suffix}`,
+    stripeB2c: `${ids.stripeB2c}_${suffix}`,
+    stripeB2b: `${ids.stripeB2b}_${suffix}`,
+  };
+}
+
+/* The wizard fields every Task type shares — saved on the record's own
+   fields. Everything else a type authors is saved whole in `wizardConfig`. */
+const COMMON_KEYS = new Set<keyof WizardData>([
+  "nameEn",
+  "nameEs",
+  "descEn",
+  "descEs",
+  "timeValue",
+  "timeUnit",
+  "visibility",
+  "requiresSubscription",
+  "discoverable",
+  "contentTags",
+]);
+
+/* Which wizard fields belong to which type — what `wizardConfig` keeps. */
+const TYPE_KEY_PREFIX: Record<TaskTypeKey, (k: string) => boolean> = {
+  xapi: (k) =>
+    ["packageEn", "packageEs", "completion", "scoreCapture", "scoreCaptureMode", "scoreDisplayMode", "allowRotation", "lockedOrientation"].includes(k),
+  file: (k) =>
+    ["url", "urlEs", "openIn", "allowRotation", "lockedOrientation", "fileEn", "fileEs", "fileOpenIn", "resourceType", "completion"].includes(k),
+  "hands-on": (k) => k.startsWith("ho") || k === "maxAttemptsMode" || k === "maxAttempts",
+  quiz: (k) =>
+    !k.startsWith("ho") &&
+    ![
+      "packageEn", "packageEs", "completion", "scoreCapture", "scoreCaptureMode", "scoreDisplayMode",
+      "url", "urlEs", "openIn", "allowRotation", "lockedOrientation", "fileEn", "fileEs", "fileOpenIn", "resourceType",
+    ].includes(k),
+};
+
+function typeConfig(d: WizardData, taskType: TaskTypeKey): Record<string, unknown> {
+  const keep = TYPE_KEY_PREFIX[taskType];
+  return Object.fromEntries(
+    Object.entries(d).filter(([k]) => !COMMON_KEYS.has(k as keyof WizardData) && keep(k)),
+  );
+}
+
+/** Questions one attempt draws: every static plus each pool's draw. */
+function questionCountOf(statics: StaticQuestion[], pools: RandomPool[]): number {
+  return statics.length + pools.reduce((n, p) => n + (parseInt(p.draw, 10) || 0), 0);
+}
+
+/** The first thing wrong with a question list, if anything: a static
+ *  question worth no points, or a random pool drawing more than it holds,
+ *  drawing nothing, or worth no points. */
+function poolProblem(pools: RandomPool[], statics: StaticQuestion[] = []): string | null {
+  if (statics.some((q) => !(parseFloat(q.weight) > 0))) return "Each question must be worth more than 0 points.";
+  for (const p of pools) {
+    const draw = parseInt(p.draw, 10) || 0;
+    if (draw > p.questionIds.length) return `Draw can't exceed the pool size (${p.questionIds.length}).`;
+    if (draw < 1) return "Each random pool must draw at least 1 question.";
+    if (!(parseFloat(p.weight) > 0)) return "Each random pool must be worth more than 0 points.";
+  }
+  return null;
 }
 
 export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, onPrimary, onCreate, onSave, onQuestionCreated }: Props) {
@@ -680,6 +845,12 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
       if (isOver(DESCRIPTION_MAX, d.hoReviewerChecklistEn, d.hoReviewerChecklistEs)) {
         gaps.push({ step: ref, key: K.hoChecklistLimit });
       }
+      /* Media allowed but no type to send it in — the inline note on the
+         Submission Fields step says the same. At 0 the types are moot. */
+      const t = d.hoMediaTypes;
+      if (d.hoMediaMax !== "0" && !t.images && !t.videos && !t.audio) {
+        gaps.push({ step: stepIndex("submission"), key: K.mediaTypes });
+      }
     }
     if (isQuiz && d.nateExam && (!d.nateIdEn.trim() || !d.nateIdEs.trim())) {
       gaps.push({ step: stepIndex("payments"), key: K.nateId });
@@ -730,6 +901,33 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
        "Yes: Timed Attempts" is picked, and then it has to say how long. */
     if (isQuiz && d.timeLimitOn && !d.timeLimitMinutes.trim()) {
       gaps.push({ step: stepIndex("integrity"), key: K.timeLimit });
+    }
+    /* Questions worth no points, and random pools that can't be drawn: more
+       than they hold, nothing at all, or worth no points. */
+    if (isQuiz) {
+      const groups =
+        d.structure === "sectioned"
+          ? d.sections.map((sec) => [sec.randomPools, sec.staticQuestions] as const)
+          : [[d.blockPools, d.blockStatic] as const];
+      if (groups.some(([po, st]) => poolProblem(po, st))) gaps.push({ step: stepIndex("questions"), key: K.pools });
+    }
+    /* Variable cooldowns: the uniform value is the fallback for every pair
+       left unset, so it is asked for too; each pair needs its minutes, and no
+       pair can sit past the last attempt. */
+    if (isQuiz && d.cooldownMode === "variable") {
+      const max = d.maxAttemptsMode === "limited" ? parseInt(d.maxAttempts, 10) || 0 : Infinity;
+      if (!d.cooldownMinutes.trim()) gaps.push({ step: stepIndex("attempts"), key: K.cooldown });
+      if (d.variableCooldowns.some((c) => !c.minutes.trim() || c.fromAttempt + 1 > max)) {
+        gaps.push({ step: stepIndex("attempts"), key: K.cooldownPairs });
+      }
+    }
+    /* Auto-unlock needs something to unlock on, and at least one attempt to
+       hand out. */
+    if (isQuiz && d.autoAttempts && d.maxAttemptsMode !== "unlimited") {
+      if (d.autoAttemptTriggers.length === 0) gaps.push({ step: stepIndex("attempts"), key: K.autoTriggers });
+      if (d.autoAttemptsCount.trim() && (parseInt(d.autoAttemptsCount, 10) || 0) < 1) {
+        gaps.push({ step: stepIndex("attempts"), key: K.autoAttempts });
+      }
     }
     /* A Quiz with nothing to answer isn't a Quiz. Sectioned Quizzes need every
        Section filled — each one is independently graded, so an empty one has no
@@ -826,7 +1024,16 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
   const [trialConfirm, setTrialConfirm] = useState(false);
   const looksLikeFinalExam = /final exam/i.test(data.nameEn);
 
-  function handlePublish(trialConfirmed = false) {
+  /* Saving an edit to a Task that sits in Certifications changes it in every
+     one of them, so it asks first and names them — the same list the row
+     panel's Certifications card shows. A Task in none saves straight away. */
+  const [saveConfirm, setSaveConfirm] = useState(false);
+  const usedInCerts = useMemo(
+    () => (editingTask ? taskCertifications(editingTask) : []),
+    [editingTask],
+  );
+
+  function handlePublish(trialConfirmed = false, saveConfirmed = false) {
     if (canPublish && unchanged) return;
     setAttemptedSubmit(true);
     if (!canPublish) {
@@ -843,6 +1050,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
         data.nameEn,
         data.requiresSubscription === true,
         data.timeValue.trim() ? `~${data.timeValue} ${data.timeUnit}` : undefined,
+        buildTask(data, taskType),
       );
       return;
     }
@@ -851,10 +1059,16 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
       return;
     }
     if (onSave && editingTask) {
-      const built = buildTask(data, taskType);
+      if (!saveConfirmed && usedInCerts.length > 0) {
+        setSaveConfirm(true);
+        return;
+      }
+      setSaveConfirm(false);
+      const built = buildTask(data, taskType, editingTask.tags);
       onSave({
         ...editingTask,
         ...built,
+        discoverable: built.discoverable && !inPaidCertification(editingTask),
         id: editingTask.id,
         usedIn: editingTask.usedIn,
         createdBy: editingTask.createdBy,
@@ -882,12 +1096,12 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
      two buttons have merged into one. */
   useWizardEnterShortcut(
     () => {
-      if (trialConfirm) return;
+      if (trialConfirm || saveConfirm) return;
       if (!isLast) goStep(step + 1);
       else if (canSave) handlePublish();
     },
     () => {
-      if (!trialConfirm) handlePublish();
+      if (!trialConfirm && !saveConfirm) handlePublish();
     },
   );
 
@@ -898,6 +1112,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
   };
 
   return (
+    <EditingTaskContext.Provider value={editingTask ?? null}>
     <div className="wizard">
       <div className="wizard-body">
         <aside className="wizard-nav">
@@ -1081,7 +1296,33 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
           </PrmModal>,
           document.body,
         )}
+
+      {saveConfirm &&
+        editingTask &&
+        createPortal(
+          <PrmModal
+            title={`Save changes to “${editingTask.name}”?`}
+            confirmLabel="Save Changes"
+            cancelLabel="Go Back"
+            onCancel={() => setSaveConfirm(false)}
+            onConfirm={() => handlePublish(false, true)}
+          >
+            <div className="prm-content">
+              <p>
+                Your changes apply everywhere this Task is used. It's currently in the
+                following Certification{usedInCerts.length === 1 ? "" : "s"}:
+              </p>
+              <ul>
+                {usedInCerts.map((c) => (
+                  <li key={c.name}>{c.name}</li>
+                ))}
+              </ul>
+            </div>
+          </PrmModal>,
+          document.body,
+        )}
     </div>
+    </EditingTaskContext.Provider>
   );
 }
 
@@ -1155,6 +1396,10 @@ const REQUIRED_FIELD_KEYS = {
   hoToolsLimit: "hoToolsLimit",
   hoInstrLimit: "hoInstrLimit",
   hoChecklistLimit: "hoChecklistLimit",
+  mediaTypes: "mediaTypes",
+  pools: "pools",
+  cooldownPairs: "cooldownPairs",
+  autoTriggers: "autoTriggers",
 } as const;
 
 /** Reader-facing name of each mandatory field, for the tooltip that says why
@@ -1181,6 +1426,10 @@ const REQUIRED_FIELD_LABELS: Record<string, string> = {
   hoToolsLimit: limitLabel("Tools/Materials Required", DESCRIPTION_MAX),
   hoInstrLimit: limitLabel("Instructions", DESCRIPTION_MAX),
   hoChecklistLimit: limitLabel("Reviewer's Checklist", DESCRIPTION_MAX),
+  mediaTypes: "Media File Types Allowed",
+  pools: "Question Points & Random Pools",
+  cooldownPairs: "Cooldown Before Specific Attempts",
+  autoTriggers: "Unlock After Completing All Of",
 };
 
 /** Stable empty set, so the "nothing missing" memo doesn't churn its consumers. */
@@ -1196,26 +1445,95 @@ const TASK_TYPE_OF: Record<TaskTypeKey, TaskType> = {
 const today = () =>
   new Date().toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
 
-/** Turn the finished wizard state into a Task row. The caller assigns the id. */
-function buildTask(d: WizardData, taskType: TaskTypeKey): Omit<Task, "id"> {
+/** Turn the finished wizard state into a Task row. The caller assigns the id.
+ *  `otherTags` are the edited record's non-audience tags, kept as they were. */
+function buildTask(d: WizardData, taskType: TaskTypeKey, otherTags: string[] = []): Omit<Task, "id"> {
   const hidden = d.visibility === "hidden";
   const stamp = today();
+  const handsOn = taskType === "hands-on";
   return {
     name: d.nameEn.trim(),
+    nameEs: d.nameEs.trim() || undefined,
     type: TASK_TYPE_OF[taskType],
     usedIn: [],
     createdBy: "SkillCat",
-    tags: d.tags,
+    // Audience, Trade and Partnership exist on Hands-On Tasks only.
+    tags: handsOn ? contentTagsToTags(d.contentTags, otherTags) : [],
+    noCompletionTracking:
+      taskType === "quiz"
+        ? d.quizCompletion === "none"
+        : taskType === "xapi" || taskType === "file"
+          ? d.completion === "none"
+          : undefined,
     dateCreated: stamp,
     dateModified: stamp,
     // The Task goes live with whatever the Visibility step was left on.
     hidden,
     visibility: hidden ? "Hidden" : "Visible · published",
-    discoverable: d.discoverable,
+    // Hands-On only, and never inside a paid Certification (the record's own
+    // `usedIn` is checked where it is known — on save).
+    discoverable: handsOn && d.discoverable,
     requiresSubscription: d.requiresSubscription === true,
     ...(d.descEn.trim() ? { description: d.descEn.trim() } : {}),
+    descriptionEs: d.descEs.trim() || undefined,
     ...(d.timeValue.trim() ? { timeToComplete: `~${d.timeValue} ${d.timeUnit}` } : {}),
-    ...(taskType === "quiz" && d.paywallOn ? { paywall: true } : {}),
+    ...(taskType === "quiz" ? quizRecord(d) : {}),
+    ...(taskType === "xapi" ? { scoreCapture: d.scoreCapture } : {}),
+    wizardConfig: typeConfig(d, taskType),
+    ...(handsOn
+      ? {
+          handsOn:
+            d.hoCompletion === "reviewer_grade"
+              ? { graded: true, maxScore: HANDS_ON_MAX_SCORE, passScore: Number(d.hoPassingGrade) || 1 }
+              : { graded: false },
+          handsOnSetup: buildHandsOnSetup(d),
+        }
+      : {}),
+  };
+}
+
+/** The typed parts of a Quiz the rest of the app reads: Sections, grading,
+ *  attempt limit and paywall shape. Fields that don't apply are written as
+ *  undefined so a save clears what the edited record had. */
+function quizRecord(d: WizardData): Partial<Task> {
+  const sectioned = d.structure === "sectioned";
+  return {
+    // Exam Reviews reads it: a proctored Quiz's attempts are reviewed there.
+    proctoring: d.proctoring || undefined,
+    paywall: d.paywallOn || undefined,
+    paywallMode: d.paywallOn ? d.paywallMode : undefined,
+    paywallAttempts: d.paywallOn && d.paywallMode === "per_attempt" ? d.attemptPrices.length : undefined,
+    maxAttempts: d.maxAttemptsMode === "unlimited" ? null : parseInt(d.maxAttempts, 10) || 1,
+    quizGrading: {
+      model: sectioned ? d.gradingModel : "quiz_level",
+      passPct: parseInt(d.quizPassingPct, 10) || 0,
+    },
+    quizSections: sectioned
+      ? d.sections.map((sec) => ({
+          name: sec.name.trim(),
+          nameEs: sec.nameEs.trim(),
+          questionCount: questionCountOf(sec.staticQuestions, sec.randomPools),
+          passingPct: parseInt(sec.passingPct, 10) || 0,
+          requiredToPass: sec.requiredToPass,
+        }))
+      : undefined,
+  };
+}
+
+function buildHandsOnSetup(d: WizardData): HandsOnSetup {
+  return {
+    toolsEn: d.hoToolsEn,
+    toolsEs: d.hoToolsEs,
+    instructionsEn: d.hoInstrEn,
+    instructionsEs: d.hoInstrEs,
+    checklistEn: d.hoReviewerChecklistEn,
+    checklistEs: d.hoReviewerChecklistEs,
+    filesEn: d.hoFilesEn,
+    filesEs: d.hoFilesEs,
+    supportingTextLimit: Number(d.hoProjectDescLimit) || 0,
+    mediaMax: Number(d.hoMediaMax) || 0,
+    mediaTypes: { ...d.hoMediaTypes },
+    maxAttempts: d.maxAttemptsMode === "unlimited" ? null : Number(d.maxAttempts) || 1,
   };
 }
 
@@ -1857,14 +2175,14 @@ function HandsOnCompletionStep(props: StepProps) {
             <Stepper
               value={data.hoPassingGrade}
               min={1}
-              max={10}
+              max={HANDS_ON_MAX_SCORE}
               ariaLabel="Passing Grade"
               onChange={(v) => {
-                if (v === "" || (/^\d+$/.test(v) && +v >= 1 && +v <= 10))
+                if (v === "" || (/^\d+$/.test(v) && +v >= 1 && +v <= HANDS_ON_MAX_SCORE))
                   update({ hoPassingGrade: v });
               }}
             />
-            <p className="form-help">Maximum Grade: 10</p>
+            <p className="form-help">Maximum Grade: {HANDS_ON_MAX_SCORE}</p>
           </div>
         </CompletionCriteriaGate>
       )}
@@ -1875,27 +2193,32 @@ function HandsOnCompletionStep(props: StepProps) {
 /* Visible/Hidden itself moved to Task Details; this step keeps what's left of the
    old Visibility page — search/browse discoverability and Content Tags. */
 function HandsOnDiscoveryStep({ data, update }: StepProps) {
+  // A Task inside a paid Certification is never discoverable.
+  const editing = useContext(EditingTaskContext);
+  const paidCert = !!editing && inPaidCertification(editing);
   return (
     <>
       <div className="form-group">
         <label className="form-label">Discoverable</label>
         <div className="radio-card-group">
           <RadioCard
-            selected={data.discoverable}
-            onSelect={() => update({ discoverable: true })}
+            selected={data.discoverable && !paidCert}
+            onSelect={() => !paidCert && update({ discoverable: true })}
             title="Yes"
             desc="Companies can add it to their own Certifications. Only for Tasks meant for B2B companies to assign."
+            disabled={paidCert}
           />
           <RadioCard
-            selected={!data.discoverable}
+            selected={!data.discoverable || paidCert}
             onSelect={() => update({ discoverable: false })}
             title="No"
             desc="Only reachable by opening a Certification that contains it."
           />
         </div>
         <p className="form-help">
-          Set this to Yes only for Hands-On Tasks we want B2B Companies to be
-          able to assign to their employees.
+          {paidCert
+            ? "This Task is in a paid Certification, so it can't be discoverable."
+            : "Set this to Yes only for Hands-On Tasks we want B2B Companies to be able to assign to their employees."}
         </p>
       </div>
 
@@ -1913,6 +2236,8 @@ const AUDIENCE_B2B = "B2B Companies Only";
 const AUDIENCE_OPTIONS = [AUDIENCE_ALL, AUDIENCE_B2B] as const;
 
 function ContentTagsSection({ data, update }: StepProps) {
+  // Product Config's saved B2B Management lists, live.
+  const { trades, partnerships } = useB2BConfig();
   const valuesOf = (type: ContentTagType) =>
     data.contentTags.filter((t) => t.type === type).map((t) => t.value);
 
@@ -1933,8 +2258,13 @@ function ContentTagsSection({ data, update }: StepProps) {
     });
   }
 
-  // The stored tag value stays "B2B Only" — the label is the display name.
-  const audience = valuesOf("userType").length > 0 ? AUDIENCE_B2B : AUDIENCE_ALL;
+  /* The field shows the DERIVED audience (`audienceOf`, as the Tasks table
+     reads it): any Trade or Partnership makes the Task B2B Companies Only, so
+     while one is set the field reads B2B and is locked — clearing them frees
+     it again. The stored tag value stays "B2B Only"; the label is the display
+     name. */
+  const lockedB2B = valuesOf("trade").length > 0 || valuesOf("partnership").length > 0;
+  const audience = audienceOf(contentTagsToTags(data.contentTags)) as (typeof AUDIENCE_OPTIONS)[number];
 
   return (
     <>
@@ -1943,6 +2273,7 @@ function ContentTagsSection({ data, update }: StepProps) {
         <SelectField
           className="select-field--full"
           value={audience}
+          disabled={lockedB2B}
           options={AUDIENCE_OPTIONS}
           onChange={(v) =>
             setValues("userType", v === AUDIENCE_B2B ? [USER_TYPE_VALUES[0]] : [])
@@ -1958,7 +2289,7 @@ function ContentTagsSection({ data, update }: StepProps) {
       <div className="form-group">
         <label className="form-label">Trade</label>
         <MultiSelect
-          options={DEFAULT_TRADES}
+          options={trades}
           value={valuesOf("trade")}
           onChange={(v) => setValues("trade", v)}
           placeholder="Select Trades"
@@ -1974,7 +2305,7 @@ function ContentTagsSection({ data, update }: StepProps) {
       <div className="form-group">
         <label className="form-label">Partnership</label>
         <MultiSelect
-          options={DEFAULT_PARTNERSHIPS}
+          options={partnerships}
           value={valuesOf("partnership")}
           onChange={(v) => setValues("partnership", v)}
           placeholder="Select Partnerships"
@@ -2224,8 +2555,17 @@ function QuizQuestionsStep({ data, update, host, missing }: StepProps & { host: 
      outlines the card — never a field inside it. */
   const flagEmpty = !!missing?.has(REQUIRED_FIELD_KEYS.questions);
   const bare = (st: StaticQuestion[], po: RandomPool[]) => st.length === 0 && po.length === 0;
-  const overDrawn = (pools: RandomPool[]) =>
-    pools.some((p) => (parseInt(p.draw, 10) || 0) > p.questionIds.length);
+  const overDrawn = (pools: RandomPool[], statics: StaticQuestion[]) => poolProblem(pools, statics) !== null;
+
+  /* A question appears once per Quiz: each editor's pickers leave out what
+     the Quiz's OTHER question lists (other Sections) already use. */
+  const groups = sectioned
+    ? data.sections.map((sec) => ({ key: sec.id, st: sec.staticQuestions, po: sec.randomPools }))
+    : [{ key: "block", st: data.blockStatic, po: data.blockPools }];
+  const usedOutside = (key: string) =>
+    groups
+      .filter((g) => g.key !== key)
+      .flatMap((g) => [...g.st.map((q) => q.id), ...g.po.flatMap((p) => p.questionIds)]);
   const emptyError = <span className="form-label-error">Questions cannot be left empty</span>;
 
   const updateSection = (
@@ -2252,13 +2592,14 @@ function QuizQuestionsStep({ data, update, host, missing }: StepProps & { host: 
                 {flagEmpty && bare(s.staticQuestions, s.randomPools) ? (
                   emptyError
                 ) : (
-                  <OverDrawError pools={s.randomPools} />
+                  <OverDrawError pools={s.randomPools} statics={s.staticQuestions} />
                 )}
               </label>
               <QuestionGroupEditor
                 host={host}
+                usedElsewhere={usedOutside(s.id)}
                 flagged={
-                  (flagEmpty && bare(s.staticQuestions, s.randomPools)) || overDrawn(s.randomPools)
+                  (flagEmpty && bare(s.staticQuestions, s.randomPools)) || overDrawn(s.randomPools, s.staticQuestions)
                 }
                 staticQuestions={s.staticQuestions}
                 pools={s.randomPools}
@@ -2275,12 +2616,13 @@ function QuizQuestionsStep({ data, update, host, missing }: StepProps & { host: 
             {flagEmpty && bare(data.blockStatic, data.blockPools) ? (
               emptyError
             ) : (
-              <OverDrawError pools={data.blockPools} />
+              <OverDrawError pools={data.blockPools} statics={data.blockStatic} />
             )}
           </label>
           <QuestionGroupEditor
             host={host}
-            flagged={(flagEmpty && bare(data.blockStatic, data.blockPools)) || overDrawn(data.blockPools)}
+            usedElsewhere={usedOutside("block")}
+            flagged={(flagEmpty && bare(data.blockStatic, data.blockPools)) || overDrawn(data.blockPools, data.blockStatic)}
             staticQuestions={data.blockStatic}
             pools={data.blockPools}
             shortcut
@@ -2359,17 +2701,14 @@ function QuizQuestionsStep({ data, update, host, missing }: StepProps & { host: 
 /* A random set drawing more questions than its pool holds. The message sits in
    the field's label row (Figma 1369:1669), naming the first such pool; the
    card is outlined (1570:3366) and the offending Pick box goes red too. */
-function OverDrawError({ pools }: { pools: RandomPool[] }) {
-  const over = pools.find((p) => (parseInt(p.draw, 10) || 0) > p.questionIds.length);
-  return over ? (
-    <span className="form-label-error">
-      Draw can't exceed the pool size ({over.questionIds.length}).
-    </span>
-  ) : null;
+function OverDrawError({ pools, statics }: { pools: RandomPool[]; statics: StaticQuestion[] }) {
+  const problem = poolProblem(pools, statics);
+  return problem ? <span className="form-label-error">{problem}</span> : null;
 }
 
 function QuestionGroupEditor({
   host,
+  usedElsewhere = [],
   staticQuestions,
   pools,
   onChange,
@@ -2377,6 +2716,8 @@ function QuestionGroupEditor({
   flagged = false,
 }: {
   host: QuestionHost;
+  /** Questions the Quiz's other lists already use — the pickers leave them out. */
+  usedElsewhere?: string[];
   /** Draw the card-table error outline (1570:3366). */
   flagged?: boolean;
   staticQuestions: StaticQuestion[];
@@ -2434,7 +2775,7 @@ function QuestionGroupEditor({
      (the pickers' own rule), and the editor writes Active. */
   const addCreatedQuestion = (q: Question) => {
     host.onQuestionCreated?.(q);
-    if (!q.gradingEnabled) return;
+    if (q.status !== "Active" || !isGradedQuestion(q)) return;
     onChange({
       staticQuestions: [
         ...staticQuestions,
@@ -2564,6 +2905,8 @@ function QuestionGroupEditor({
     if (!menuOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // A leave guard or the Free Trial confirm over the wizard owns the keys.
+      if (modalOpen()) return;
       const k = e.key.toLowerCase();
       if (k === "escape") {
         e.preventDefault();
@@ -2651,7 +2994,7 @@ function QuestionGroupEditor({
               </div>
               <span className="qz-pt">
                 <input
-                  className="qz-pt-input"
+                  className={`qz-pt-input${parseFloat(q.weight) > 0 ? "" : " has-error"}`}
                   value={q.weight}
                   aria-label="Points"
                   onChange={(e) => {
@@ -2702,7 +3045,7 @@ function QuestionGroupEditor({
               <div className="qz-pool-line">
                 <span>Pick</span>
                 <input
-                  className={`qz-pt-input${drawNum > size ? " has-error" : ""}`}
+                  className={`qz-pt-input${drawNum > size || drawNum < 1 ? " has-error" : ""}`}
                   value={p.draw}
                   aria-label="Questions drawn per attempt"
                   onChange={(e) => {
@@ -2720,7 +3063,7 @@ function QuestionGroupEditor({
               </div>
               <span className="qz-pt">
                 <input
-                  className="qz-pt-input"
+                  className={`qz-pt-input${parseFloat(p.weight) > 0 ? "" : " has-error"}`}
                   value={p.weight}
                   aria-label="Points per drawn question"
                   onChange={(e) => {
@@ -2799,7 +3142,15 @@ function QuestionGroupEditor({
         <SelectQuestionsModal
           mode={picker.mode}
           editingPool={picker.mode === "pool" && !!picker.poolId}
-          excludeIds={picker.mode === "static" ? staticQuestions.map((q) => q.id) : []}
+          excludeIds={[
+            ...usedElsewhere,
+            ...staticQuestions.map((q) => q.id),
+            // Every other pool's members — and, adding statics or a new pool,
+            // this list's pools too.
+            ...pools
+              .filter((p) => !(picker.mode === "pool" && p.id === picker.poolId))
+              .flatMap((p) => p.questionIds),
+          ]}
           value={
             picker.mode === "pool" && picker.poolId
               ? pools.find((p) => p.id === picker.poolId)?.questionIds ?? []
@@ -3099,7 +3450,9 @@ function QuizAttemptsStep({ touch, data, update, missing }: StepProps) {
       {/* Whichever cooldown was chosen is CONFIGURED in its own labelled field,
           the same way Time Limit and its minutes are two fields — the value
           used to hang off the radio group as an unlabelled input. */}
-      {data.cooldownMode === "uniform" && (
+      {/* The uniform value is also Variable mode's fallback: every pair left
+          unset waits this long. */}
+      {data.cooldownMode !== "none" && (
         <div className="form-group" onBlur={leave(() => touch?.("cooldown"))}>
           <label className="form-label">
             Set Cooldown in Minutes<span className="req">*</span>
@@ -3117,15 +3470,26 @@ function QuizAttemptsStep({ touch, data, update, missing }: StepProps) {
             }}
           />
           <p className="form-help">
-            How long a learner waits before every next attempt.
+            {data.cooldownMode === "variable"
+              ? "How long a learner waits between any two attempts without their own pair below."
+              : "How long a learner waits before every next attempt."}
           </p>
         </div>
       )}
 
       {data.cooldownMode === "variable" && (
-        <div className="form-group">
-          <label className="form-label">Cooldown Before Specific Attempts</label>
-          <VariableCooldownEditor data={data} update={update} />
+        <div className="form-group" onBlur={leave(() => touch?.("cooldownPairs"))}>
+          <label className="form-label">
+            Cooldown Before Specific Attempts
+            {missing?.has(REQUIRED_FIELD_KEYS.cooldownPairs) && (
+              <span className="form-label-error">
+                {data.variableCooldowns.some((c) => !c.minutes.trim())
+                  ? "Every cooldown pair needs its minutes"
+                  : "Cooldown pairs can't go past Maximum Attempts"}
+              </span>
+            )}
+          </label>
+          <VariableCooldownEditor data={data} update={update} missing={missing} />
           <p className="form-help">
             Set a gap before the attempts that need one; any attempt you leave
             unset falls back to the uniform cooldown.
@@ -3139,19 +3503,32 @@ function QuizAttemptsStep({ touch, data, update, missing }: StepProps) {
   );
 }
 
-function VariableCooldownEditor({ data, update }: StepProps) {
-  const rows = data.variableCooldowns;
+function VariableCooldownEditor({ data, update, missing }: StepProps) {
+  // Read in attempt order, whatever order the pairs were added in.
+  const rows = [...data.variableCooldowns].sort((a, b) => a.fromAttempt - b.fromAttempt);
+  /* The pairs there are to set: "1 and 2" up to the last two attempts, or —
+     with no limit — as far as a few past the highest pair already set. */
+  const max =
+    data.maxAttemptsMode === "limited" ? parseInt(data.maxAttempts, 10) || 0 : Infinity;
+  const ceiling = Number.isFinite(max) ? max - 1 : Math.max(9, ...rows.map((r) => r.fromAttempt + 1));
+  const allFrom = Array.from({ length: Math.max(0, ceiling) }, (_, i) => i + 1);
+  const pairLabel = (from: number) => `${from} and ${from + 1}`;
+  const freeFor = (id: string | null) =>
+    allFrom.filter((n) => !rows.some((r) => r.id !== id && r.fromAttempt === n));
+  const flagged = !!missing?.has(REQUIRED_FIELD_KEYS.cooldownPairs);
 
+  // Add takes the first pair nobody has set — any gap, not just the end.
   const add = () => {
-    const nextFrom = rows.length
-      ? Math.max(...rows.map((r) => r.fromAttempt)) + 1
-      : 1;
+    const next = freeFor(null)[0];
+    if (next === undefined) return;
     update({
-      variableCooldowns: [...rows, { id: `vc${Date.now()}`, fromAttempt: nextFrom, minutes: "" }],
+      variableCooldowns: [...rows, { id: `vc${Date.now()}`, fromAttempt: next, minutes: "" }],
     });
   };
   const set = (id: string, minutes: string) =>
     update({ variableCooldowns: rows.map((r) => (r.id === id ? { ...r, minutes } : r)) });
+  const setFrom = (id: string, fromAttempt: number) =>
+    update({ variableCooldowns: rows.map((r) => (r.id === id ? { ...r, fromAttempt } : r)) });
   const remove = (id: string) =>
     update({ variableCooldowns: rows.filter((r) => r.id !== id) });
 
@@ -3161,7 +3538,7 @@ function VariableCooldownEditor({ data, update }: StepProps) {
      list that was borrowed from the paywall and looked nothing like the other
      tables on this wizard. */
   return (
-    <div className="qsec qsec--cool">
+    <div className={`qsec qsec--cool${flagged ? " has-error" : ""}`}>
       <div className="qsec-hd">
         <span className="qsec-secname">BETWEEN ATTEMPTS</span>
         <span className="qsec-mins">COOLDOWN</span>
@@ -3179,11 +3556,18 @@ function VariableCooldownEditor({ data, update }: StepProps) {
       {rows.map((r) => (
         <div className="qsec-row" key={r.id}>
           <span className="qsec-secname">
-            {r.fromAttempt} and {r.fromAttempt + 1}
+            {/* Any pair not already set — so a gap left earlier can be filled. */}
+            <SelectField
+              value={pairLabel(r.fromAttempt)}
+              options={[...new Set([r.fromAttempt, ...freeFor(r.id)])].sort((a, b) => a - b).map(pairLabel)}
+              onChange={(v) => setFrom(r.id, parseInt(v, 10))}
+            />
           </span>
           <span className="qsec-mins">
             <input
-              className="qsec-pct-input no-spinner"
+              className={`qsec-pct-input no-spinner${
+                flagged && (!r.minutes.trim() || r.fromAttempt + 1 > max) ? " has-error" : ""
+              }`}
               inputMode="numeric"
               aria-label={`Cooldown between attempts ${r.fromAttempt} and ${r.fromAttempt + 1}`}
               value={r.minutes}
@@ -3205,7 +3589,7 @@ function VariableCooldownEditor({ data, update }: StepProps) {
       ))}
 
       <div className="qsec-foot">
-        <button className="qsec-add" onClick={add}>
+        <button className="qsec-add" onClick={add} disabled={freeFor(null).length === 0}>
           <PlusThinIcon />
           Add Cooldown Pair
         </button>
@@ -3229,9 +3613,22 @@ function AutoUnlockField({ touch, data, update, missing }: StepProps) {
   const noLimit = data.maxAttemptsMode === "unlimited";
   const on = data.autoAttempts && !noLimit;
 
+  /* What can trigger an unlock: the live library (Tasks created this session
+     included), less this Quiz itself, hidden Tasks, and other tenants' Tasks —
+     a SkillCat Quiz unlocks on SkillCat Tasks. */
+  const self = useContext(EditingTaskContext);
+  const owner = self?.createdBy ?? "SkillCat";
+  const library = useLiveTasks();
+  const eligible = useMemo(
+    () =>
+      library.filter(
+        (t) => t.id !== self?.id && !t.hidden && t.createdBy === owner && !t.noCompletionTracking,
+      ),
+    [library, self, owner],
+  );
   // MultiSelect speaks names; the trigger list stores {id, name} pairs. Task
   // names are unique in the catalogue, so the round-trip is lossless.
-  const byName = useMemo(() => new Map(ALL_TASKS.map((t) => [t.name, t.id])), []);
+  const byName = useMemo(() => new Map(eligible.map((t) => [t.name, t.id])), [eligible]);
 
   return (
     <>
@@ -3269,12 +3666,14 @@ function AutoUnlockField({ touch, data, update, missing }: StepProps) {
           <label className="form-label">
             Attempts to Unlock<span className="req">*</span>
             {missing?.has(REQUIRED_FIELD_KEYS.autoAttempts) && (
-              <span className="form-label-error">Attempts to Unlock cannot be left empty</span>
+              <span className="form-label-error">
+                {data.autoAttemptsCount.trim() ? "Unlock at least 1 attempt" : "Attempts to Unlock cannot be left empty"}
+              </span>
             )}
           </label>
           <Stepper
             value={data.autoAttemptsCount}
-            min={0}
+            min={1}
             ariaLabel="Attempts to Unlock"
             hasError={missing?.has(REQUIRED_FIELD_KEYS.autoAttempts)}
             onChange={(v) => {
@@ -3286,10 +3685,15 @@ function AutoUnlockField({ touch, data, update, missing }: StepProps) {
       )}
 
       {on && (
-        <div className="form-group">
-          <label className="form-label">Unlock After Completing All Of</label>
+        <div className="form-group" onBlur={leave(() => touch?.("autoTriggers"))}>
+          <label className="form-label">
+            Unlock After Completing All Of<span className="req">*</span>
+            {missing?.has(REQUIRED_FIELD_KEYS.autoTriggers) && (
+              <span className="form-label-error">Pick at least one Task to unlock on</span>
+            )}
+          </label>
           <MultiSelect
-            options={ALL_TASKS.map((t) => t.name)}
+            options={eligible.map((t) => t.name)}
             value={data.autoAttemptTriggers.map((t) => t.name)}
             onChange={(names) =>
               update({
@@ -3303,7 +3707,8 @@ function AutoUnlockField({ touch, data, update, missing }: StepProps) {
           />
           <p className="form-help">
             The learner must complete every selected Task before the extra
-            attempts are granted.
+            attempts are granted. Only Tasks with completion tracking appear
+            here — Tasks set to No Completion Tracking are never completed.
           </p>
         </div>
       )}
@@ -3758,38 +4163,35 @@ function QuizReviewStep({ data, update }: StepProps) {
       disabled: false,
       toggle: (v) => setR({ attempt: v }),
     },
+    /* Result, Per-Section Results and Score stand on their own — each is a
+       summary the learner can see without the attempt itself. Only the two
+       per-question rows need the attempt (and Feedback the verdict) to hang on. */
     {
       key: "result",
       label: "Result",
-      sub: !r.attempt
-        ? "Requires Attempt review."
-        : quizLevel
-          ? "Whether the user passed or failed the Quiz overall"
-          : "Only available under Quiz-level grading — Section-level Quizzes show pass/fail per Section instead.",
-      on: r.attempt && quizLevel && r.quizResult,
-      disabled: !r.attempt || !quizLevel,
+      sub: quizLevel
+        ? "Whether the user passed or failed the Quiz overall"
+        : "Only available under Quiz-level grading — Section-level Quizzes show pass/fail per Section instead.",
+      on: quizLevel && r.quizResult,
+      disabled: !quizLevel,
       toggle: (v) => setR({ quizResult: v }),
     },
     {
       key: "perSection",
       label: "Per-Section Results",
-      sub: !r.attempt
-        ? "Requires Attempt review."
-        : sectioned
-          ? "Each Section's score (and pass/fail under Section-level grading), plus the cumulative Section completion record."
-          : "Only available for Quizzes with Sections", // 1213:1343
-      on: r.attempt && sectioned && r.perSectionResults,
-      disabled: !r.attempt || !sectioned,
+      sub: sectioned
+        ? "Each Section's score (and pass/fail under Section-level grading), plus the cumulative Section completion record."
+        : "Only available for Quizzes with Sections", // 1213:1343
+      on: sectioned && r.perSectionResults,
+      disabled: !sectioned,
       toggle: (v) => setR({ perSectionResults: v }),
     },
     {
       key: "score",
       label: "Score",
-      sub: !r.attempt
-        ? "Requires Attempt review."
-        : "The overall score achieved for the Quiz Attempt",
-      on: r.attempt && r.quizScore,
-      disabled: !r.attempt,
+      sub: "The overall score achieved for the Quiz Attempt",
+      on: r.quizScore,
+      disabled: false,
       toggle: (v) => setR({ quizScore: v }),
     },
     {
@@ -4215,6 +4617,9 @@ function SubscriptionAccessField({ touch, data, update, missing }: StepProps) {
    single-select rather than its own wizard page. Hidden takes the neutral
    active pill (Figma 359:2373); Visible takes the accent one (639:895). */
 function VisibilityField({ data, update }: StepProps) {
+  /* A Task in an Access Restriction chain can't be hidden — the same rule the
+     Tasks list's Hide applies. */
+  const restricted = !!useContext(EditingTaskContext)?.accessRestricted;
   return (
     <div className="form-group">
       <label className="form-label">Visibility</label>
@@ -4223,7 +4628,8 @@ function VisibilityField({ data, update }: StepProps) {
           type="button"
           className={`seg-btn${data.visibility === "hidden" ? " active" : ""}`}
           aria-pressed={data.visibility === "hidden"}
-          onClick={() => update({ visibility: "hidden" })}
+          disabled={restricted && data.visibility !== "hidden"}
+          onClick={() => !restricted && update({ visibility: "hidden" })}
         >
           Hidden
         </button>
@@ -4237,7 +4643,9 @@ function VisibilityField({ data, update }: StepProps) {
         </button>
       </div>
       <p className="form-help">
-        Hiding a Task temporarily removes it from Certifications
+        {restricted
+          ? "This Task is part of an Access Restriction chain, so it can't be hidden. Remove it from the chain first."
+          : "Hiding a Task temporarily removes it from Certifications"}
       </p>
     </div>
   );
@@ -4676,6 +5084,18 @@ export function TaskSummary({ task }: { task: Task }) {
     ],
   ];
 
+  /* The ID Upload Task has no wizard fields — its panel is the overview. */
+  if (task.type === "ID Upload") {
+    return (
+      <div className="confirm-cards">
+        <ConfirmCard
+          title="Overview"
+          rows={[["Type", "ID Upload"], ...overview.filter(([label]) => label !== "Type" && label !== "Time to Complete")]}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="confirm-cards">
       {type === "xapi" && (
@@ -4779,7 +5199,7 @@ export function TaskSummary({ task }: { task: Task }) {
               ],
               [
                 "Passing Grade",
-                data.hoCompletion === "reviewer_grade" ? `${orDash(data.hoPassingGrade)} / 10` : undefined,
+                data.hoCompletion === "reviewer_grade" ? `${orDash(data.hoPassingGrade)} / ${HANDS_ON_MAX_SCORE}` : undefined,
               ],
             ]}
           />
@@ -4787,7 +5207,8 @@ export function TaskSummary({ task }: { task: Task }) {
             title={title("discovery")}
             rows={[
               ["Discoverable", data.discoverable ? "Yes" : "No"],
-              ["Audience", tagsOf("userType") ? AUDIENCE_B2B : AUDIENCE_ALL],
+              // Derived, as the Tasks table reads it: a Trade or Partnership is B2B too.
+              ["Audience", audienceOf(contentTagsToTags(data.contentTags))],
               ["Trade", orDash(tagsOf("trade")), true],
               ["Partnership", orDash(tagsOf("partnership")), true],
             ]}
@@ -4887,7 +5308,8 @@ function QuizSummaryCards({
             data.cooldownMode === "variable" ? (
               data.variableCooldowns.length ? (
                 <span className="tdr-pre">
-                  {data.variableCooldowns
+                  {[...data.variableCooldowns]
+                    .sort((a, b) => a.fromAttempt - b.fromAttempt)
                     .map((c) => `Between ${c.fromAttempt} and ${c.fromAttempt + 1}: ${orDash(c.minutes)} min`)
                     .join("\n")}
                 </span>
@@ -4927,9 +5349,9 @@ function QuizSummaryCards({
         title={title("review")}
         rows={[
           ["Attempt", shown(r.attempt)],
-          ["Result", shown(r.attempt && !sectionLevel && r.quizResult)],
-          ["Per-Section Results", shown(r.attempt && sectioned && r.perSectionResults)],
-          ["Score", shown(r.attempt && r.quizScore)],
+          ["Result", shown(!sectionLevel && r.quizResult)],
+          ["Per-Section Results", shown(sectioned && r.perSectionResults)],
+          ["Score", shown(r.quizScore)],
           ["Whether Correct", shown(r.attempt && r.whetherCorrect)],
           ["Per-Question Feedback", shown(r.attempt && r.whetherCorrect && r.perQuestionFeedback)],
         ]}
@@ -4962,6 +5384,7 @@ function QuizSummaryCards({
                 ]),
           ["Requires NATE Integration", data.nateExam ? "Yes: This is a NATE Exam" : "No: Not a NATE Exam", true],
           ["External ID (English)", data.nateExam ? orDash(data.nateIdEn) : undefined],
+          ["External ID (Spanish)", data.nateExam ? orDash(data.nateIdEs) : undefined],
         ]}
       />
     </>

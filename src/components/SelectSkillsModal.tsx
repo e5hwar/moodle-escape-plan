@@ -4,7 +4,7 @@ import {
   skillTaskNames,
   skillCertifications,
   skillIndustries,
-  INDUSTRY_OPTIONS,
+  useIndustryOptions,
   matchesIndustry,
 } from "../data/skillGraph";
 import { PrmModal } from "./PrmModal";
@@ -66,6 +66,7 @@ export function SelectSkillsModal({
   const [taskF, setTaskF] = useState<string[]>([]);
   const [certs, setCerts] = useState<string[]>([]);
   const [inds, setInds] = useState<string[]>([]);
+  const INDUSTRY_OPTIONS = useIndustryOptions();
   const [picked, setPicked] = useState<string[]>(value);
   const [page, setPage] = useState(1);
   // Default sort is by last edited — newest first, as Select Tasks opens.

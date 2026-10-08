@@ -1,3 +1,6 @@
+import { useSyncExternalStore } from "react";
+import { CURRENT_ADMIN } from "./certPurchases";
+
 export type QuestionType =
   | "Multiple choice"
   | "Multiple select"
@@ -111,24 +114,56 @@ export type Question = {
   quizzes: string[]; // quiz tasks using it (graded usage only)
   forms: string[]; // feedback forms using it (graded or not)
   version: number; // bumped each time the question is edited
-  /* When the question was last saved, in epoch ms — set by anything that
-     writes a question during the session (Create, bulk import). The seed
-     leaves it out and its date comes from the mocked version history
-     (`questionModifiedAt`). */
-  modifiedAt?: number;
+  /* The versions written this session (Create, bulk import, an editor save),
+     oldest first. They are real rows, not mocked ones: nobody has answered
+     them yet, so they carry no attempts, and their dates are the saves'. A
+     seed question's history below the first of these stays mocked
+     (`versionHistory`). */
+  sessionVersions?: { version: number; at: number; note: string }[];
+  /* Every earlier version exactly as it was saved, keyed by version — written
+     by each editor save for the version it replaces, so Version History reads
+     back the real past question (`questionAtVersion`). */
+  snapshots?: Record<number, QuestionSnapshot>;
   gradingEnabled: boolean;
   randomise: boolean;
   hasSpanish: boolean; // ES translation complete
   // Type-specific answer data (drives the preview panel).
   options?: QuestionOption[]; // MCQ / Multiple select / ungraded MCQ
-  otherOption?: boolean; // MCQ "Other" free-text option (a typed answer scores 0% when graded)
-  tfAnswer?: boolean; // True/False correct value
+  otherOption?: boolean; // MCQ "Other" free-text option — ungraded MCQs only
+  tfAnswer?: boolean; // True/False correct value — graded only; ungraded has none
   pairs?: MatchPair[]; // Match the following
   matchGrading?: MatchGradingMode;
   scale?: { min: number; max: number; minLabel?: string; maxLabel?: string };
+  /* Left out when the question takes the system-wide default
+     (`FILE_UPLOAD_DEFAULTS`) — read it through `fileRulesOf`. */
   fileRules?: { maxFiles: number; maxSizeMb: number };
   feedback?: { correct?: string; partial?: string; incorrect?: string };
 };
+
+/** A version's content — everything but identity, filing and usage, which
+ *  belong to the question rather than to any one version of it. */
+export type QuestionSnapshot = Omit<
+  Question,
+  "id" | "status" | "categoryPath" | "quizzes" | "forms" | "version" | "sessionVersions" | "snapshots"
+>;
+
+/* The system-wide File Upload limit — what every File Upload question allows
+   unless it sets its own. One place, so the editor's defaults, the preview
+   panel and the Select Questions preview can't drift apart. */
+export const FILE_UPLOAD_DEFAULTS = {
+  maxFiles: 1,
+  maxSizeMb: 5,
+  fileTypes: ["JPG", "PNG", "PDF"],
+} as const;
+
+/** A File Upload question's limits — its own, or the system-wide default. */
+export function fileRulesOf(q: Question): { maxFiles: number; maxSizeMb: number; fileTypes: readonly string[] } {
+  return {
+    maxFiles: q.fileRules?.maxFiles ?? FILE_UPLOAD_DEFAULTS.maxFiles,
+    maxSizeMb: q.fileRules?.maxSizeMb ?? FILE_UPLOAD_DEFAULTS.maxSizeMb,
+    fileTypes: FILE_UPLOAD_DEFAULTS.fileTypes,
+  };
+}
 
 /* Sentinel option labels for filtering questions that link nowhere — the same
    trick the Certifications pills use for an unset Career Stage / Type. Figma
@@ -209,9 +244,13 @@ export function selectionLabel(sel: CategorySelection, cats: Category[]): string
 }
 
 /* ─── Version history ───
-   Mocked deterministically from the question id so every screen shows the same
+   Two sources, newest first. Versions written this session (`sessionVersions`)
+   are real: their own save time, the signed-in admin, a note naming what
+   changed, and no attempts — nothing can have answered them yet. Everything
+   below them — the history a seed question arrived with — is mocked
+   deterministically from the question id so every screen shows the same
    history for the same question. Past attempts/responses stay pinned to the
-   version they answered; a version with zero pinned attempts can be deleted. */
+   version they answered. */
 export type QuestionVersion = {
   version: number;
   date: string; // "Jun 12, 2026"
@@ -233,9 +272,9 @@ export type QuestionVersion = {
   quizAttempts: number;
   formResponses: number;
   /* The question stem as it read at this version — the Version History page's
-     "Question" column, and what the editor loads when you View a past version.
-     It only differs from the newer version's where that version's note says
-     the text was edited; every other kind of edit leaves the stem alone. */
+     "Question" column. A saved version's is its snapshot's; a mocked one only
+     differs from the newer version's where that version's note says the text
+     was edited. */
   text: string;
 };
 
@@ -256,9 +295,77 @@ function earlierText(t: string): string {
   return t;
 }
 
-/** The stem as it read at `version` — falls back to today's text. */
-export function versionText(q: Question, version: number): string {
-  return versionHistory(q).find((v) => v.version === version)?.text ?? q.text;
+/** The version's content alone — what a snapshot keeps. */
+export function snapshotOf(q: Question): QuestionSnapshot {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { id, status, categoryPath, quizzes, forms, version, sessionVersions, snapshots, ...content } = q;
+  return content;
+}
+
+/** The question as it stood at `version`, for viewing a past version. A saved
+ *  version is its snapshot, options, grades, grading and feedback included. A
+ *  mocked seed version older than anything snapshotted has no content of its
+ *  own on record, so it reads as the oldest content known above it under its
+ *  own stem. Identity, filing and usage are always today's. */
+export function questionAtVersion(q: Question, version: number): Question {
+  if (version === q.version) return q;
+  const keep = {
+    id: q.id,
+    status: q.status,
+    categoryPath: q.categoryPath,
+    quizzes: q.quizzes,
+    forms: q.forms,
+    version,
+  };
+  const snap = q.snapshots?.[version];
+  if (snap) return { ...snap, ...keep };
+  const above = Object.keys(q.snapshots ?? {})
+    .map(Number)
+    .filter((v) => v > version)
+    .sort((a, b) => a - b)[0];
+  const base = above !== undefined ? q.snapshots![above] : snapshotOf(q);
+  const text = versionHistory(q).find((v) => v.version === version)?.text ?? base.text;
+  return { ...base, ...keep, text };
+}
+
+/** Save an edit as the question's next version: the version it replaces is
+ *  kept exactly as it stood (`snapshots`), and the new one is a real, so far
+ *  unanswered, session version. Identity and usage carry over from `prev`. */
+export function saveAsNextVersion(prev: Question, next: Question, at = Date.now()): Question {
+  const version = prev.version + 1;
+  return {
+    ...next,
+    id: prev.id,
+    quizzes: prev.quizzes,
+    forms: prev.forms,
+    version,
+    snapshots: { ...prev.snapshots, [prev.version]: snapshotOf(prev) },
+    sessionVersions: [
+      ...(prev.sessionVersions ?? []),
+      { version, at, note: editNote(prev, next) },
+    ],
+  };
+}
+
+/* What an editor save changed, for its version note — the first difference
+   in reading order wins. */
+function editNote(a: Question, b: Question): string {
+  const same = (x: unknown, y: unknown) => JSON.stringify(x ?? null) === JSON.stringify(y ?? null);
+  if (a.text !== b.text) return "Edited question text";
+  if (a.gradingEnabled !== b.gradingEnabled) return b.gradingEnabled ? "Turned grading on" : "Turned grading off";
+  if (a.type !== b.type) return b.type === "Multiple select" ? "Allowed multiple answers" : "Limited to one answer";
+  if (!same(a.options?.map((o) => o.text), b.options?.map((o) => o.text))) return "Edited the options";
+  if (!same(a.options?.map((o) => o.grade), b.options?.map((o) => o.grade))) return "Updated option grades";
+  if (a.tfAnswer !== b.tfAnswer) return "Changed the correct answer";
+  if (!same(a.pairs, b.pairs)) return "Edited the pairs";
+  if (a.matchGrading !== b.matchGrading) return "Changed the scoring";
+  if (!same(a.scale, b.scale)) return "Changed the scale";
+  if (!same(a.fileRules, b.fileRules)) return "Changed the file limits";
+  if (!same(a.feedback, b.feedback)) return "Updated feedback";
+  if (!!a.otherOption !== !!b.otherOption) return b.otherOption ? "Added an “Other” option" : "Removed the “Other” option";
+  if (a.hasSpanish !== b.hasSpanish) return "Updated Spanish translation";
+  if (!same(a.categoryPath, b.categoryPath)) return "Moved to another category";
+  return "Edited settings";
 }
 
 /* Created / last-modified dates for the list's optional columns. Derived from
@@ -266,27 +373,17 @@ export function versionText(q: Question, version: number): string {
    is the creation date, the newest row is the last edit. */
 export function questionDates(q: Question): { created: string; modified: string } {
   const rows = versionHistory(q);
-  if (q.modifiedAt !== undefined) {
-    const modified = new Date(q.modifiedAt).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-    // A question written this session at v1 was created at that same moment.
-    return { created: q.version === 1 ? modified : rows[rows.length - 1].date, modified };
-  }
   return { created: rows[rows.length - 1].date, modified: rows[0].date };
 }
 
 /** When the question was last modified, in epoch ms — the list's default sort. */
 export function questionModifiedAt(q: Question): number {
-  return q.modifiedAt ?? versionHistory(q)[0].at;
+  return versionHistory(q)[0].at;
 }
 
-/** When the question was created, in epoch ms — v1's row, or the session's
-    own save for a question written this session (same rule as `questionDates`). */
+/** When the question was created, in epoch ms — v1's row (same rule as
+    `questionDates`). */
 export function questionCreatedAt(q: Question): number {
-  if (q.modifiedAt !== undefined && q.version === 1) return q.modifiedAt;
   const rows = versionHistory(q);
   return rows[rows.length - 1].at;
 }
@@ -295,21 +392,47 @@ export function questionCreatedAt(q: Question): number {
    "Attempts" column, and the fact the row menu splits Archive from Delete on.
    Form responses count: a Feedback Form question is "attempted" the same way,
    which is why the version history page labels the number
-   "attempts/responses". */
+   "attempts/responses". A question created or imported this session has none. */
 export function attemptCount(q: Question): number {
   return versionHistory(q).reduce((sum, v) => sum + v.attempts, 0);
 }
 
 const VERSION_AUTHORS = ["Priya N.", "Marcus L.", "Dana R.", "Eshwar V."];
-const VERSION_NOTES = [
-  "Edited question text",
-  "Updated option grades",
-  "Fixed a typo in the options",
-  "Added Spanish translation",
-  "Toggled grading",
-  "Reworded distractors",
-  "Replaced an option",
-];
+
+/* The edits a mocked version can claim, by type — a note has to describe
+   something the question actually has: no option grades on a True/False or an
+   ungraded MCQ, no distractors on a Linear Scale. "Added Spanish translation"
+   joins only for a question that has one. */
+function versionNotes(q: Question): string[] {
+  const graded = q.gradingEnabled && supportsGrading(q.type);
+  const notes = ["Edited question text"];
+  switch (q.type) {
+    case "Multiple choice":
+    case "Multiple select":
+      notes.push("Fixed a typo in the options", "Replaced an option");
+      if (graded) notes.push("Updated option grades", "Reworded distractors", "Toggled grading");
+      break;
+    case "True/False":
+      notes.push("Fixed a typo in the question");
+      if (graded) notes.push("Changed the correct answer", "Updated feedback");
+      break;
+    case "Match the following":
+      notes.push("Edited the pairs", "Added a distractor");
+      if (graded) notes.push("Changed the scoring");
+      break;
+    case "Short answer":
+      notes.push("Fixed a typo in the question");
+      break;
+    case "Linear scale":
+      notes.push("Changed the scale range", "Updated scale labels");
+      break;
+    case "File upload":
+      notes.push("Changed the file limits");
+      break;
+  }
+  if (q.hasSpanish) notes.push("Added Spanish translation");
+  return notes;
+}
 
 /* Share of a question's pinned usage that is Feedback-Form responses, for a
    question whose links don't already settle it. Most questions live in one
@@ -328,6 +451,9 @@ function editTime(h: number, v: number): string {
   return `${hour12}:${String(minute).padStart(2, "0")} ${hour24 < 12 ? "AM" : "PM"}`;
 }
 
+const dateLabel = (d: Date) =>
+  d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
 function hashId(s: string): number {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 100000;
@@ -335,6 +461,34 @@ function hashId(s: string): number {
 }
 
 export function versionHistory(q: Question): QuestionVersion[] {
+  const saved = q.sessionVersions ?? [];
+  const out: QuestionVersion[] = [];
+  for (let i = saved.length - 1; i >= 0; i--) {
+    const s = saved[i];
+    const d = new Date(s.at);
+    const date = dateLabel(d);
+    out.push({
+      version: s.version,
+      date,
+      stamp: `${date} · ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`,
+      at: s.at,
+      author: CURRENT_ADMIN,
+      note: s.note,
+      attempts: 0,
+      quizAttempts: 0,
+      formResponses: 0,
+      text: s.version === q.version ? q.text : q.snapshots?.[s.version]?.text ?? q.text,
+    });
+  }
+  // The version the seed question arrived at — nothing below the first
+  // session version was written this session. A question created or imported
+  // this session has no seed history at all.
+  const seedTop = saved.length ? saved[0].version - 1 : q.version;
+  if (seedTop >= 1) out.push(...seedHistory(q, seedTop));
+  return out;
+}
+
+function seedHistory(q: Question, top: number): QuestionVersion[] {
   const h = hashId(q.id);
   /* Whether a question has EVER been answered is its own fact, not a
      restatement of where it is used today: a question can hold years of
@@ -364,30 +518,34 @@ export function versionHistory(q: Question): QuestionVersion[] {
       : q.quizzes.length > 0 && q.forms.length === 0
         ? 0
         : FORM_SHARES[h % FORM_SHARES.length];
+  /* The newest seed version as it actually stood — its snapshot once the
+     question has been edited this session, today's question otherwise. */
+  const topContent: Question = q.snapshots?.[top] ? { ...q, ...q.snapshots[top] } : q;
+  const notes = versionNotes(topContent);
   const out: QuestionVersion[] = [];
   // Walk back from the prototype's fixed "today".
   let day = new Date(2026, 5, 24 - (h % 18));
-  /* The stem, walked backwards alongside the dates: it starts as today's text
-     and steps back one wording every time we pass a version that edited it. */
-  let text = q.text;
-  for (let v = q.version; v >= 1; v--) {
-    const isCurrent = v === q.version;
-    // Old versions usually have pinned attempts; some (and any never-published
-    // edit) have none and can be deleted.
+  /* The stem, walked backwards alongside the dates: it starts as the top
+     version's text and steps back one wording every time we pass a version
+     that edited it. */
+  let text = topContent.text;
+  for (let v = top; v >= 1; v--) {
+    const isTop = v === top;
+    // Old versions usually have pinned attempts; some have none.
     const attempts = !everAnswered
       ? 0
-      : isCurrent
+      : isTop
         ? (h % 90) + 8
         : (h + v * 13) % 4 === 0
           ? 0
           : ((h + v * 31) % 380) + 15;
     const formResponses = Math.round(attempts * formShare);
-    const date = day.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-    const note = v === 1 ? "Created" : VERSION_NOTES[(h + v * 3) % VERSION_NOTES.length];
+    const date = dateLabel(day);
+    let note = v === 1 ? "Created" : notes[(h + v * 3) % notes.length];
+    // A text edit that left no trace in the stem would be a note that lies.
+    if (note === "Edited question text" && earlierText(text) === text) {
+      note = notes.length > 1 ? notes[1 + ((h + v) % (notes.length - 1))] : "Edited settings";
+    }
     out.push({
       version: v,
       date,
@@ -407,6 +565,29 @@ export function versionHistory(q: Question): QuestionVersion[] {
     day = new Date(day.getTime() - (4 + ((h + v * 7) % 38)) * 86400000);
   }
   return out;
+}
+
+/* The category tree the app is working with — App mirrors its live list here,
+   so the editor's Category picker (opened from the bank or from a Quiz's
+   Questions step) offers categories made on the page or by an import. */
+let liveCategories: Category[] | null = null;
+const categoryListeners = new Set<() => void>();
+export function setLiveCategories(list: Category[]) {
+  if (list === liveCategories) return;
+  liveCategories = list;
+  categoryListeners.forEach((l) => l());
+}
+export function getLiveCategories(): Category[] {
+  return liveCategories ?? categories;
+}
+export function useLiveCategories(): Category[] {
+  return useSyncExternalStore(
+    (l) => {
+      categoryListeners.add(l);
+      return () => categoryListeners.delete(l);
+    },
+    getLiveCategories,
+  );
 }
 
 const SEED_CATEGORIES: Category[] = [
@@ -883,7 +1064,9 @@ const AUTHORED: Question[] = [
     "Active", ["EPA Universal Exam"], { tfAnswer: false }),
   Q("Q-10432", "Multiple choice",
     "A small appliance technician encounters R-12 — what is the legally required action?",
-    "Archived", ["EPA Type I Final (legacy)"], {
+    // Archived, so in no Quiz — it was pulled from "EPA Type I Final (legacy)"
+    // before it could be archived (Archive is blocked while any link exists).
+    "Archived", [], {
       options: [
         { text: "Recover it with certified equipment", grade: 100 },
         { text: "Vent it — R-12 is exempt", grade: -100 },
@@ -1175,17 +1358,21 @@ const FILLER_QUIZZES = [
   "EPA Type II",
 ];
 
-function fillerOptions(type: QuestionType, sub: string): Partial<Question> {
+/* `turn` counts how many times the template rotation has come round, so the
+   same template answers differently on successive rows — the correct MCQ
+   option moves through A–D and True/False alternates. */
+function fillerOptions(type: QuestionType, sub: string, turn: number): Partial<Question> {
   switch (type) {
-    case "Multiple choice":
-      return {
-        options: [
-          { text: `The manufacturer's published ${sub} specification`, grade: 100 },
-          { text: "Whatever the previous technician recorded", grade: -25 },
-          { text: "The nameplate rating alone", grade: -25 },
-          { text: "An estimate based on ambient conditions", grade: -25 },
-        ],
-      };
+    case "Multiple choice": {
+      const options = [
+        { text: `The manufacturer's published ${sub} specification`, grade: 100 },
+        { text: "Whatever the previous technician recorded", grade: -25 },
+        { text: "The nameplate rating alone", grade: -25 },
+        { text: "An estimate based on ambient conditions", grade: -25 },
+      ];
+      const k = turn % options.length;
+      return { options: [...options.slice(options.length - k), ...options.slice(0, options.length - k)] };
+    }
     case "Multiple select":
       return {
         options: [
@@ -1196,7 +1383,7 @@ function fillerOptions(type: QuestionType, sub: string): Partial<Question> {
         ],
       };
     case "True/False":
-      return { tfAnswer: true };
+      return { tfAnswer: turn % 2 === 0 };
     case "Match the following":
       return {
         pairs: [
@@ -1228,7 +1415,12 @@ function fillerQuestion(n: number, cat: string, sub: string): Question {
   const status: QuestionStatus = n % 13 === 5 ? "Archived" : "Active";
   // Roughly a third of the bank is live in a Quiz, which is also what gates
   // Delete in the row menu — so both states show up while clicking around.
-  const quizzes = n % 3 === 0 ? [FILLER_QUIZZES[n % FILLER_QUIZZES.length]] : [];
+  // Only a graded type can sit in a Quiz, and an archived question sits in
+  // none (Archive is blocked while any link exists).
+  const quizzes =
+    n % 3 === 0 && supportsGrading(type) && status === "Active"
+      ? [FILLER_QUIZZES[n % FILLER_QUIZZES.length]]
+      : [];
   return {
     id,
     type,
@@ -1242,7 +1434,7 @@ function fillerQuestion(n: number, cat: string, sub: string): Question {
     randomise:
       type === "Multiple choice" || type === "Multiple select" || type === "Match the following",
     hasSpanish: n % 5 === 0,
-    ...fillerOptions(type, sub),
+    ...fillerOptions(type, sub, Math.floor(n / FILLER_TEMPLATES.length)),
   };
 }
 

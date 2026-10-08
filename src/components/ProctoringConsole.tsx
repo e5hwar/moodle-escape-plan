@@ -11,14 +11,14 @@ import { LimitedInput } from "./LimitedInput";
 import { DESCRIPTION_MAX, NAME_MAX, isOver, limitLabel } from "../data/fieldLimits";
 import { UserDetailsHover } from "./UserDetailsHover";
 import { FullscreenViewer } from "./FullscreenViewer";
-import { attemptTaskIdForExam } from "../data/certLookup";
 
-/** Maps a submission's ID fields onto the shared card's shape. The "US " prefix
- *  is dropped from the document label because the card already shows the
- *  issuing region beside it ("CALIFORNIA · DRIVER'S LICENSE"). */
+/** Maps a submission's ID fields onto the shared card's shape. The name is the
+ *  one read off the document, not the SkillCat profile's — the card is the ID.
+ *  The "US " prefix is dropped from the document label because the card
+ *  already shows the issuing region beside it ("CALIFORNIA · DRIVER'S LICENSE"). */
 function idCardOf(s: Submission): IdCardData {
   return {
-    name: s.candidateName,
+    name: s.idDetectedName ?? s.candidateName,
     idType: s.idType.replace(/^US\s+/i, ""),
     idNumber: s.idNumber,
     dob: s.idDob,
@@ -83,6 +83,7 @@ export function ProctoringConsole({
   onRequestId,
   onUpdateName,
   onRenameUser,
+  hidePendingCount = false,
 }: {
   submission: Submission;
   /** The table's filtered + sorted pending submissions — the order Skip and
@@ -104,6 +105,9 @@ export function ProctoringConsole({
   onUpdateName: (name: string) => void;
   /** A plain rename from the candidate's user-details card. */
   onRenameUser?: (userId: string, name: string) => void;
+  /** Drop the "· n Pending" count — on a queue where every row awaits the
+   *  learner (Pending ID Re-Uploads) it would always read 0. */
+  hidePendingCount?: boolean;
 }) {
   /* The frame viewer shows no title (same chrome as the ID full view), so the
      state is just the node to display. */
@@ -135,15 +139,25 @@ export function ProctoringConsole({
       return next;
     });
 
-  /* The queue has no on-screen control (Figma 445:878 leaves Skip alone on the
-     footer's left), but ←/→ still step through it for keyboard users. */
+  /* The queue's one on-screen control is Skip (Figma 445:878); ←/→ also step
+     through it. NEXT vs PENDING, as on Hands-On: Skip walks every row of the
+     queue whatever its status, and its "· n Pending" counts only the rows
+     after this one still awaiting review. On the queue's last row it becomes
+     Back — never hidden — and returns to the list the queue came from. */
   const index = queue.findIndex((s) => s.id === submission.id);
   const hasPrev = index > 0;
   const hasNext = index >= 0 && index < queue.length - 1;
+  const pendingCount = index >= 0 ? queue.slice(index + 1).filter((s) => s.status === "pending").length : 0;
 
   function gotoIndex(idx: number) {
     if (idx < 0 || idx >= queue.length) return;
     onGoto(queue[idx].id);
+  }
+
+  /* No toast — the screen changing is the feedback. */
+  function skipOrBack() {
+    if (hasNext) gotoIndex(index + 1);
+    else onExit();
   }
 
   /* Approving is what saves the name — the Name Mismatch card promises exactly
@@ -192,6 +206,8 @@ export function ProctoringConsole({
         if (e.key === "Escape") (e.target as HTMLElement).blur();
         return;
       }
+      // A held modifier is the browser's (⌘R reloads, ⌘A selects), never ours.
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "ArrowLeft" && hasPrev) gotoIndex(index - 1);
       else if (e.key === "ArrowRight" && hasNext) gotoIndex(index + 1);
       /* The footer's keycaps (Figma 445:878). Reject keeps R (it matches the red
@@ -200,12 +216,13 @@ export function ProctoringConsole({
       // No Reject button on ID-only submissions, so no R either.
       else if ((e.key === "r" || e.key === "R") && hasFootage) setConfirmKind("reject");
       else if ((e.key === "i" || e.key === "I") && !idAlreadyRequested) setConfirmKind("request");
+      else if (e.key === "n" || e.key === "N") skipOrBack();
       else if (e.key === "Escape") onExit();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zoom, confirmKind, idFullView, index, hasPrev, hasNext, hasFootage, idAlreadyRequested, queue, submission.id, nameOver]);
+  }, [zoom, confirmKind, idFullView, index, hasPrev, hasNext, hasFootage, idAlreadyRequested, queue, submission.id, nameOver, onExit]);
 
   return (
     <div className="main">
@@ -269,7 +286,7 @@ export function ProctoringConsole({
                 {/* The exam + date line opens the quiz attempt behind this
                     submission; the tooltip says so (Figma 451:545). */}
                 <QuizAttemptLink submission={submission}>
-                  <span>{submission.examShort}</span>
+                  <span>{submission.exam}</span>
                   <span className="tasks-subtitle-dot" />
                   <span>{submission.submittedAt}</span>
                 </QuizAttemptLink>
@@ -374,20 +391,31 @@ export function ProctoringConsole({
             </div>
           </div>
 
-          {/* ── footer (Figma 445:878) — Skip + View Queue on the left, the three
-                 CTAs on the right ── */}
+          {/* ── footer (Figma 445:878) — Skip on the left, the three CTAs on
+                 the right ── */}
           <div className="wizard-footer rvc-footer prc-footer">
             <div className="wizard-footer-left prc-footer-left">
-              {/* Hidden, not disabled, once there is nothing left to skip to. */}
-              {hasNext && (
-                <button
-                  className="wizard-cancel"
-                  onClick={() => gotoIndex(index + 1)}
-                  title="Move to the next submission without deciding this one"
-                >
-                  Skip
-                </button>
-              )}
+              {/* The Hands-On console's Skip atom (`.rvc-skip`): "Skip to Next ·
+                  n Pending" with its own N keycap, and "Back" on the queue's
+                  last row (see `skipOrBack`). */}
+              <button className="btn-save-draft rvc-skip" onClick={skipOrBack}>
+                <span className="rvc-skip-label">
+                  {hasNext ? (
+                    <>
+                      Skip to Next
+                      {!hidePendingCount && (
+                        <>
+                          {" "}
+                          <span className="rvc-skip-count">· {pendingCount} Pending</span>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    "Back"
+                  )}
+                </span>
+                <span className="cta-kbd">N</span>
+              </button>
             </div>
 
             <div className="prc-footer-right">
@@ -741,6 +769,7 @@ function RejectModal({
 
       {viewing !== null && (
         <ImageZoomOverlay
+          stepKey={viewing}
           onClose={() => setViewing(null)}
           /* Bounded, not a carousel: at either end the arrow is simply
              unavailable, so the reviewer can tell where the set stops. */
@@ -819,11 +848,16 @@ function ZoomedFrame({ frame }: { frame: WebcamFrame }) {
 /** Fullscreen webcam-frame viewer — the same FullscreenViewer chrome the ID
  *  full view uses (bare close, bottom rotate + zoom toolbar, no title bar). */
 function ImageZoomOverlay({
+  stepKey,
   onPrev,
   onNext,
   onClose,
   children,
 }: {
+  /** Which image of a set is showing. A new one starts upright at the fit,
+   *  and is a fresh element so it doesn't visibly spin back from the last
+   *  one's rotation. */
+  stepKey?: number;
   /** Stepping through a set of frames — omitted for a single image. */
   onPrev?: () => void;
   onNext?: () => void;
@@ -831,9 +865,9 @@ function ImageZoomOverlay({
   children: ReactNode;
 }) {
   return (
-    <FullscreenViewer onPrev={onPrev} onNext={onNext} onClose={onClose}>
+    <FullscreenViewer viewKey={stepKey} onPrev={onPrev} onNext={onNext} onClose={onClose}>
       {({ rotation }) => (
-        <div className="pr-zoom-stage" style={{ transform: `rotate(${rotation}deg)` }}>
+        <div key={stepKey} className="pr-zoom-stage" style={{ transform: `rotate(${rotation}deg)` }}>
           {children}
         </div>
       )}
@@ -996,9 +1030,8 @@ function ReviewSection({
 /* ── The header's exam + date line ──
    The line itself opens the attempt viewer for this candidate + exam in a new
    tab — the same `?attemptsUid=&attemptsTaskId=` deep link the Certification
-   Lookup uses — and says so in the plain tooltip (Figma 451:545). The exam has
-   to resolve to a task id first: EPA 609 has no certification in the data set,
-   so there the line stays plain text with nothing to hover. */
+   Lookup uses — and says so in the plain tooltip (Figma 451:545). Every
+   submission names its Quiz Task, so the link always has somewhere to go. */
 function QuizAttemptLink({
   submission,
   children,
@@ -1006,10 +1039,7 @@ function QuizAttemptLink({
   submission: Submission;
   children: ReactNode;
 }) {
-  const taskId = attemptTaskIdForExam(submission.exam);
-
-  if (!taskId) return <div className="tasks-subtitle prc-subtitle">{children}</div>;
-
+  const taskId = submission.taskId;
   return (
     <button
       className="tasks-subtitle prc-subtitle prc-subtitle--link"
@@ -1069,10 +1099,16 @@ function VerifiedPill() {
   );
 }
 
+/** "March 2nd, 2026, 9:00 AM" → "March 2, 2026, 9:00 AM" — the ordinal
+ *  stripped so Date can read it. */
+function readableDate(at: string): string {
+  return at.replace(/(\d+)(st|nd|rd|th)/, "$1");
+}
+
 /** "March 2nd, 2026, 9:00 AM" → "Mar 2, 2026", the short date the verified
  *  rail's APPROVED ON stat carries (Figma 1006:1388). */
 function shortDateOf(at: string): string {
-  const d = new Date(at.replace(/(\d+)(st|nd|rd|th)/, "$1"));
+  const d = new Date(readableDate(at));
   if (Number.isNaN(d.getTime())) return at;
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
@@ -1091,11 +1127,16 @@ function IntegrityNoteBanner({
   if (previousRejected.length === 0) return null;
 
   /* The note used to expand to list the rejected attempts inline. It doesn't any
-     more (Figma 457:577): the whole banner is a link to the Attempts page for
-     this candidate + exam, pre-filtered to Status "Rejected", which is the real
-     record. Without a resolvable task there is nothing to open, so it falls back
-     to a plain, non-interactive banner. */
-  const taskId = attemptTaskIdForExam(submission.exam);
+     more (Figma 457:577): the whole banner is a link to the Attempts page,
+     pre-filtered to this candidate and Status "Rejected", which is the real
+     record. The page is per Quiz, so it opens the Quiz the latest rejection
+     was on — NOT this submission's exam, which may have no rejection at all.
+     Without a resolvable task there is nothing to open, so it falls back to a
+     plain, non-interactive banner. */
+  const latest = [...previousRejected].sort(
+    (a, b) => Date.parse(readableDate(b.submittedAt)) - Date.parse(readableDate(a.submittedAt)),
+  )[0];
+  const taskId = latest.taskId;
   const openRejected = taskId
     ? () =>
         openInNewTab(

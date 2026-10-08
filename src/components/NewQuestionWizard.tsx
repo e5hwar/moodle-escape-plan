@@ -1,9 +1,12 @@
 import { Fragment, useMemo, useRef, useState } from "react";
 import { useRowDrag } from "../hooks/useRowDrag";
 import {
-  categories as seedCategories,
+  FILE_UPLOAD_DEFAULTS,
   flattenCategories,
+  saveAsNextVersion,
   supportsGrading,
+  useLiveCategories,
+  type Category,
   type Question,
   type QuestionStatus,
   type QuestionType,
@@ -33,6 +36,9 @@ type QuestionDraft = {
   textEs: string;
   // MCQ
   choices: Choice[];
+  /* Single vs multiple answers on an UNGRADED MCQ, where there are no grades
+     to infer it from. A graded MCQ ignores it — see `multiAnswer`. */
+  multiSelect: boolean;
   otherOption: boolean;
   // True/False
   tfAnswer: boolean;
@@ -94,12 +100,22 @@ const TYPE_TITLES: Record<QType, string> = {
   scale: "Linear Scale",
 };
 
-/* An MCQ is a "multiple select" as soon as more than one option carries a
-   positive grade — the per-option percentages are what say how many answers a
-   learner may pick, so there is no separate single/multiple switch. */
+/* A GRADED MCQ is a "multiple select" as soon as more than one option carries
+   a positive grade — the per-option percentages are what say how many answers
+   a learner may pick, so it has no separate single/multiple switch. An
+   ungraded MCQ has no grades to read, so it stores the author's pick
+   (`multiSelect`, the Answers field) instead. */
 function multiAnswer(choices: Choice[]): boolean {
-  return choices.filter((c) => c.grade > 0).length > 1;
+  return choices.filter((c) => c.text.trim() !== "" && c.grade > 0).length > 1;
 }
+
+/* Graded MCQ: the positive grades must add up to the whole mark. A small
+   tolerance, since thirds and sevenths are stored rounded (33.33333…). */
+const gradeTotal = (choices: Choice[]) =>
+  choices
+    .filter((c) => c.text.trim() !== "" && c.grade > 0)
+    .reduce((sum, c) => sum + c.grade, 0);
+const totalsWholeMark = (choices: Choice[]) => Math.abs(gradeTotal(choices) - 100) < 0.01;
 
 function typeSupportsGrading(t: QType): boolean {
   return t === "mcq" || t === "true-false" || t === "match";
@@ -155,9 +171,9 @@ function editorType(t: QuestionType): QType {
   }
 }
 
-function catKeyFromPath(path?: string[]): string {
+function catKeyFromPath(cats: Category[], path?: string[]): string {
   if (!path || path.length === 0) return "";
-  const cat = seedCategories.find((c) => c.label === path[0]);
+  const cat = cats.find((c) => c.label === path[0]);
   if (!cat) return "";
   if (path[1]) {
     const sub = cat.subcategories?.find((s) => s.label === path[1]);
@@ -167,6 +183,7 @@ function catKeyFromPath(path?: string[]): string {
 }
 
 function buildInitial(
+  cats: Category[],
   initialCategoryPath?: string[],
   editing?: Question,
   initialType?: QuestionType,
@@ -176,7 +193,7 @@ function buildInitial(
   // field stays empty on its placeholder — guessing a category for the author
   // is worse than asking.
   const defaultCatKey = initialCategoryPath?.length
-    ? catKeyFromPath(initialCategoryPath)
+    ? catKeyFromPath(cats, initialCategoryPath)
     : "";
   const baseType = initialType ? editorType(initialType) : "mcq";
   const base: QuestionDraft = {
@@ -188,6 +205,7 @@ function buildInitial(
     /* Every option starts on "None" — the author sets the correct one, and a
        pre-filled 100% on A reads as an answer nobody chose. */
     choices: [blankChoice(), blankChoice(), blankChoice(), blankChoice()],
+    multiSelect: false,
     otherOption: false,
     tfAnswer: true,
     pairs: [blankPair(), blankPair(), blankPair(), blankPair()],
@@ -198,8 +216,8 @@ function buildInitial(
     scaleMinLabelEs: "",
     scaleMaxLabel: "",
     scaleMaxLabelEs: "",
-    maxFiles: "1",
-    maxSizeMb: "5",
+    maxFiles: String(FILE_UPLOAD_DEFAULTS.maxFiles),
+    maxSizeMb: String(FILE_UPLOAD_DEFAULTS.maxSizeMb),
     grading: true,
     randomise: baseType === "mcq",
     fbCorrect: "",
@@ -216,7 +234,7 @@ function buildInitial(
   return {
     ...base,
     type: t,
-    catKey: catKeyFromPath(editing.categoryPath),
+    catKey: catKeyFromPath(cats, editing.categoryPath),
     status: editing.status,
     text: editing.text,
     textEs: es ? `[ES] ${editing.text}` : "",
@@ -228,6 +246,7 @@ function buildInitial(
           grade: o.grade,
         }))
       : base.choices,
+    multiSelect: editing.type === "Multiple select",
     otherOption: !!editing.otherOption,
     tfAnswer: editing.tfAnswer ?? true,
     pairs: editing.pairs?.length
@@ -246,8 +265,8 @@ function buildInitial(
     scaleMinLabelEs: es && editing.scale?.minLabel ? `[ES] ${editing.scale.minLabel}` : "",
     scaleMaxLabel: editing.scale?.maxLabel ?? "",
     scaleMaxLabelEs: es && editing.scale?.maxLabel ? `[ES] ${editing.scale.maxLabel}` : "",
-    maxFiles: editing.fileRules ? String(editing.fileRules.maxFiles) : "1",
-    maxSizeMb: editing.fileRules ? String(editing.fileRules.maxSizeMb) : "5",
+    maxFiles: editing.fileRules ? String(editing.fileRules.maxFiles) : base.maxFiles,
+    maxSizeMb: editing.fileRules ? String(editing.fileRules.maxSizeMb) : base.maxSizeMb,
     grading: editing.gradingEnabled && supportsGrading(editing.type),
     randomise: editing.randomise,
     fbCorrect: editing.feedback?.correct ?? "",
@@ -301,7 +320,9 @@ const REQUIRED_FIELD_KEYS = {
   text: "text",
   options: "options",
   answer: "answer",
+  gradeTotal: "gradeTotal",
   pairs: "pairs",
+  pairsHalf: "pairsHalf",
   scaleLabels: "scaleLabels",
   textLimit: "textLimit",
   optionsLimit: "optionsLimit",
@@ -318,7 +339,9 @@ const REQUIRED_FIELD_LABELS: Record<string, string> = {
   text: "Question",
   options: "Options — at least two need text",
   answer: "Correct Answer — grade one option above 0%",
+  gradeTotal: "Grades — the correct options must total 100%",
   pairs: "Questions & Answers — at least two questions and three answers",
+  pairsHalf: "Questions & Answers — every question needs an answer",
   scaleLabels: "Scale labels — label both ends or neither",
   textLimit: limitLabel("Question", DESCRIPTION_MAX),
   optionsLimit: limitLabel("Options", NAME_MAX),
@@ -366,6 +389,8 @@ function collectMissing(d: QuestionDraft): string[] {
     // fix, not the answer it can't have yet.
     if (filled.length < 2) gaps.push(K.options);
     else if (grading && !filled.some((c) => c.grade > 0)) gaps.push(K.answer);
+    // The rule the field's subtext states: the correct options share 100%.
+    else if (grading && !totalsWholeMark(d.choices)) gaps.push(K.gradeTotal);
   }
   if (d.type === "match") {
     /* Figma 1198:1934's subtext is the rule: two complete pairs to match, and
@@ -376,6 +401,11 @@ function collectMissing(d: QuestionDraft): string[] {
     );
     const answers = d.pairs.filter((p) => p.right.trim() !== "");
     if (complete.length < 2 || answers.length < 3) gaps.push(K.pairs);
+    // A question with nothing to match it to can't be answered. (An answer
+    // with no question is the distractor the subtext describes.)
+    if (d.pairs.some((p) => p.left.trim() !== "" && p.right.trim() === "")) {
+      gaps.push(K.pairsHalf);
+    }
     if (d.pairs.some((p) => isOver(NAME_MAX, p.left, p.leftEs, p.right, p.rightEs))) {
       gaps.push(K.pairsLimit);
     }
@@ -418,10 +448,11 @@ type Props = {
 
 let createdSeq = 0;
 
-function questionFromDraft(d: QuestionDraft, hasSpanish: boolean): Question {
+function questionFromDraft(d: QuestionDraft, hasSpanish: boolean, cats: Category[]): Question {
+  const grading = d.grading && typeSupportsGrading(d.type);
   const type: QuestionType =
     d.type === "mcq"
-      ? multiAnswer(d.choices)
+      ? (grading ? multiAnswer(d.choices) : d.multiSelect)
         ? "Multiple select"
         : "Multiple choice"
       : d.type === "true-false"
@@ -433,8 +464,7 @@ function questionFromDraft(d: QuestionDraft, hasSpanish: boolean): Question {
             : d.type === "file"
               ? "File upload"
               : "Linear scale";
-  const catOption = flattenCategories(seedCategories).find((o) => o.key === d.catKey);
-  const grading = d.grading && typeSupportsGrading(d.type);
+  const catOption = flattenCategories(cats).find((o) => o.key === d.catKey);
   const q: Question = {
     id: `Q-${10480 + createdSeq++}`,
     type,
@@ -444,7 +474,9 @@ function questionFromDraft(d: QuestionDraft, hasSpanish: boolean): Question {
     quizzes: [],
     forms: [],
     version: 1,
-    modifiedAt: Date.now(),
+    // A real v1, saved now and never answered (an edit's save replaces this
+    // with its next version — `saveAsNextVersion`).
+    sessionVersions: [{ version: 1, at: Date.now(), note: "Created" }],
     gradingEnabled: grading,
     randomise: d.randomise && (d.type === "mcq" || d.type === "match"),
     hasSpanish,
@@ -453,9 +485,11 @@ function questionFromDraft(d: QuestionDraft, hasSpanish: boolean): Question {
     q.options = d.choices
       .filter((c) => c.text.trim() !== "")
       .map((c) => ({ text: c.text, grade: grading ? c.grade : 0 }));
-    if (d.otherOption) q.otherOption = true;
+    // "Other" is an ungraded-only option.
+    if (d.otherOption && !grading) q.otherOption = true;
   }
-  if (d.type === "true-false") q.tfAnswer = d.tfAnswer;
+  // Only a graded True/False has a correct value.
+  if (d.type === "true-false" && grading) q.tfAnswer = d.tfAnswer;
   if (d.type === "match") {
     q.pairs = d.pairs
       .filter((p) => p.left.trim() !== "" || p.right.trim() !== "")
@@ -471,12 +505,13 @@ function questionFromDraft(d: QuestionDraft, hasSpanish: boolean): Question {
     };
   }
   if (d.type === "file") {
-    // Every File Upload question carries its own limits now — there is no
-    // system-wide fallback to defer to.
-    q.fileRules = {
-      maxFiles: Number(d.maxFiles) || 1,
-      maxSizeMb: Number(d.maxSizeMb) || 5,
-    };
+    /* Left at the system-wide default, the question sets no limits of its own
+       and follows the default (`fileRulesOf`); only a change is stored. */
+    const maxFiles = Number(d.maxFiles) || FILE_UPLOAD_DEFAULTS.maxFiles;
+    const maxSizeMb = Number(d.maxSizeMb) || FILE_UPLOAD_DEFAULTS.maxSizeMb;
+    if (maxFiles !== FILE_UPLOAD_DEFAULTS.maxFiles || maxSizeMb !== FILE_UPLOAD_DEFAULTS.maxSizeMb) {
+      q.fileRules = { maxFiles, maxSizeMb };
+    }
   }
   // A type with no partial-credit row can't carry partial feedback, whatever
   // the draft still holds from a type the author moved away from.
@@ -501,8 +536,11 @@ export function NewQuestionWizard({
   crumbs,
 }: Props) {
   const isEditing = !!editingQuestion;
+  /* The live category tree (App's), so a category made on the bank or by an
+     import is pickable — and a question filed in one opens with it set. */
+  const cats = useLiveCategories();
   const [data, setData] = useState<QuestionDraft>(() =>
-    buildInitial(initialCategoryPath, editingQuestion, initialType),
+    buildInitial(cats, initialCategoryPath, editingQuestion, initialType),
   );
   const rootRef = useRef<HTMLDivElement>(null);
   const update = (patch: Partial<QuestionDraft>) => setData((d) => ({ ...d, ...patch }));
@@ -522,10 +560,10 @@ export function NewQuestionWizard({
      the sort lives here rather than in the shared helper. */
   const catOptions = useMemo(
     () =>
-      [...flattenCategories(seedCategories)].sort((a, b) =>
+      [...flattenCategories(cats)].sort((a, b) =>
         a.label.localeCompare(b.label),
       ),
-    [],
+    [cats],
   );
   /* The gate on creating: every mandatory field, re-derived each render, so
      filling the last one enables the button on the keystroke rather than on the
@@ -564,15 +602,10 @@ export function NewQuestionWizard({
       setMissingKeys(new Set(gaps));
       return;
     }
-    if (!isEditing && onCreate) onCreate(questionFromDraft(data, esComplete));
+    if (!isEditing && onCreate) onCreate(questionFromDraft(data, esComplete, cats));
     if (isEditing && editingQuestion && onSave && dirty) {
-      onSave({
-        ...questionFromDraft(data, esComplete),
-        id: editingQuestion.id,
-        quizzes: editingQuestion.quizzes,
-        forms: editingQuestion.forms,
-        version: editingQuestion.version + 1,
-      });
+      // The next version; the one it replaces is kept as it stood.
+      onSave(saveAsNextVersion(editingQuestion, questionFromDraft(data, esComplete, cats)));
     }
     onClose();
   };
@@ -738,7 +771,8 @@ function SetupSection({
       // otherwise fall back to that type's default (on for MCQ, off for Match,
       // whose answers already shuffle).
       randomise: isRandomisable ? (wasRandomisable ? data.randomise : t === "mcq") : false,
-      otherOption: t === "mcq" ? data.otherOption : false,
+      // Every type opens graded where it can, and "Other" is ungraded-only.
+      otherOption: false,
     });
   };
 
@@ -889,7 +923,10 @@ function McqSection({
      field, grade, remove), then a footer row holding the add CTA. */
   return (
     <div className="wizard-fields">
-      <div className="form-group" onBlur={leave(() => { touch("options"); touch("answer"); })}>
+      <div
+        className="form-group"
+        onBlur={leave(() => { touch("options"); touch("answer"); touch("gradeTotal"); })}
+      >
         <label className="form-label">
           Options<span className="req">*</span>
           {belowFloor ? (
@@ -902,13 +939,20 @@ function McqSection({
             <span className="form-label-error">
               Grade one option above 0% so the question has a correct answer.
             </span>
+          ) : missing.has("gradeTotal") ? (
+            <span className="form-label-error">
+              The correct options total {Math.round(gradeTotal(choices) * 100) / 100}% — they must
+              total 100%.
+            </span>
           ) : null}
           <LimitError max={NAME_MAX} values={choices.flatMap((c) => [c.text, c.textEs])} warn={false} />
         </label>
 
         <div
           className={`qed-tbl${
-            belowFloor || missing.has("options") || missing.has("answer") ? " has-error" : ""
+            belowFloor || missing.has("options") || missing.has("answer") || missing.has("gradeTotal")
+              ? " has-error"
+              : ""
           }`}
         >
           <div className="qed-tbl-hd">
@@ -967,7 +1011,7 @@ function McqSection({
             );
           })}
 
-          {data.otherOption && (
+          {data.otherOption && !grading && (
             /* Figma 1094:1183 — the "Other" row is a 44px caption line, not an
                option: "Other" over the 955:976 name-plus-qualifier pattern. No
                letter, no grade and no remove ✕ — the rail's toggle is what
@@ -1063,6 +1107,7 @@ function MatchSection({
 }) {
   const pairs = data.pairs;
   const flagged = missing.has("pairs");
+  const halfFlagged = missing.has("pairsHalf");
   const setPair = (id: string, patch: Partial<Pair>) =>
     update({ pairs: pairs.map((p) => (p.id === id ? { ...p, ...patch } : p)) });
   const addPair = () => {
@@ -1089,7 +1134,7 @@ function MatchSection({
      card explains distractors in words now. */
   return (
     <div className="wizard-fields">
-      <div className="form-group" onBlur={leave(() => touch("pairs"))}>
+      <div className="form-group" onBlur={leave(() => { touch("pairs"); touch("pairsHalf"); })}>
         <label className="form-label">
           Questions &amp; Answers<span className="req">*</span>
           {belowFloor ? (
@@ -1097,6 +1142,10 @@ function MatchSection({
           ) : flagged ? (
             <span className="form-label-error">
               Add at least two questions and three answers to create this question.
+            </span>
+          ) : halfFlagged ? (
+            <span className="form-label-error">
+              Every question needs an answer — add one or clear the row.
             </span>
           ) : null}
           <LimitError
@@ -1106,7 +1155,9 @@ function MatchSection({
           />
         </label>
 
-        <div className={`qed-tbl qed-tbl--pairs${belowFloor || flagged ? " has-error" : ""}`}>
+        <div
+          className={`qed-tbl qed-tbl--pairs${belowFloor || flagged || halfFlagged ? " has-error" : ""}`}
+        >
           <div className="qed-tbl-hd">
             <span className="qed-tbl-ord" aria-hidden />
             <span className="qed-tbl-hd-opt">QUESTION</span>
@@ -1244,29 +1295,34 @@ function FileRulesSection({
 }) {
   /* Two ordinary rail fields now — the same searchless SelectField as Question
      Type, at full width — so they don't need a heading over them: the wizards'
-     rule is a flat label / control / subtext stack. The old "System default"
-     row is gone with it; every question carries its own limits. */
+     rule is a flat label / control / subtext stack. Both open on the
+     system-wide default (`FILE_UPLOAD_DEFAULTS`); a question left there sets
+     no limits of its own and follows the default. */
+  const defFiles = String(FILE_UPLOAD_DEFAULTS.maxFiles);
+  const defSize = String(FILE_UPLOAD_DEFAULTS.maxSizeMb);
   return (
     <div className="wizard-fields">
       <div className="form-group">
         <label className="form-label">Maximum Files Allowed</label>
         <SelectField
-          value={limitValue(FILE_COUNT_STEPS, data.maxFiles, "1")}
+          value={limitValue(FILE_COUNT_STEPS, data.maxFiles, defFiles)}
           options={FILE_COUNT_STEPS}
           onChange={(v) => update({ maxFiles: v })}
           className="select-field--full"
         />
-        <p className="form-help">Default: 1</p>
+        <p className="form-help">Default: {defFiles}</p>
       </div>
       <div className="form-group">
         <label className="form-label">Maximum File Size</label>
         <SelectField
-          value={sizeLabel(limitValue(FILE_SIZE_STEPS, data.maxSizeMb, "5"))}
+          value={sizeLabel(limitValue(FILE_SIZE_STEPS, data.maxSizeMb, defSize))}
           options={FILE_SIZE_STEPS.map(sizeLabel)}
           onChange={(v) => update({ maxSizeMb: String(parseInt(v, 10)) })}
           className="select-field--full"
         />
-        <p className="form-help">Default: 5MB</p>
+        <p className="form-help">
+          Default: {defSize}MB · {FILE_UPLOAD_DEFAULTS.fileTypes.join(", ")} files
+        </p>
       </div>
     </div>
   );
@@ -1387,9 +1443,8 @@ function GradingField({
   usedInQuizzes: number;
 }) {
   const grading = data.grading && gradable;
-  // Grading can't be disabled while the question is in a quiz. The "Other"
-  // option no longer holds it either way — on a graded question a typed-in
-  // answer simply scores 0% (Figma 1481:3500 draws Other beside GRADE).
+  // Grading can't be disabled while the question is in a quiz. Turning it on
+  // drops the "Other" option, which only an ungraded MCQ offers.
   const lockedByQuizzes = grading && usedInQuizzes > 0;
   const locked = !gradable || lockedByQuizzes;
   const sub = !gradable
@@ -1404,7 +1459,16 @@ function GradingField({
       value={grading}
       offLabel="Not Graded"
       onLabel="Graded"
-      onChange={(v) => update({ grading: v })}
+      onChange={(v) =>
+        update(
+          v
+            ? // "Other" is ungraded-only, so grading takes it away.
+              { grading: v, otherOption: false }
+            : // Ungraded, single vs multiple can't be read off grades any more —
+              // carry over what the grades said.
+              { grading: v, multiSelect: multiAnswer(data.choices) },
+        )
+      }
       disabled={locked}
       sub={sub}
     />
@@ -1425,11 +1489,25 @@ function OptionTogglesSection({
   grading: boolean;
 }) {
   const canRandomise = data.type === "mcq" || data.type === "match";
-  const canOther = data.type === "mcq";
+  // Ungraded MCQs only: a typed-in answer can't be scored.
+  const canOther = data.type === "mcq" && !grading;
+  /* An ungraded MCQ has no grades to say how many answers a learner may pick,
+     so the author says it here (a graded one reads it off the grades). */
+  const pickAnswers = data.type === "mcq" && !grading;
   if (!canRandomise && !canOther) return null;
 
   return (
     <div className="wizard-fields">
+      {pickAnswers && (
+        <SegField
+          label="Answers"
+          value={data.multiSelect}
+          offLabel="Single Answer"
+          onLabel="Multiple Answers"
+          onChange={(v) => update({ multiSelect: v })}
+          sub="How many options a user can pick"
+        />
+      )}
       {canRandomise && (
         <SegField
           label="Randomize Options"
@@ -1448,14 +1526,10 @@ function OptionTogglesSection({
           label="“Other” Free-Text Option"
           value={data.otherOption}
           onChange={(v) => update({ otherOption: v })}
-          /* Available graded or not (1570:3366's subtext). On a graded
-             question a typed answer matches no option, so it scores 0%. */
+          /* Ungraded only — a typed answer matches no option, so there is
+             nothing to score it against. */
           sub="User can enter an answer of their own"
-          info={
-            grading
-              ? "A learner who picks it types their own answer. On a graded question that answer scores 0%."
-              : "A learner who picks it types their own answer."
-          }
+          info="A learner who picks it types their own answer."
         />
       )}
     </div>

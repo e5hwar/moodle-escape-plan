@@ -15,6 +15,7 @@ import {
 } from "./icons";
 import { TasksSearch } from "./TasksSearch";
 import { TableEmpty } from "./TableEmpty";
+import { certIndustryText } from "../data/industries";
 
 /* Select Tasks — Figma 682:2321. A compact version of the Tasks page table
  * inside the shared PrmModal shell: search bar, filter pills, a table carrying
@@ -38,7 +39,7 @@ const VISIBILITIES = ["Visible", "Hidden"];
 /** Cert name → Industry path. A Task has no Industry of its own, so its
  *  Industries are those of the Certifications it is used in — the same way the
  *  Skills page derives a Skill's Certifications through its Tasks. */
-const industryOfCert = new Map(certifications.map((c) => [c.name, c.industry]));
+const industryOfCert = new Map(certifications.map((c) => [c.name, certIndustryText(c.industries)]));
 
 type SortKey = "name" | "type" | "certs" | "dateModified";
 type SortDir = "asc" | "desc";

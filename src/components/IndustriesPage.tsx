@@ -1,12 +1,20 @@
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import { TableEmpty } from "./TableEmpty";
 import {
-  industries as seedIndustries,
-  allCertsById,
   rowIcon,
+  industryTagLabels,
+  syncIndustryOrder,
   type Industry,
   type SubIndustry,
-  type IndustryCert,
 } from "../data/industries";
 import {
   DragHandleIcon,
@@ -25,7 +33,7 @@ import { IndustriesSearch } from "./IndustriesSearch";
 import { useToast } from "./useToast";
 import { PrmModal } from "./PrmModal";
 import { SelectRequirementModal } from "./SelectRequirementModal";
-import type { Certification } from "../data/certifications";
+import { formatTimeToComplete, isSkillCatCert, type Certification } from "../data/certifications";
 import { SelectField } from "./SelectField";
 import { CharCount, LimitError } from "./CharCount";
 import { NAME_MAX, isOver, limitClass } from "../data/fieldLimits";
@@ -160,15 +168,22 @@ function replayMoves(base: Industry[], moves: Move[]): { view: Industry[]; steps
 type LaunchItem =
   | { kind: "industry"; key: string; industry: Industry; position: number }
   /** One per place it's tagged in; `where` = "Industry" or "Industry > Sub-Industry". */
-  | { kind: "cert"; key: string; cert: IndustryCert; scope: Scope; where: string };
+  | { kind: "cert"; key: string; cert: Certification; scope: Scope; where: string };
 
 // The hub subtext's counts, title-cased like the rest of the app's subtext
 // ("3 Sub-Industries · 29 Certifications" — the user, 2026-10-03).
 const certCount = (n: number) => `${n} ${n === 1 ? "Certification" : "Certifications"}`;
 const subIndustryCount = (n: number) => `${n} ${n === 1 ? "Sub-Industry" : "Sub-Industries"}`;
 
+/* The distinct Certifications tagged with the Industry or any of its
+   Sub-Industries (one tagged at both levels counts once). */
 const industryCertTotal = (ind: Industry) =>
-  ind.certIds.length + ind.subIndustries.reduce((n, s) => n + s.certIds.length, 0);
+  new Set([...ind.certIds, ...ind.subIndustries.flatMap((s) => s.certIds)]).size;
+
+// The tag key a scope stands for: the Industry's, or the Sub-Industry's.
+const scopeTag = (sc: Scope) => (sc.kind === "industry" ? sc.industryKey : sc.subKey);
+
+type CertsById = Map<string, Certification>;
 
 /* A row's second line names what sits one level down — Figma 1306:1208: as
    many as fit the row in browse order, then "... +N" for the rest
@@ -226,9 +241,9 @@ const subIndustriesLine = (ind: Industry) =>
   childrenLine(
     [...ind.subIndustries].sort((a, b) => a.displayPosition - b.displayPosition).map((s) => s.name),
   );
-const certificationsLine = (sub: SubIndustry) =>
+const certificationsLine = (sub: SubIndustry, certsById: CertsById) =>
   childrenLine(
-    sub.certIds.map((id) => allCertsById[id]?.name).filter((n): n is string => !!n),
+    sub.certIds.map((id) => certsById.get(id)?.name).filter((n): n is string => !!n),
   );
 
 type HandleProps = React.HTMLAttributes<HTMLSpanElement> & { draggable?: boolean };
@@ -318,11 +333,28 @@ function RowKebab({ label, onClick }: { label: string; onClick: (e: React.MouseE
   );
 }
 
-export function IndustriesPage({ onBackToCerts: leavePage }: { onBackToCerts?: () => void } = {}) {
+export function IndustriesPage({
+  industries: savedIndustries,
+  setIndustries,
+  certs,
+  setCerts,
+  onBackToCerts: leavePage,
+}: {
+  /** App's Industries (names, icons, visibility, order). */
+  industries: Industry[];
+  setIndustries: Dispatch<SetStateAction<Industry[]>>;
+  /** App's Certifications — tag MEMBERSHIP lives on them (`industries`). */
+  certs: Certification[];
+  setCerts: Dispatch<SetStateAction<Certification[]>>;
+  onBackToCerts?: () => void;
+}) {
   /* `saved` is the record — every edit but a reorder writes it directly (they
-     each confirm in their own modal). Reorders are staged as `moves`; the page
-     renders `industries`, the saved order with the moves replayed. */
-  const [saved, setIndustries] = useState<Industry[]>(seedIndustries);
+     each confirm in their own modal). Each scope's `certIds` is matched to
+     the Certifications' tags here, so it lists exactly the tagged ones in
+     their display order. Reorders are staged as `moves`; the page renders
+     `industries`, the saved order with the moves replayed. */
+  const saved = useMemo(() => syncIndustryOrder(savedIndustries, certs), [savedIndustries, certs]);
+  const certsById = useMemo<CertsById>(() => new Map(certs.map((c) => [c.id, c])), [certs]);
   const [moves, setMoves] = useState<Move[]>([]);
   const { view: industries, steps } = useMemo(() => replayMoves(saved, moves), [saved, moves]);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -345,7 +377,8 @@ export function IndustriesPage({ onBackToCerts: leavePage }: { onBackToCerts?: (
   const searchRef = useRef<HTMLInputElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
 
-  const quiet = modal.kind === "none" && !menu;
+  // The Review & Save confirm counts too: C, A and the launcher's ↑↓↵ wait.
+  const quiet = modal.kind === "none" && !menu && !reviewOpen;
 
   // "C" opens New Industry on the launcher (the badge on its header CTA). The
   // hub's "C" / Add Certification CTA was removed 2026-09-29 — adding lives on
@@ -355,17 +388,18 @@ export function IndustriesPage({ onBackToCerts: leavePage }: { onBackToCerts?: (
     quiet && scope === null,
   );
 
-  /* Certifications tagged nowhere — in no Industry and no Sub-Industry. The
+  /* SkillCat-created Certifications tagged nowhere — in no Industry and no
+     Sub-Industry (company-created ones can't be tagged at all). The
      launcher flags them in a banner (Figma 1424:1416, the Certifications
      setup banner's shape) whose Assign Industries opens the picker on them;
      its ✕ puts the banner off for the ones it named, so a Certification that
      later loses its last tag brings it back. */
   const untagged = useMemo(
     () =>
-      CERT_UNIVERSE.filter((c) => !isTagged(industries, c.id)).sort((a, b) =>
-        a.name.localeCompare(b.name),
-      ),
-    [industries],
+      certs
+        .filter((c) => isSkillCatCert(c) && industryTagLabels(c.industries, saved).length === 0)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [certs, saved],
   );
   const [bannerHiddenFor, setBannerHiddenFor] = useState<string[]>([]);
   // Not on a results page — that's about the query, not the setup gap.
@@ -401,7 +435,7 @@ export function IndustriesPage({ onBackToCerts: leavePage }: { onBackToCerts?: (
        tagged in several places is one result per place, in browse order,
        each opening its own place. */
     const consider = (id: string, sc: Scope, where: string) => {
-      const cert = allCertsById[id];
+      const cert = certsById.get(id);
       if (!cert || !cert.name.toLowerCase().includes(q)) return;
       out.push({ kind: "cert", key: `cert-${id}-${scopeKey(sc)}`, cert, scope: sc, where });
     };
@@ -422,7 +456,7 @@ export function IndustriesPage({ onBackToCerts: leavePage }: { onBackToCerts?: (
         );
     });
     return out;
-  }, [orderedIndustries, search]);
+  }, [orderedIndustries, search, certsById]);
 
   // The highlight goes back to the top on every new query, which also drops
   // any pointer/keyboard mode — the top hit is the ↵ target from there.
@@ -587,7 +621,21 @@ export function IndustriesPage({ onBackToCerts: leavePage }: { onBackToCerts?: (
     );
   }
 
+  /** Drops these tag keys from every Certification. */
+  function untagEverywhere(keys: string[]) {
+    setCerts((prev) =>
+      prev.map((c) =>
+        c.industries.some((k) => keys.includes(k))
+          ? { ...c, industries: c.industries.filter((k) => !keys.includes(k)) }
+          : c,
+      ),
+    );
+  }
+
   function deleteIndustry(key: string) {
+    // The Industry's own tag and every one of its Sub-Industries' go too.
+    const ind = saved.find((i) => i.key === key);
+    untagEverywhere([key, ...(ind?.subIndustries.map((s) => s.key) ?? [])]);
     setIndustries((prev) => {
       const target = prev.find((i) => i.key === key);
       if (!target) return prev;
@@ -603,6 +651,7 @@ export function IndustriesPage({ onBackToCerts: leavePage }: { onBackToCerts?: (
   }
 
   function deleteSub(industryKey: string, subKey: string) {
+    untagEverywhere([subKey]);
     setIndustries((prev) =>
       prev.map((i) => {
         if (i.key !== industryKey) return i;
@@ -650,7 +699,7 @@ export function IndustriesPage({ onBackToCerts: leavePage }: { onBackToCerts?: (
       sc.kind === "industry"
         ? indName
         : `${indName} › ${ind?.subIndustries.find((s) => s.key === sc.subKey)?.name ?? sc.subKey}`;
-    return `${allCertsById[move.key]?.name ?? move.key} · ${where}`;
+    return `${certsById.get(move.key)?.name ?? move.key} · ${where}`;
   }
 
   const changes: StagedChange[] = steps.map(({ move, from, to }, i) => ({
@@ -668,7 +717,29 @@ export function IndustriesPage({ onBackToCerts: leavePage }: { onBackToCerts?: (
     toast(`${n} ${n === 1 ? "Change" : "Changes"} Applied`);
   }
 
-  function updateScopeCerts(sc: Scope, fn: (ids: string[]) => string[]) {
+  /* Tagging writes the Certification (membership) and the scope's display
+     order (a newly tagged one is appended); untagging drops both. */
+  function tagCerts(sc: Scope, ids: string[]) {
+    const key = scopeTag(sc);
+    setCerts((prev) =>
+      prev.map((c) =>
+        ids.includes(c.id) && isSkillCatCert(c) && !c.industries.includes(key)
+          ? { ...c, industries: [...c.industries, key] }
+          : c,
+      ),
+    );
+    updateScopeOrder(sc, (cur) => [...cur, ...ids.filter((id) => !cur.includes(id))]);
+  }
+
+  function untagCert(sc: Scope, id: string) {
+    const key = scopeTag(sc);
+    setCerts((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, industries: c.industries.filter((k) => k !== key) } : c)),
+    );
+    updateScopeOrder(sc, (cur) => cur.filter((c) => c !== id));
+  }
+
+  function updateScopeOrder(sc: Scope, fn: (ids: string[]) => string[]) {
     setIndustries((prev) =>
       prev.map((i) => {
         if (i.key !== sc.industryKey) return i;
@@ -758,6 +829,7 @@ export function IndustriesPage({ onBackToCerts: leavePage }: { onBackToCerts?: (
             industry={currentIndustry}
             sub={currentSub}
             certIds={scopeCertIds}
+            certsById={certsById}
             onBackToCerts={onBackToCerts}
             onBackToLauncher={() => setScope(null)}
             onBackToIndustry={() =>
@@ -998,7 +1070,7 @@ export function IndustriesPage({ onBackToCerts: leavePage }: { onBackToCerts?: (
         const target = modal.scope;
         const certId = modal.certId;
         const ind = industries.find((i) => i.key === target.industryKey);
-        const cert = allCertsById[certId];
+        const cert = certsById.get(certId);
         const sub = target.kind === "sub" ? ind?.subIndustries.find((s) => s.key === target.subKey) : null;
         if (!ind || !cert || (target.kind === "sub" && !sub)) return null;
         return (
@@ -1009,7 +1081,7 @@ export function IndustriesPage({ onBackToCerts: leavePage }: { onBackToCerts?: (
             // Tagged here and nowhere else → removing it drops it from browse.
             lastTag={tagsForCert(certId).length <= 1}
             onConfirm={() => {
-              updateScopeCerts(target, (ids) => ids.filter((c) => c !== certId));
+              untagCert(target, certId);
               setModal({ kind: "none" });
               toast("Certification Removed");
             }}
@@ -1026,12 +1098,13 @@ export function IndustriesPage({ onBackToCerts: leavePage }: { onBackToCerts?: (
         const already = target.kind === "industry" ? ind.certIds : sub?.certIds ?? [];
         return (
           <AddCertsModal
+            certs={certs}
             industryName={ind.name}
             subName={sub?.name}
             alreadyAtScope={new Set(already)}
             tagsForCert={tagsForCert}
             onAdd={(ids) => {
-              updateScopeCerts(target, (cur) => [...cur, ...ids]);
+              tagCerts(target, ids);
               setModal({ kind: "none" });
               toast(`${ids.length} ${ids.length === 1 ? "Certification" : "Certifications"} Added`);
             }}
@@ -1041,11 +1114,12 @@ export function IndustriesPage({ onBackToCerts: leavePage }: { onBackToCerts?: (
       })()}
       {modal.kind === "assign-industries" && (
         <AddCertsModal
+          certs={certs}
           pickScope={industries}
           tagsForCert={tagsForCert}
           onAdd={(ids, target) => {
             if (!target) return;
-            updateScopeCerts(target, (cur) => [...cur, ...ids.filter((id) => !cur.includes(id))]);
+            tagCerts(target, ids);
             setModal({ kind: "none" });
             toast("Industries Assigned");
           }}
@@ -1053,17 +1127,6 @@ export function IndustriesPage({ onBackToCerts: leavePage }: { onBackToCerts?: (
         />
       )}
     </div>
-  );
-}
-
-/* The Certifications the page knows, minus the picker's placeholder filler. */
-const CERT_UNIVERSE: IndustryCert[] = Object.values(allCertsById).filter(
-  (c) => !c.name.startsWith("Placeholder Cert"),
-);
-
-function isTagged(inds: Industry[], certId: string): boolean {
-  return inds.some(
-    (i) => i.certIds.includes(certId) || i.subIndustries.some((s) => s.certIds.includes(certId)),
   );
 }
 
@@ -1078,7 +1141,7 @@ function UntaggedBanner({
   onAssign,
   onDismiss,
 }: {
-  certs: IndustryCert[];
+  certs: Certification[];
   onAssign: () => void;
   onDismiss: () => void;
 }) {
@@ -1354,6 +1417,7 @@ function Hub({
   industry,
   sub,
   certIds,
+  certsById,
   onBackToCerts,
   onBackToLauncher,
   onBackToIndustry,
@@ -1369,6 +1433,7 @@ function Hub({
   industry: Industry;
   sub: SubIndustry | null;
   certIds: string[];
+  certsById: CertsById;
   /** Crumb targets: the launcher, and (from a sub) its parent industry. */
   onBackToCerts?: () => void;
   onBackToLauncher: () => void;
@@ -1521,7 +1586,7 @@ function Hub({
                     icon={rowIcon(s)}
                     name={s.name}
                     hiddenPill={!!s.hidden}
-                    meta={certificationsLine(s)}
+                    meta={certificationsLine(s, certsById)}
                     action={
                       <RowKebab label="Sub-Industry options" onClick={(e) => onSubMenu(e, s.key)} />
                     }
@@ -1538,7 +1603,7 @@ function Hub({
             addLabel="Add Certification"
             onAdd={onAddCerts}
           />
-          <CertList certIds={certIds} onMove={onMoveCert} onRemove={onRemoveCert} />
+          <CertList certIds={certIds} certsById={certsById} onMove={onMoveCert} onRemove={onRemoveCert} />
         </section>
 
       </div>
@@ -1578,10 +1643,12 @@ function SecHead({
 
 function CertList({
   certIds,
+  certsById,
   onMove,
   onRemove,
 }: {
   certIds: string[];
+  certsById: CertsById;
   onMove: (id: string, to: number) => void;
   onRemove: (id: string) => void;
 }) {
@@ -1613,7 +1680,7 @@ function CertList({
   return (
     <div className="ind-rowlist ind-certtable">
       {certIds.map((id, idx) => {
-        const cert = allCertsById[id];
+        const cert = certsById.get(id);
         if (!cert) return null;
         const isDragging = dragIdx === idx;
         const isOver = overIdx === idx && dragIdx !== null && dragIdx !== idx;
@@ -1635,7 +1702,11 @@ function CertList({
             handle={{}}
             index={idx + 1}
             name={cert.name}
-            meta={`${cert.stage} · ${cert.hours} ${cert.hours === 1 ? "hour" : "hours"}`}
+            meta={
+              [cert.careerStage, formatTimeToComplete(cert.timeToComplete)]
+                .filter(Boolean)
+                .join(" · ") || null
+            }
             action={
               <span className="row-action-bar">
                 <button className="row-action-btn row-action-btn--label" onClick={() => onRemove(id)}>
@@ -2000,6 +2071,7 @@ function RemoveCertConfirm({
    search, the list is the untagged Certifications, and the chosen scope comes
    back with the picks. Selection is staged until confirm. */
 function AddCertsModal({
+  certs,
   industryName,
   subName,
   alreadyAtScope,
@@ -2008,6 +2080,8 @@ function AddCertsModal({
   onAdd,
   onClose,
 }: {
+  /** App's Certifications; only SkillCat-created ones can be tagged. */
+  certs: Certification[];
   industryName?: string;
   subName?: string;
   alreadyAtScope?: Set<string>;
@@ -2035,25 +2109,15 @@ function AddCertsModal({
 
   const scopeLabel = subName ? `${industryName} › ${subName}` : `${industryName ?? ""} (Industry-level)`;
 
-  /* The page's certifications as the picker's rows. Assign Industries lists
-     only the untagged ones — that banner exists to tag them. */
+  /* The catalog's SkillCat-created Certifications (company-created ones
+     can't carry Industry tags). Assign Industries lists only the untagged
+     ones — that banner exists to tag them. */
   const pool = useMemo<Certification[]>(
     () =>
-      Object.values(allCertsById)
-        .filter((c) => !c.name.startsWith("Placeholder Cert"))
-        .filter((c) => !pickScope || tagsForCert(c.id).length === 0)
-        .map((c) => ({
-          id: c.id,
-          name: c.name,
-          industry: tagsForCert(c.id)
-            .map((t) => (t.subName ? `${t.industryName} › ${t.subName}` : t.industryName))
-            .join(", "),
-          ceus: "",
-          tasks: 0,
-          createdBy: "SkillCat",
-          careerStage: c.stage,
-        })),
-    [pickScope, tagsForCert],
+      certs
+        .filter(isSkillCatCert)
+        .filter((c) => !pickScope || tagsForCert(c.id).length === 0),
+    [certs, pickScope, tagsForCert],
   );
   const lockedNames = useMemo(
     () => pool.filter((c) => alreadyAtScope?.has(c.id)).map((c) => c.name),
@@ -2101,6 +2165,3 @@ function AddCertsModal({
     />
   );
 }
-
-// Silence unused-var warnings for the cert type re-export
-export type { IndustryCert };

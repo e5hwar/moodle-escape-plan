@@ -1,16 +1,15 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
-  skills as seedSkills,
-  masterySkills as seedMastery,
   masteryUsing,
+  blockingMastery,
+  skillDateToday,
   taskById,
   fmtHolders,
   SKILL_STATUSES,
   type Skill,
   type MasterySkill,
 } from "../data/skills";
-import { topIndustry } from "../data/certifications";
-import { skillTaskNames, skillCertifications, skillIndustryPaths, skillIndustries, INDUSTRY_OPTIONS, matchesIndustry } from "../data/skillGraph";
+import { skillTaskNames, skillCertifications, skillIndustryPaths, skillIndustries, useIndustryOptions, matchesIndustry } from "../data/skillGraph";
 import { Dropdown } from "./Dropdown";
 import { FILTER_TIPS } from "../data/filterTips";
 import {
@@ -138,9 +137,10 @@ const COLS: Col[] = [
   {
     key: "tasks", label: "Linked Tasks", className: "col-used", width: 280, sortable: false,
     tip: (r) => listTip(recTasks(r)),
-    /* More than one linked Task means completing any of them awards the Skill,
-       so the list needs saying so before it reads as "all of these". */
-    tipHead: (r) => (recTasks(r).length > 1 ? "Any of:" : undefined), // 1567:3206's "All of:" shape
+    /* More than one linked Task: the head says which the Skill's rule asks
+       for — every one of them, or any one (1567:3206's "All of:" shape). */
+    tipHead: (r) =>
+      r.kind === "skill" && recTasks(r).length > 1 ? (r.skill.rule === "all" ? "All of:" : "Any of:") : undefined,
     render: (r) => <NamesCell names={recTasks(r)} />,
   },
   {
@@ -187,9 +187,20 @@ function countBy(skills: Skill[], values: (s: Skill) => string[]): Map<string, n
   return m;
 }
 
-export function SkillsPage({ onBackToTasks }: { onBackToTasks: () => void }) {
-  const [skills, setSkills] = useState<Skill[]>(seedSkills);
-  const [mastery, setMastery] = useState<MasterySkill[]>(seedMastery);
+export function SkillsPage({
+  skills,
+  setSkills,
+  mastery,
+  setMastery,
+  onBackToTasks,
+}: {
+  /** Held in App, as Certifications are, so changes survive navigation. */
+  skills: Skill[];
+  setSkills: Dispatch<SetStateAction<Skill[]>>;
+  mastery: MasterySkill[];
+  setMastery: Dispatch<SetStateAction<MasterySkill[]>>;
+  onBackToTasks: () => void;
+}) {
   const [mode, setMode] = useState<Mode>({ kind: "list" });
   const [modal, setModal] = useState<Modal>({ kind: "none" });
   /* Raised here, not in the wizard: a save closes the wizard back onto this
@@ -205,8 +216,12 @@ export function SkillsPage({ onBackToTasks }: { onBackToTasks: () => void }) {
     setPanel(null);
     run();
   }
-  // "C" stands down while the panel is open — the wizard would open behind it.
-  useCreateShortcut(() => setMode({ kind: "new", type: "skill" }), mode.kind === "list" && !panel);
+  // "C" stands down while the panel, a row menu or a confirm is open — the
+  // wizard would open behind it, and the confirm would resurface on its close.
+  useCreateShortcut(
+    () => setMode({ kind: "new", type: "skill" }),
+    mode.kind === "list" && !panel && !menu && modal.kind === "none",
+  );
 
   const [query, setQuery] = useState("");
   const [certFilter, setCertFilter] = useState<string[]>([]);
@@ -249,13 +264,17 @@ export function SkillsPage({ onBackToTasks }: { onBackToTasks: () => void }) {
     });
   }
   function setSkillStatus(id: string, status: Skill["status"]) {
-    setSkills((prev) => prev.map((s) => (s.id === id ? { ...s, status } : s)));
+    setSkills((prev) => prev.map((s) => (s.id === id ? { ...s, status, dateModified: skillDateToday() } : s)));
   }
   function setMasteryStatus(id: string, status: MasterySkill["status"]) {
-    setMastery((prev) => prev.map((m) => (m.id === id ? { ...m, status } : m)));
+    setMastery((prev) => prev.map((m) => (m.id === id ? { ...m, status, dateModified: skillDateToday() } : m)));
   }
   function deleteSkill(id: string) {
     setSkills((prev) => prev.filter((s) => s.id !== id));
+    // An archived Mastery Skill may still list it — drop the dangling link.
+    setMastery((prev) =>
+      prev.map((m) => (m.skillIds.includes(id) ? { ...m, skillIds: m.skillIds.filter((x) => x !== id) } : m)),
+    );
   }
   function deleteMastery(id: string) {
     setMastery((prev) => prev.filter((m) => m.id !== id));
@@ -266,7 +285,7 @@ export function SkillsPage({ onBackToTasks }: { onBackToTasks: () => void }) {
     if (s.status === "Archived") { setSkillStatus(s.id, "Active"); toast("Skill Unarchived"); return; }
     /* A Skill still linked to a Mastery Skill can't be archived — the menu
        disables the row (1403:2071), so this guard only backs that up. */
-    if (masteryUsing(s.id, mastery).length > 0) return;
+    if (blockingMastery(s.id, mastery).length > 0) return;
     setModal({ kind: "archive-skill", skill: s });
   }
   function archiveMastery(m: MasterySkill) {
@@ -283,10 +302,11 @@ export function SkillsPage({ onBackToTasks }: { onBackToTasks: () => void }) {
     [skills],
   );
   const certCounts = useMemo(() => countBy(skills, skillCertifications), [skills]);
-  /* A parent Industry counts the Skills of its Sub-Industries too, so the
-     option's count matches what picking it actually shows. */
+  /* Exact tags, as the filter matches: a Sub-Industry's Skills don't count
+     toward its Industry. */
+  const INDUSTRY_OPTIONS = useIndustryOptions();
   const industryCounts = useMemo(
-    () => countBy(skills, (s) => skillIndustryPaths(s).flatMap((p) => [p, topIndustry(p)])),
+    () => countBy(skills, skillIndustryPaths),
     [skills],
   );
   const taskCounts = useMemo(() => countBy(skills, skillTaskNames), [skills]);
@@ -655,9 +675,10 @@ export function SkillsPage({ onBackToTasks }: { onBackToTasks: () => void }) {
         if (menu.kind === "skill") {
           const s = skills.find((x) => x.id === menu.id);
           if (!s) return null;
-          /* Linked to any Mastery Skill = can't be archived OR deleted
-             (1403:2071): both rows disable with the same reason. */
-          const linkedCount = masteryUsing(s.id, mastery).length;
+          /* Linked to a Mastery Skill, archived or not = can't be archived OR
+             deleted (1403:2071): both rows disable with the same reason. The
+             admin removes the Skill from the Mastery Skill's criteria first. */
+          const linkedCount = blockingMastery(s.id, mastery).length;
           const linkedWhy = linkedCount > 0
             ? `Currently linked to ${linkedCount} Mastery Skill${linkedCount === 1 ? "" : "s"}. Remove ${linkedCount === 1 ? "it" : "them"} to proceed.`
             : undefined;
@@ -871,6 +892,7 @@ function RecRow({
   return (
     <tr className={`skg-row ${archived ? "skg-archived" : ""} ${menuOpen ? "menu-open" : ""}`} onClick={onOpen}>
       <td className="col-name">
+        <img className="skg-icon" src={r.image.url} alt="" />
         <span className="skg-name" data-tip={r.name}>{r.name}</span>
         {archived && <span className="pr-name-flag pr-name-flag--grey">Archived</span>}
       </td>
@@ -900,6 +922,7 @@ function SkillPanel({
   const tasks = isSkill ? rec.skill.taskIds.map((id) => ({ id, task: taskById(id) })) : [];
   return (
     <PreviewPanel
+      image={r.image.url}
       title={r.name}
       subtitle={r.description}
       onMore={onMore}

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  pendingIdReuploads as seed,
+  useReviewedQuizNames,
+  useSubmissions,
+  isPendingIdReupload,
   matchesQuery,
   type Submission,
 } from "../data/proctoring";
@@ -17,6 +19,7 @@ import {
 } from "./DateRangeFilter";
 import { TableCols } from "./TableCols";
 import { TableEmpty } from "./TableEmpty";
+import { useToast } from "./useToast";
 
 const PAGE_SIZE = 50;
 
@@ -67,33 +70,61 @@ function compare(a: Submission, b: Submission, key: SortKey): number {
   }
 }
 
+/** What this page was showing — handed out with a row so App can put it back
+ *  when the console returns here. */
+export type PendingIdListState = {
+  query: string;
+  examFilter: string[];
+  sort: { key: SortKey; dir: SortDir };
+  submittedRange: DateRangeState;
+  requestedRange: DateRangeState;
+};
+
 export function PendingIdReuploadsPage({
   onBack,
   onReview,
+  restore,
+  flash,
+  onFlashDone,
 }: {
   onBack?: () => void;
   /** Opens the submission in the Exam Reviews console — the same console the
-   *  review queue opens, so there is only one place an exam is reviewed. */
-  onReview?: (id: string) => void;
+   *  review queue opens, so there is only one place an exam is reviewed.
+   *  `queueIds` is this page's filtered, sorted list: the console's queue, so
+   *  Skip and ←/→ walk it. `state` is what to restore on the way back. */
+  onReview?: (id: string, queueIds: string[], state: PendingIdListState) => void;
+  /** The filters, sort and page the console was opened from. */
+  restore?: PendingIdListState | null;
+  /** A decision made in the console on this page's queue ("ID Approved"). */
+  flash?: string | null;
+  onFlashDone?: () => void;
 }) {
-  const [query, setQuery] = useState("");
-  // The search bar.s Quiz scope, applied the same way Exam Reviews applies it.
-  const [examFilter, setExamFilter] = useState<string[]>([]);
+  const [, toastNode] = useToast(flash, onFlashDone);
+  /* The live list Exam Reviews writes to: a re-upload requested in the console
+     shows up here, and a row decided from here leaves. */
+  const all = useSubmissions();
+  const rows = useMemo(() => all.filter(isPendingIdReupload), [all]);
+  const [query, setQuery] = useState(restore?.query ?? "");
+  // The search bar's Quiz scope, applied the same way Exam Reviews applies it.
+  const [examFilter, setExamFilter] = useState<string[]>(restore?.examFilter ?? []);
   // Oldest request first — the longest chase leads, the date this page is
   // measured from (user, 2026-10-02).
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
-    key: "requestedAt",
-    dir: "asc",
-  });
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>(
+    restore?.sort ?? { key: "requestedAt", dir: "asc" },
+  );
   const [page, setPage] = useState(1);
   /* One range per date column, both the Exam Reviews pill: All Time is the
      unapplied, dashed state, so neither narrows anything until it's set. */
-  const [submittedRange, setSubmittedRange] = useState<DateRangeState>(() => allTimeDateRange());
-  const [requestedRange, setRequestedRange] = useState<DateRangeState>(() => allTimeDateRange());
+  const [submittedRange, setSubmittedRange] = useState<DateRangeState>(
+    () => restore?.submittedRange ?? allTimeDateRange(),
+  );
+  const [requestedRange, setRequestedRange] = useState<DateRangeState>(
+    () => restore?.requestedRange ?? allTimeDateRange(),
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return seed.filter((s) => {
+    return rows.filter((s) => {
       if (examFilter.length > 0 && !examFilter.includes(s.exam)) return false;
       if (q && !matchesQuery(s, q)) return false;
       if (!dateRangeIncludes(submittedRange, readableDate(s.submittedAt))) return false;
@@ -103,7 +134,7 @@ export function PendingIdReuploadsPage({
       }
       return true;
     });
-  }, [query, examFilter, submittedRange, requestedRange]);
+  }, [rows, query, examFilter, submittedRange, requestedRange]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered].sort((a, b) => compare(a, b, sort.key));
@@ -116,11 +147,18 @@ export function PendingIdReuploadsPage({
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
 
-  /** Every quiz present in this queue — the Quiz pill's option list. */
-  const examNames = useMemo(
-    () => [...new Set(seed.map((s) => s.exam))].sort((a, b) => a.localeCompare(b)),
-    [],
-  );
+  /** Every Quiz Exam Reviews reviews — the Quiz pill's option list, the same
+   *  live list Exam Reviews offers, so an applied Quiz can't vanish when its
+   *  last row leaves. */
+  const examNames = useReviewedQuizNames();
+
+  function review(id: string) {
+    onReview?.(
+      id,
+      sorted.map((s) => s.id),
+      { query, examFilter, sort, submittedRange, requestedRange },
+    );
+  }
 
   const hasFilters =
     examFilter.length > 0 || !isAllTimeRange(submittedRange) || !isAllTimeRange(requestedRange);
@@ -138,6 +176,7 @@ export function PendingIdReuploadsPage({
   }
 
   return (
+    <>
     <div className="main">
       <div className="workspace">
         <div className="tasks sch-page">
@@ -167,7 +206,8 @@ export function PendingIdReuploadsPage({
                   same Quiz scope, scoped to this page's rows. */}
               <div className="toolbar">
                 <ProctoringSearch
-                  submissions={seed}
+                  submissions={rows}
+                  quizzes={examNames}
                   exams={examFilter}
                   onExamsChange={setExamFilter}
                   query={query}
@@ -259,7 +299,7 @@ export function PendingIdReuploadsPage({
                   </thead>
                   <tbody>
                     {paged.map((s) => (
-                      <tr key={s.id} onClick={() => onReview?.(s.id)}>
+                      <tr key={s.id} onClick={() => review(s.id)}>
                         <td className="col-name">{s.candidateName}</td>
                         {/* Click-to-copy (see CopyCells.tsx) — same pair as the
                             Exam Reviews table, for the same re-upload chase. */}
@@ -275,14 +315,14 @@ export function PendingIdReuploadsPage({
                           <button
                             className="row-action-btn lone-dots row-chevron"
                             aria-label="Review Exam"
-                            onClick={(e) => { e.stopPropagation(); onReview?.(s.id); }}
+                            onClick={(e) => { e.stopPropagation(); review(s.id); }}
                           >
                             <RowChevronIcon />
                           </button>
                           <div className="row-action-bar">
                             <button
                               className="row-action-btn row-action-btn--label"
-                              onClick={(e) => { e.stopPropagation(); onReview?.(s.id); }}
+                              onClick={(e) => { e.stopPropagation(); review(s.id); }}
                             >
                               Review Exam
                               <RowChevronIcon />
@@ -311,6 +351,8 @@ export function PendingIdReuploadsPage({
         </div>
       </div>
     </div>
+    {toastNode}
+    </>
   );
 }
 

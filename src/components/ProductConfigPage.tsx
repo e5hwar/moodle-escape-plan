@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { SYSTEM_DEEP_LINKS, type SystemDeepLink } from "../data/deepLinks";
-import { CANCELLATION_REASONS } from "../data/companies";
-import { DEFAULT_PARTNERSHIPS, DEFAULT_TRADES } from "../data/productConfig";
+import type { Award, AwardDesignTemplate } from "../data/awards";
 import {
-  designTemplates as seedTemplates,
-  type Award,
-  type AwardDesignTemplate,
-} from "../data/awards";
+  DEFAULT_B2B_TRIAL_DAYS,
+  DEFAULT_CANCELLATION_REASONS,
+  DEFAULT_PARTNERSHIPS,
+  DEFAULT_TRADES,
+} from "../data/productConfig";
 import { formatShortDate } from "../formatDate";
 import { AddIcon, PlusThinIcon, RowCloseIcon, RowEditIcon, RowExternalLinkIcon, InfoIcon12 } from "./icons";
 import { PrmModal } from "./PrmModal";
@@ -41,7 +41,8 @@ import { NAME_MAX, isOver, limitClass, limitLabel } from "../data/fieldLimits";
    modals, so it brings its own full-height body and saves on its own. */
 
 /* ─── Types ─── */
-type Tab = "general" | "display" | "award-templates" | "b2c" | "b2b" | "legal" | "permissions";
+export type ProductConfigTab = "general" | "display" | "award-templates" | "b2c" | "b2b" | "legal" | "permissions";
+type Tab = ProductConfigTab;
 
 const TAB_LABELS: Record<Tab, string> = {
   general: "General Settings",
@@ -94,6 +95,14 @@ const B2B_PRICE_ROWS: PriceRow<Tier>[] = [
 const emptyPrices = <K extends string>(rows: PriceRow<K>[]): PriceTable<K> =>
   Object.fromEntries(rows.map((r) => [r.key, { Monthly: "", Annual: "" }])) as PriceTable<K>;
 
+/* The default B2B rates: a sample Stripe Price ID in every tier × cycle, so
+   none starts blank. */
+const DEFAULT_B2B_PRICES: PriceTable<Tier> = {
+  Essentials: { Monthly: "price_1QEssMo7Hk2LpXa9TbR4vNcE", Annual: "price_1QEssAn3Wd8FqZt6YmK2sGhJ" },
+  Growth: { Monthly: "price_1QGroMo5Rn9VbCx2LpQ8wEdT", Annual: "price_1QGroAn8Jt4MzKs7NfH3yUcB" },
+  Professional: { Monthly: "price_1QProMo2Xc6TgWq9DkL5aVbN", Annual: "price_1QProAn9Ly3HsRf4PeG7mZtK" },
+};
+
 /** `date` is ISO "YYYY-MM-DD"; it prints through the app's `formatShortDate`. */
 type ForceUpdate = { id: string; version: string; date: string };
 
@@ -105,16 +114,17 @@ const tabRow = (id: string, nameEn: string, nameEs = ""): TabRow => ({
 });
 
 /* Every value the page's Save Changes covers. One object, so "is anything
-   unsaved?" is one comparison against the last saved copy. */
-type Settings = {
+   unsaved?" is one comparison against the last saved copy. The saved copy
+   lives in App state, so it outlasts a visit to another page. */
+export type ProductSettings = {
   forceUpdates: ForceUpdate[];
   webcamFrequency: string;
+  initialTaskCount: string;
   appTabs: TabRow[];
   dashboardTabs: TabRow[];
   supportLinks: SupportLink[];
   b2cPrices: PriceTable<Platform>;
   b2cTrialDays: string;
-  b2cInitialTaskCount: string;
   b2cEpaCard: string;
   b2bPrices: PriceTable<Tier>;
   b2bTrialDays: string;
@@ -126,13 +136,22 @@ type Settings = {
   privacyPolicy: BilingualDoc;
 };
 
-const DEFAULT_SETTINGS: Settings = {
+type Settings = ProductSettings;
+
+/** The B2B lists whose values records carry — removing one strips it from them. */
+export type B2BListKey = "partnerships" | "trades" | "cancelReasons";
+/** How many records carry a list value. Cancellation Reasons live on
+ *  companies only, so their Task / Certification counts are always 0. */
+export type B2BValueUsage = { companies: number; tasks: number; certifications: number };
+
+export const DEFAULT_PRODUCT_SETTINGS: Settings = {
   forceUpdates: [
     { id: "fu-3", version: "4.2.0", date: "2026-06-02" },
     { id: "fu-2", version: "4.1.3", date: "2026-04-18" },
     { id: "fu-1", version: "4.0.0", date: "2026-01-27" },
   ],
   webcamFrequency: "20",
+  initialTaskCount: "5",
   appTabs: [
     tabRow("app-lab", "Lab"),
     tabRow("app-resources", "Resources"),
@@ -152,19 +171,41 @@ const DEFAULT_SETTINGS: Settings = {
   ],
   b2cPrices: emptyPrices(B2C_PRICE_ROWS),
   b2cTrialDays: "3",
-  b2cInitialTaskCount: "5",
   b2cEpaCard: "",
-  b2bPrices: emptyPrices(B2B_PRICE_ROWS),
-  b2bTrialDays: "14",
+  b2bPrices: DEFAULT_B2B_PRICES,
+  b2bTrialDays: String(DEFAULT_B2B_TRIAL_DAYS),
   partnerships: DEFAULT_PARTNERSHIPS,
   trades: DEFAULT_TRADES,
   b2bEpaCard: "",
-  cancelReasons: [...CANCELLATION_REASONS],
+  cancelReasons: DEFAULT_CANCELLATION_REASONS,
   termsOfService: { en: "", es: "" },
   privacyPolicy: { en: "", es: "" },
 };
 
-const SETTING_KEYS = Object.keys(DEFAULT_SETTINGS) as (keyof Settings)[];
+const SETTING_KEYS = Object.keys(DEFAULT_PRODUCT_SETTINGS) as (keyof Settings)[];
+
+/* The whole-number settings and the least each may be saved at. Blank or
+   below the minimum blocks Save Changes and flags the field. */
+const NUMBER_MINS = {
+  webcamFrequency: 1,
+  initialTaskCount: 1,
+  b2cTrialDays: 1,
+  b2bTrialDays: 1,
+} as const;
+type NumberKey = keyof typeof NUMBER_MINS;
+const NUMBER_LABELS: Record<NumberKey, string> = {
+  webcamFrequency: "Webcam Capture Frequency",
+  initialTaskCount: "Initial Tasks Count",
+  b2cTrialDays: "B2C Free Trial Duration",
+  b2bTrialDays: "B2B Free Trial Duration",
+};
+/** Why a number setting can't be saved, or null when it can. */
+function numberProblem(key: NumberKey, value: string): string | null {
+  if (!value.trim()) return "Cannot be left empty";
+  const n = parseInt(value, 10);
+  if (!Number.isFinite(n) || n < NUMBER_MINS[key]) return `Must be at least ${NUMBER_MINS[key]}`;
+  return null;
+}
 
 /* By value, not reference: adding an option and then clearing it again leaves
    an equal but new array, which is not an unsaved change. */
@@ -257,21 +298,29 @@ function NumberField({
   value,
   onChange,
   min = 0,
+  error,
 }: {
   label: string;
   help: string;
   value: string;
   onChange: (v: string) => void;
   min?: number;
+  /** Blank or under `min` — the label row says which, the shell goes red,
+   *  and Save Changes is blocked. */
+  error?: string | null;
 }) {
   return (
     <div className="form-group">
-      <label className="form-label">{label}</label>
+      <label className="form-label">
+        {label}
+        {error && <span className="form-label-error">{error}</span>}
+      </label>
       <Stepper
         value={value}
         onChange={(v) => onChange(v.replace(/[^0-9]/g, ""))}
         min={min}
         ariaLabel={label}
+        hasError={!!error}
       />
       <p className="form-help">{help}</p>
     </div>
@@ -407,6 +456,7 @@ function ForceAppUpdateField({
       {adding && (
         <ForceUpdateModal
           existing={history.map((h) => h.version)}
+          active={history[0]?.version}
           onForce={force}
           onCancel={() => setAdding(false)}
         />
@@ -425,12 +475,26 @@ function ForceAppUpdateField({
 
 const VERSION_RE = /^\d+(\.\d+)*$/;
 
+/** Compares dotted versions part by part ("4.10.0" > "4.9.2"; "4.2" = "4.2.0"). */
+function compareVersions(a: string, b: string): number {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d) return d;
+  }
+  return 0;
+}
+
 function ForceUpdateModal({
   existing,
+  active,
   onForce,
   onCancel,
 }: {
   existing: string[];
+  /** The version currently forced — a new one must be higher. */
+  active?: string;
   onForce: (version: string) => void;
   onCancel: () => void;
 }) {
@@ -438,7 +502,8 @@ function ForceUpdateModal({
   const v = version.trim();
   const isFormat = VERSION_RE.test(v);
   const isDuplicate = isFormat && existing.includes(v);
-  const isValid = isFormat && !isDuplicate;
+  const isLower = isFormat && !isDuplicate && !!active && compareVersions(v, active) <= 0;
+  const isValid = isFormat && !isDuplicate && !isLower;
 
   useEscape(onCancel);
 
@@ -463,11 +528,13 @@ function ForceUpdateModal({
               <span className="form-label-error">Use numbers separated by dots, e.g. 4.3.0.</span>
             ) : isDuplicate ? (
               <span className="form-label-error">Version {v} is already in the log.</span>
+            ) : isLower ? (
+              <span className="form-label-error">Must be higher than the Active version, {active}.</span>
             ) : null}
           </span>
           <input
             autoFocus
-            className={`form-input${(v && !isFormat) || isDuplicate ? " has-error" : ""}`}
+            className={`form-input${(v && !isFormat) || isDuplicate || isLower ? " has-error" : ""}`}
             placeholder="e.g. 4.3.0"
             value={version}
             onChange={(e) => setVersion(e.target.value)}
@@ -545,7 +612,7 @@ function DeepLinksField({ links }: { links: SystemDeepLink[] }) {
             <span className="pc-col-login pc-muted">{link.requiresLogin ? "Yes" : "No"}</span>
             <a
               className="pc-open"
-              href={`https://${link.url}`}
+              href={link.url}
               target="_blank"
               rel="noopener noreferrer"
               title="Open in a New Tab"
@@ -772,8 +839,8 @@ function EpaCardField({
         spellCheck={false}
       />
       <p className="form-help">
-        Stripe Product ID for the EPA card. Used to create the checkout session when a learner
-        purchases their EPA card.
+        Stripe Product ID for the EPA card. Checkout uses the Product's default Price when a
+        learner purchases their EPA card.
         <span className="form-help-info" tabIndex={0} role="note" aria-label={note} data-tip={note}>
           <InfoIcon12 />
         </span>
@@ -797,7 +864,11 @@ function OptionListField({
   emptyLabel,
   options,
   onChange,
+  onRequestRemove,
 }: {
+  /** Removing goes through the caller (a usage warning and a confirm) instead
+   *  of dropping the row straight away. */
+  onRequestRemove?: (value: string) => void;
   label: string;
   help: string;
   /** Header cell, e.g. "PARTNERSHIP". */
@@ -849,7 +920,7 @@ function OptionListField({
                 className="qsec-x"
                 title="Remove"
                 aria-label={`Remove ${opt}`}
-                onClick={() => removeAt(i)}
+                onClick={() => (onRequestRemove ? onRequestRemove(opt) : removeAt(i))}
               >
                 <RowCloseIcon />
               </button>
@@ -886,6 +957,65 @@ function OptionListField({
         />
       )}
     </div>
+  );
+}
+
+/* Removing a Partnership, Trade or Cancellation Reason. Records carry these
+   values, so the warning says how many do before anything goes — then the
+   standard second confirm every destructive action gets. */
+function plural(n: number, one: string, many = `${one}s`) {
+  return `${n} ${n === 1 ? one : many}`;
+}
+function usageSentence(u: B2BValueUsage): string | null {
+  const parts = [
+    u.companies > 0 && plural(u.companies, "company", "companies"),
+    u.tasks > 0 && plural(u.tasks, "Task"),
+    u.certifications > 0 && plural(u.certifications, "Certification"),
+  ].filter((p): p is string => !!p);
+  if (parts.length === 0) return null;
+  return parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+function RemoveValueModal({
+  noun, value, usage, onCancel, onConfirm,
+}: {
+  noun: string;
+  value: string;
+  usage: B2BValueUsage;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const carriedBy = usageSentence(usage);
+  return (
+    <PrmModal
+      title={`Remove ${noun}?`}
+      confirmLabel={`Remove ${noun}`}
+      cancelLabel="Cancel"
+      danger
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+      doubleConfirmLabel={`Yes, Remove ${noun}`}
+      doubleConfirm={
+        <>
+          <strong>{value}</strong> will be removed
+          {carriedBy ? <> from {carriedBy}</> : null} and from every filter and picker. This
+          can't be undone.
+        </>
+      }
+    >
+      <p className="prm-content">
+        {carriedBy ? (
+          <>
+            <strong>{value}</strong> is on {carriedBy}. Removing it takes it off all of them,
+            and out of every filter and picker. This is saved straight away.
+          </>
+        ) : (
+          <>
+            No companies, Tasks or Certifications carry <strong>{value}</strong>. Removing it
+            takes it out of every filter and picker. This is saved straight away.
+          </>
+        )}
+      </p>
+    </PrmModal>
   );
 }
 
@@ -997,16 +1127,53 @@ function LegalDocField({
 /* ─── Main page ─── */
 export function ProductConfigPage({
   initialTab,
+  navKey,
+  saved,
+  onSave,
+  templates,
+  setTemplates,
   onEditAward,
+  usageOf,
+  onRemoveValue,
 }: {
+  /** How many companies / Tasks / Certifications carry a list value. */
+  usageOf?: (list: B2BListKey, value: string) => B2BValueUsage;
+  /** Confirmed removal of a list value: App drops it from the SAVED list and
+   *  strips it from every record that carries it. Saved straight away — it
+   *  can't wait for Save Changes, the records have already lost it. */
+  onRemoveValue?: (list: B2BListKey, value: string) => void;
   initialTab?: Tab;
+  /** Changes on every navigation to this page (App's view object), so a link
+   *  to a tab switches to it even while the page is already open. */
+  navKey?: unknown;
+  /** The last SAVED settings — App state, so they persist across pages. */
+  saved: Settings;
+  /** Save Changes: App stores them and publishes what other pages read. */
+  onSave: (settings: Settings) => void;
+  /** Award Design Templates — App state, shared with the Award wizard. */
+  templates: AwardDesignTemplate[];
+  setTemplates: React.Dispatch<React.SetStateAction<AwardDesignTemplate[]>>;
   /** Leaves for the Awards page, on one Award — the Award Templates tab uses
    *  it to reach an Award that still holds a template you tried to delete. */
   onEditAward?: (award: Award) => void;
-} = {}) {
+}) {
   const [tab, setTab] = useState<Tab>(initialTab ?? "general");
-  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
-  const [saved, setSaved] = useState<Settings>(DEFAULT_SETTINGS);
+  // A tab link followed while already here: go to that tab. (Not on mount —
+  // useState above already opened on it.)
+  const firstNav = useRef(true);
+  useEffect(() => {
+    if (firstNav.current) {
+      firstNav.current = false;
+      return;
+    }
+    if (initialTab) setTab(initialTab);
+  }, [navKey, initialTab]);
+  const [settings, setSettings] = useState<Settings>(saved);
+  /* A list value waiting on the remove warning (Partnerships, Trade,
+     Cancellation Reasons). */
+  const [removing, setRemoving] = useState<{ list: B2BListKey; noun: string; value: string } | null>(null);
+  const requestRemove = (list: B2BListKey, noun: string) => (value: string) =>
+    setRemoving({ list, noun, value });
   /* One toast for the page: the save footer's "Settings Saved", and the
      template wizard's create/edit (raised here because the wizard closes back
      to this page as it saves) and the Award Templates delete. */
@@ -1025,10 +1192,20 @@ export function ProductConfigPage({
     tabsOver(settings.appTabs) && limitLabel("App Tabs", NAME_MAX),
     tabsOver(settings.dashboardTabs) && limitLabel("Dashboard Tabs", NAME_MAX),
   ].filter((x): x is string => !!x);
-  const canSave = overLimit.length === 0;
+  // Number settings left blank or under their minimum.
+  const numberErr = Object.fromEntries(
+    (Object.keys(NUMBER_MINS) as NumberKey[]).map((k) => [k, numberProblem(k, settings[k])]),
+  ) as Record<NumberKey, string | null>;
+  const badNumbers = (Object.keys(NUMBER_MINS) as NumberKey[])
+    .filter((k) => numberErr[k])
+    .map((k) => `${NUMBER_LABELS[k]} (at least ${NUMBER_MINS[k]})`);
+  const canSave = overLimit.length === 0 && badNumbers.length === 0;
   const blockedTip = canSave
     ? undefined
-    : ["Shorten these to save:", ...overLimit.map((l) => `• ${l}`)].join("\n");
+    : [
+        ...(overLimit.length ? ["Shorten these to save:", ...overLimit.map((l) => `• ${l}`)] : []),
+        ...(badNumbers.length ? ["Fill in a valid number to save:", ...badNumbers.map((l) => `• ${l}`)] : []),
+      ].join("\n");
 
   const set =
     <K extends keyof Settings>(key: K) =>
@@ -1042,12 +1219,17 @@ export function ProductConfigPage({
   /* Award Templates is a record list, not a settings form: it saves through its
      own wizard and modals, so it keeps its state (and its Create CTA) here
      rather than under the page's Save Changes. */
-  const [templates, setTemplates] = useState<AwardDesignTemplate[]>(seedTemplates);
   const [templateWizard, setTemplateWizard] = useState<
     { kind: "new" } | { kind: "edit"; template: AwardDesignTemplate } | null
   >(null);
   const onTemplatesTab = tab === "award-templates";
-  useCreateShortcut(() => setTemplateWizard({ kind: "new" }), onTemplatesTab && !templateWizard);
+  /* Award Templates' own confirms (delete, "still in use") report up, so C
+     stands down while one is open — on top of the hook's own overlay check. */
+  const [templatesModalOpen, setTemplatesModalOpen] = useState(false);
+  useCreateShortcut(
+    () => setTemplateWizard({ kind: "new" }),
+    onTemplatesTab && !templateWizard && !templatesModalOpen,
+  );
 
   if (templateWizard) {
     return (
@@ -1113,6 +1295,7 @@ export function ProductConfigPage({
                 toast("Template Deleted");
               }}
               onEditLinkedAward={onEditAward && ((award) => guard(() => onEditAward(award)))}
+              onModalChange={setTemplatesModalOpen}
             />
           ) : (
             <div className="pc-body" key={tab}>
@@ -1128,10 +1311,19 @@ export function ProductConfigPage({
                       />
                       <NumberField
                         label="Webcam Capture Frequency in Seconds"
-                        help="How often the webcam captures a frame during proctored sessions."
+                        help="How often the webcam captures a frame during proctored sessions. Changes apply to future Proctored Quiz attempts only."
                         value={settings.webcamFrequency}
                         onChange={set("webcamFrequency")}
-                        min={1}
+                        min={NUMBER_MINS.webcamFrequency}
+                        error={numberErr.webcamFrequency}
+                      />
+                      <NumberField
+                        label="Initial Tasks Count"
+                        help="How many Tasks from the start of each Certification are open to B2C Starter users and B2B companies with no active plan. Final Exams stay locked regardless."
+                        value={settings.initialTaskCount}
+                        onChange={set("initialTaskCount")}
+                        min={NUMBER_MINS.initialTaskCount}
+                        error={numberErr.initialTaskCount}
                       />
                       <DeepLinksField links={SYSTEM_DEEP_LINKS} />
                     </>
@@ -1176,15 +1368,11 @@ export function ProductConfigPage({
                       </div>
                       <NumberField
                         label="Free Trial Duration in Days"
-                        help="Number of days an individual learner gets free access before their trial converts to a paid subscription."
+                        help="The trial length in days for new users."
                         value={settings.b2cTrialDays}
                         onChange={set("b2cTrialDays")}
-                      />
-                      <NumberField
-                        label="Initial Task Count"
-                        help="Number of tasks an individual learner is given to start with when they first sign up."
-                        value={settings.b2cInitialTaskCount}
-                        onChange={set("b2cInitialTaskCount")}
+                        min={NUMBER_MINS.b2cTrialDays}
+                        error={numberErr.b2cTrialDays}
                       />
                       <EpaCardField
                         value={settings.b2cEpaCard}
@@ -1211,9 +1399,11 @@ export function ProductConfigPage({
                       </div>
                       <NumberField
                         label="Free Trial Duration in Days"
-                        help="Number of days a B2B company gets free access before their trial converts to a paid subscription."
+                        help="The trial length in days for new companies. The trial needs no payment method."
                         value={settings.b2bTrialDays}
                         onChange={set("b2bTrialDays")}
+                        min={NUMBER_MINS.b2bTrialDays}
+                        error={numberErr.b2bTrialDays}
                       />
                       <OptionListField
                         label="Partnerships"
@@ -1225,6 +1415,7 @@ export function ProductConfigPage({
                         emptyLabel="No Partnerships Configured Yet"
                         options={settings.partnerships}
                         onChange={set("partnerships")}
+                        onRequestRemove={onRemoveValue && requestRemove("partnerships", "Partnership")}
                       />
                       <OptionListField
                         label="Trade"
@@ -1236,6 +1427,7 @@ export function ProductConfigPage({
                         emptyLabel="No Trades Configured Yet"
                         options={settings.trades}
                         onChange={set("trades")}
+                        onRequestRemove={onRemoveValue && requestRemove("trades", "Trade")}
                       />
                       <EpaCardField
                         value={settings.b2bEpaCard}
@@ -1252,6 +1444,7 @@ export function ProductConfigPage({
                         emptyLabel="No Cancellation Reasons Configured Yet"
                         options={settings.cancelReasons}
                         onChange={set("cancelReasons")}
+                        onRequestRemove={onRemoveValue && requestRemove("cancelReasons", "Reason")}
                       />
                     </>
                   )}
@@ -1297,7 +1490,7 @@ export function ProductConfigPage({
                   data-tip={blockedTip}
                   onClick={() => {
                     if (!canSave) return;
-                    setSaved(settings);
+                    onSave(settings);
                     toast("Settings Saved");
                   }}
                 >
@@ -1308,6 +1501,22 @@ export function ProductConfigPage({
           )}
         </div>
       </div>
+      {removing && (
+        <RemoveValueModal
+          noun={removing.noun}
+          value={removing.value}
+          usage={usageOf?.(removing.list, removing.value) ?? { companies: 0, tasks: 0, certifications: 0 }}
+          onCancel={() => setRemoving(null)}
+          onConfirm={() => {
+            const { list, value, noun } = removing;
+            // Off the draft too, so the list on screen and the saved one agree.
+            setSettings((s) => ({ ...s, [list]: s[list].filter((v) => v !== value) }));
+            onRemoveValue?.(list, value);
+            setRemoving(null);
+            toast(`${noun} Removed`);
+          }}
+        />
+      )}
       {toastNode}
     </div>
   );

@@ -1,6 +1,7 @@
 import { taskById, type Skill } from "./skills";
-import { CERT_BY_USEDIN, topIndustry } from "./certifications";
-import { industries as allIndustries } from "./industries";
+import { useMemo } from "react";
+import { CERT_BY_USEDIN, certById } from "./certifications";
+import { industryTagLabels, industryTagOptions, useLiveIndustries } from "./industries";
 
 /* How a Skill reaches the rest of the content graph — through its Tasks.
    Shared by the Skills page and the Select Skills picker so both derive
@@ -24,39 +25,37 @@ export function skillCertifications(s: Skill): string[] {
 /* A Skill has no Industry of its own — it inherits the Industries of every
    Certification it reaches through its Tasks. A Skill can therefore land in
    several Industries, or in none (its Certifications carry no Industry, or it
-   awards no Task at all). These are the FULL paths ("HVAC › Residential"),
-   which is what the filter matches on; the column shows the top level. */
+   awards no Task at all). These are the exact tag labels ("HVAC",
+   "HVAC › Residential"): a Sub-Industry tag doesn't put it in the Industry. */
 export function skillIndustryPaths(s: Skill): string[] {
   return [
     ...new Set(
       skillCertifications(s).flatMap((name) => {
-        const industry = CERT_BY_USEDIN.get(name)?.industry;
-        return industry ? [industry] : [];
+        const seed = CERT_BY_USEDIN.get(name);
+        // The live record, so tags set this session show here too.
+        const c = seed && (certById(seed.id) ?? seed);
+        return c ? industryTagLabels(c.industries) : [];
       }),
     ),
   ];
 }
 
 export function skillIndustries(s: Skill): string[] {
-  return [...new Set(skillIndustryPaths(s).map(topIndustry))];
+  return skillIndustryPaths(s);
 }
 
-/* Industry options are the Industries page's own list: every Industry followed
+/* Industry options are the live Industries page list: every Industry followed
    by its Sub-Industries, each reading as its own full path — the same flat
    list the Certification filters use (see `CertFilters.tsx`). */
-export const INDUSTRY_OPTIONS: string[] = [...allIndustries]
-  .sort((a, b) => a.displayPosition - b.displayPosition)
-  .flatMap((ind) => [
-    ind.name,
-    ...[...ind.subIndustries]
-      .sort((a, b) => a.displayPosition - b.displayPosition)
-      .map((sub) => `${ind.name} › ${sub.name}`),
-  ]);
+export function useIndustryOptions(): string[] {
+  const inds = useLiveIndustries();
+  return useMemo(() => industryTagOptions(inds).map((o) => o.label), [inds]);
+}
 
-/* A selected option matches its own path and everything beneath it: picking
-   "HVAC" catches "HVAC › Residential", picking the sub path matches only it. */
+/* Exact tags only: picking "HVAC" matches a Skill reaching a Certification
+   tagged "HVAC" itself, not one tagged only "HVAC › Residential". */
 export function matchesIndustry(s: Skill, selected: string[]): boolean {
   const paths = skillIndustryPaths(s);
-  return selected.some((opt) => paths.some((p) => p === opt || p.startsWith(`${opt} ›`)));
+  return selected.some((opt) => paths.includes(opt));
 }
 

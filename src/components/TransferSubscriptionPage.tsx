@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { findUser, type MergeUser } from "../data/transferSubscription";
 import { loginId, renewalLabel, subLabel } from "../data/mergeAccounts";
+import { transferSubscription, useUsers } from "../data/users";
 import {
   AccountPicker,
   CompareTable,
@@ -49,7 +50,8 @@ import { useLeaveGuard } from "./LeaveGuard";
  *   confirm   -> PrmModal (danger), then — like a merge — straight back to
  *                Manage Users with a "Subscription Transferred" toast
  * Unlike a merge, neither account is deleted — only the subscription moves.
- * All data is demo data; nothing is persisted.
+ * Confirming writes it to the live Users roster (users.transferSubscription):
+ * the destination's pill and profile show the plan, the source's show Starter.
  */
 
 /* `desc` is the one line the screen needs; `tip` is the longer explanation
@@ -88,6 +90,8 @@ export function TransferSubscriptionPage({
   const guard = useLeaveGuard(!!(srcId || dstId));
 
   useEscape(showModal, () => setShowModal(false));
+  // Re-read the accounts whenever the roster changes (another tab's edit).
+  useUsers();
 
   /* ⌘K opens the account picker while the page is still missing a side — the
      shortcut the empty state's CTA advertises. Off once both are picked, and
@@ -187,6 +191,7 @@ export function TransferSubscriptionPage({
      Users with its toast. */
   function confirmTransfer() {
     setShowModal(false);
+    if (src && dst) transferSubscription(src.id, dst.id);
     onTransferred?.("Subscription Transferred");
   }
 

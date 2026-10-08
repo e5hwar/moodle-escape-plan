@@ -15,7 +15,7 @@ import {
   CURRENT_ADMIN,
   type CertPurchase,
 } from "../data/certPurchases";
-import { certifications as allCerts, type Certification } from "../data/certifications";
+import { getLiveCerts, type Certification } from "../data/certifications";
 import {
   UsersFilters,
   UsersEditColumns,
@@ -170,12 +170,13 @@ export function CertPurchasersPage({
 }) {
   const userById = useMemo(() => new Map(allUsers.map((u) => [u.id, u])), []);
 
-  /* The Certification this page was opened from may sit outside the seeded paid
-     set (one created in this session), so union it in — otherwise the
-     pre-applied pill would offer no way back to its own value. */
+  /* The live paid Certifications (seed + this session's, under their current
+     names), with the one this page was opened from unioned in by id so the
+     pre-applied pill always has its own value. One created this session has no
+     buyers yet (buildCertPurchases), so it opens on an empty list. */
   const paidCerts = useMemo(() => {
-    const seeded = allCerts.filter((c) => !!c.payment);
-    return seeded.some((c) => c.id === cert.id) ? seeded : [cert, ...seeded];
+    const live = getLiveCerts().filter((c) => !!c.payment && c.id !== cert.id);
+    return [cert, ...live];
   }, [cert]);
   const certOptions = useMemo(
     () => [...new Set(paidCerts.map((c) => c.name))].sort(),
@@ -203,7 +204,9 @@ export function CertPurchasersPage({
   const [committedQuery, setCommittedQuery] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "purchaseDate", dir: "desc" });
   const [page, setPage] = useState(1);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Selection is per row (user × Certification), so one user's other rows stay
+  // unselected.
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [granting, setGranting] = useState(false);
   // The row awaiting the Revoke Access confirm, if any.
   const [revoking, setRevoking] = useState<Row | null>(null);
@@ -308,14 +311,14 @@ export function CertPurchasersPage({
   }
 
   function revokeAccess(row: Row) {
-    const { consumable, resets } = revokeTerms(row);
+    const { resets } = revokeTerms(row);
     const today = todayIso();
     setPurchases((prev) =>
       prev.map((p) => {
         if (p.userId !== row.u.id || p.certName !== row.p.certName) return p;
-        const next: CertPurchase = { ...p, revokedDate: today };
-        // Consumables end their access window on revoke; some also reset progress.
-        if (consumable) next.accessEndedDate = today;
+        // Revoking ends access on any Certification; some consumables also
+        // reset progress.
+        const next: CertPurchase = { ...p, revokedDate: today, accessEndedDate: today };
         if (resets) {
           next.progress = 0;
           next.completed = false;
@@ -329,23 +332,24 @@ export function CertPurchasersPage({
 
   function grantAccess(user: User) {
     setPurchases((prev) => {
-      // already has access to THIS Certification
-      if (prev.some((p) => p.userId === user.id && p.certName === cert.name)) return prev;
-      return [
-        {
-          userId: user.id,
-          certName: cert.name,
-          purchaseDate: null,
-          progress: 0,
-          completed: false,
-          accessEndedDate: null,
-          revokedDate: null,
-          granted: true,
-          grantDate: todayIso(),
-          grantedBy: CURRENT_ADMIN,
-        },
-        ...prev,
-      ];
+      const existing = prev.find((p) => p.userId === user.id && p.certName === cert.name);
+      // Live access to THIS Certification already — nothing to grant.
+      if (existing && !existing.revokedDate) return prev;
+      /* A revoked user is granted again: their old row becomes a fresh admin
+         grant (moved to the top), keeping whatever progress the revoke left. */
+      const granted: CertPurchase = {
+        userId: user.id,
+        certName: cert.name,
+        purchaseDate: null,
+        progress: existing?.progress ?? 0,
+        completed: existing?.completed ?? false,
+        accessEndedDate: null,
+        revokedDate: null,
+        granted: true,
+        grantDate: todayIso(),
+        grantedBy: CURRENT_ADMIN,
+      };
+      return [granted, ...prev.filter((p) => p !== existing)];
     });
     setGranting(false);
     toast("Access Granted");
@@ -456,20 +460,23 @@ export function CertPurchasersPage({
                   <table className="table table-body">
                     <ColGroup cols={visibleCols} />
                     <tbody>
-                      {paged.map((row) => (
+                      {paged.map((row) => {
+                        const rowKey = `${row.u.id}-${row.p.certName}`;
+                        return (
                         <PurchaserRow
-                          key={`${row.u.id}-${row.p.certName}`}
+                          key={rowKey}
                           row={row}
                           cols={visibleCols}
-                          selected={row.u.id === selectedId}
-                          onClick={() => setSelectedId(row.u.id === selectedId ? null : row.u.id)}
+                          selected={rowKey === selectedKey}
+                          onClick={() => setSelectedKey(rowKey === selectedKey ? null : rowKey)}
                           onOpenMenu={(rect) => setMenu({ row, rect })}
                           menuOpen={
                             menu?.row.p.userId === row.p.userId &&
                             menu.row.p.certName === row.p.certName
                           }
                         />
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -494,6 +501,9 @@ export function CertPurchasersPage({
         <GrantAccessModal
           cert={cert}
           candidates={usersWithoutAccess(purchases, cert.name, allUsers)}
+          priorProgress={(u) =>
+            purchases.find((p) => p.userId === u.id && p.certName === cert.name)?.progress ?? 0
+          }
           onGrant={grantAccess}
           onClose={() => setGranting(false)}
         />
@@ -526,8 +536,8 @@ export function CertPurchasersPage({
           <p className="prm-content">
             {revoking.u.name}'s access to “{revoking.p.certName}” ends immediately.{" "}
             {revokeTerms(revoking).consumable
-              ? `${revokeTerms(revoking).resets ? "Their progress on this Certification is reset, and they" : "They"} can purchase the Certification again to regain access.`
-              : "They keep their completion record. This can't be undone."}
+              ? `${revokeTerms(revoking).resets ? "Their progress on this Certification is reset, and they" : "They"} can purchase the Certification again or be granted access again.`
+              : "They keep their completion record, and access can be granted again later."}
           </p>
         </PrmModal>
       )}
@@ -755,11 +765,14 @@ function PurchaserActionsMenu({
 function GrantAccessModal({
   cert,
   candidates,
+  priorProgress,
   onGrant,
   onClose,
 }: {
   cert: Certification;
   candidates: User[];
+  /** Progress a previously revoked user keeps when granted again (0 if new). */
+  priorProgress: (u: User) => number;
   onGrant: (u: User) => void;
   onClose: () => void;
 }) {
@@ -805,8 +818,8 @@ function GrantAccessModal({
     >
       <p className="prm-content">
         <strong>{picked.name}</strong> will get full access to <strong>{cert.name}</strong> at
-        no charge. They start at 0% progress and the purchase is recorded as an
-        admin grant{isConsumableCert(cert) ? " (a consumable access window opens immediately)" : ""}.
+        no charge. They start at {priorProgress(picked)}% progress and the purchase is recorded as an
+        admin grant.
       </p>
     </PrmModal>
   );

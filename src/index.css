@@ -1861,7 +1861,7 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   cursor: pointer;
   transition: background 0.1s ease;
 }
-/* A row that opens nothing itself (Users — no preview panel): hover still
+/* A row that opens nothing itself (Users, Companies — no preview panel): hover still
    shows its actions, but the pointer stays an arrow. */
 .table tbody tr.is-static {
   cursor: default;
@@ -3351,6 +3351,9 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 .qsec-pct-input.has-error:focus,
 .qz-pt-input.has-error,
 .qz-pt-input.has-error:focus,
+/* Content Links' Link Strength (empty, or outside 1–100). */
+.lc-strength.has-error,
+.lc-strength.has-error:focus,
 /* Single-language plain input (1389:1548) — same red edge as the dual one. */
 .form-input.has-error,
 .form-input.has-error:focus {
@@ -3383,7 +3386,8 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 .qed-tbl.has-error,
 .qz.has-error,
 .qsec.has-error,
-.cc-panel.has-error {
+.cc-panel.has-error,
+.lc-panel.has-error {
   box-shadow: inset 0 0 0 1px var(--field-error);
 }
 
@@ -5037,9 +5041,16 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   cursor: pointer;
 }
 
-.drop-big:hover {
+.drop-big:hover,
+.drop-big.is-over {
   background-color: rgba(255, 255, 255, 0.02);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Crect width='100%25' height='100%25' rx='8' ry='8' fill='none' stroke='%23a8a8a8' stroke-width='2' stroke-dasharray='4 4'/%3E%3C/svg%3E");
+}
+
+/* A required zone left empty (field-error red, the same dashes). */
+.drop-big.has-error,
+.drop-big.has-error:hover {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Crect width='100%25' height='100%25' rx='8' ry='8' fill='none' stroke='%23ff1f17' stroke-width='2' stroke-dasharray='4 4'/%3E%3C/svg%3E");
 }
 
 /* Tall variant — Create Spotlight's background-image zone (Figma 552:1155,
@@ -6256,6 +6267,17 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 }
 .seg-btn:hover:not(.active) {
   color: #fff;
+}
+/* Inside a locked field (`.crit-lock` fieldset — e.g. Manage Subscription on a
+   company whose cancellation is scheduled): no pointer, no hover lift, the
+   way a locked radio card behaves. */
+.seg-btn:disabled,
+.cw-price-cur:disabled,
+.cw-price-cell:disabled {
+  cursor: not-allowed;
+}
+.seg-btn:disabled:hover:not(.active) {
+  color: #a8a8a8;
 }
 
 /* Force order banner */
@@ -7787,6 +7809,11 @@ button.rr-card.ctb-start-card--accent:hover {
 }
 
 /* Panel (801:2099) — the DS wash over #0d0d0d, 12px radius, rows clipped to it. */
+/* The 10-link cap note sits above the three panels, 24px clear of them. */
+.lc-cap-note {
+  margin-bottom: 24px;
+}
+
 .lc-panel {
   overflow: hidden;
   background: linear-gradient(rgba(122, 122, 122, 0.1), rgba(122, 122, 122, 0.1)), #0d0d0d;
@@ -11132,6 +11159,11 @@ a.spc-hero-pill--link:hover {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+/* A sentence after the list keeps the list's own 12px off it. */
+.prm-content ol + p,
+.prm-content ul + p {
+  margin-top: 12px;
 }
 
 /* A modal's fields are a form like any other, so they take the app-wide
@@ -16827,6 +16859,12 @@ body:has(.pm-overlay) .pl-copied-toast {
   color: #ffc524 !important;
   background: rgba(255, 197, 36, 0.1) !important;
 }
+/* The flag sits 4px after the name (Figma 1126:1686, 1290:2943) — its own
+   margin. Restated here because the generic "span + span" table rule (6px)
+   otherwise wins whenever the name is wrapped in a span (`.tsk-name`). */
+.table tbody td.col-name:not(.col-actions) .pr-name-flag {
+  margin-left: 4px !important;
+}
 
 /* Sign-up channel pill (Self vs Internal) */
 .co-signup {
@@ -19591,6 +19629,18 @@ body:has(.pm-overlay) .pl-copied-toast {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* The record's uploaded icon, 24px ahead of the name (the Industries row's
+   icon slot). An archived record shows it greyed, as unearned badges are. */
+.table tbody tr.skg-row td.col-name > .skg-icon {
+  width: 24px;
+  height: 24px;
+  margin-right: 12px;
+  border-radius: 4px;
+  object-fit: contain;
+}
+.table tbody tr.skg-row.skg-archived td.col-name > .skg-icon {
+  filter: grayscale(1);
+}
 
 /* A Skill row does nothing on click — selecting one had no use, so it was
    removed — and must not offer the shared `.table tbody tr` pointer. Only the
@@ -19644,11 +19694,13 @@ body:has(.pm-overlay) .pl-copied-toast {
    **`.task-dim` is the shared dim-row treatment, not a Tasks-only class** — a
    DISABLED Feedback Form row wears it too (2026-09-18), with a grey "Disabled"
    flag in place of "Hidden". Keep it generic. */
-.table tbody tr.task-dim td.col-name {
+.table tbody tr.task-dim td.col-name,
+.table tbody td.col-name.has-flag {
   display: flex;
   align-items: center;
 }
-.table tbody tr.task-dim td.col-name > :not(.tsk-name) {
+.table tbody tr.task-dim td.col-name > :not(.tsk-name),
+.table tbody td.col-name.has-flag > :not(.tsk-name) {
   flex: none;
 }
 .table tbody td.col-name:not(.col-actions) span.tsk-name {
@@ -20090,6 +20142,26 @@ body:has(.pm-overlay) .pl-copied-toast {
   font-size: 12px;
   line-height: 1.35;
   color: #7a7a7a;
+}
+/* A refused file (wrong type, over 100MB) — the field-error red, on the zone
+   and in a line under the hint. */
+.mid-drop.has-error {
+  border-color: var(--field-error);
+}
+.mid-drop-error {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--field-error);
+}
+/* The chosen file itself, in the box the drop zone held (420 × 265). */
+.mid-upload-preview {
+  display: block;
+  width: 100%;
+  height: 265px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: rgba(122, 122, 122, 0.06);
 }
 
 /* ============== Attempt Viewer (View Attempt page) ============== */
@@ -21870,7 +21942,10 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   padding-left: 24px;
   list-style: disc;
 }
-.rvc-checklist-fail { margin: 19px 0 0; }
+/* The checklist is the wizard's one rich-text field: bulleted lines become
+   lists, other lines paragraphs, a blank line (19px at 16px/normal) apart. */
+.rvc-checklist p { margin: 0; }
+.rvc-checklist > * + * { margin-top: 19px; }
 
 /* Scoring scale (Figma 263:1021) — ten 38×41 cells, 8px apart. The selected
    cell carries the verdict: green fill for a pass, red for a rejection. */
@@ -26353,6 +26428,15 @@ button.rr-card.rr-card--add:hover {
 
 .qz-addrow-btn:hover {
   filter: brightness(1.15);
+}
+
+/* At a cap (Content Links' 10 links): the Condition Set add's disabled look
+   (1570:3462) — label + plus go #404040, no hover. */
+.qz-addrow-btn:disabled,
+.qz-addrow-btn:disabled:hover {
+  color: #404040;
+  filter: none;
+  cursor: not-allowed;
 }
 
 /* Footer row — the Add Question CTA and its anchored menu. */

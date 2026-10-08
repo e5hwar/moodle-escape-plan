@@ -1,4 +1,14 @@
-import { tasks } from "./tasks";
+import { useSyncExternalStore } from "react";
+import {
+  tasks as seedTasks,
+  isPaid,
+  quizAttemptPasses,
+  quizGradingOf,
+  taskById,
+  taskCertifications,
+  type Task,
+} from "./tasks";
+import { users } from "./users";
 
 // A finished attempt is Passed or Failed — the grade decides, so the status
 // never has to be stored independently of the score (see `gradeStatus`).
@@ -20,22 +30,35 @@ export type AttemptStatus =
  *  Absent on an ordinary Quiz, whose attempts nobody reviews. */
 export type AttemptReview = "proctored" | "id-only";
 
-/** The app-wide pass mark, the same 70% the attempt viewer and the paid-attempt
- *  records use (PASS_THRESHOLD in quizPurchases). */
+/** The pass mark for an attempt whose Quiz isn't in the library (a deep-link
+ *  row built from Manage User Progress data). Library Quizzes use their own
+ *  mark and grading model — see `quizAttemptPasses`. */
 export const ATTEMPT_PASS_MARK = 70;
 
-/** Whether a finished, un-proctored attempt reads as Passed or Failed. The one
+/** Whether a finished, un-reviewed attempt reads as Passed or Failed, by the
+ *  Quiz's own pass mark and grading model when the Quiz is known. The one
  *  place the grade → status rule lives; every builder goes through it. */
-export function gradeStatus(grade: number): AttemptStatus {
-  return grade >= ATTEMPT_PASS_MARK ? "Passed" : "Failed";
+export function gradeStatus(
+  grade: number,
+  quiz?: Pick<Task, "quizGrading" | "quizSections">,
+  sectionGrades?: number[],
+): AttemptStatus {
+  const passed = quiz ? quizAttemptPasses(quiz, grade, sectionGrades) : grade >= ATTEMPT_PASS_MARK;
+  return passed ? "Passed" : "Failed";
 }
 
 export type Attempt = {
   id: string;
+  /** The Task this attempt belongs to — what the page filters on, so a
+   *  renamed Quiz keeps its attempts. */
+  taskId: string;
+  /** The learner, when they are an app user (Who Paid joins on it). */
+  userId?: string;
   name: string;
   email: string;
   phone: string;
-  /** The Task (quiz / hands-on / xAPI) this attempt belongs to. */
+  /** The Task's name when the attempt was made — shown only when the Task is
+   *  no longer in the library; otherwise the live name is (see `attemptQuizName`). */
   quizName: string;
   attemptNumber: number;
   status: AttemptStatus;
@@ -45,6 +68,9 @@ export type Attempt = {
   completedAt: string | null;
   /** Whole-number percentage out of 100, or null while In Progress. */
   grade: number | null;
+  /** A sectioned Quiz's per-Section grades, in Section order — what decides
+   *  pass/fail under section-level grading. */
+  sectionGrades?: number[];
   /** Set when this attempt's Quiz is reviewed — the only place the In Review /
    *  Rejected statuses, and a Reviewed On date, can appear. */
   review?: AttemptReview;
@@ -57,27 +83,13 @@ export type Attempt = {
   rejectionReason?: string;
 };
 
-/* Tasks that surface a "View Attempts" entry. Attempts are generated against
-   these so the default Quiz filter (the task clicked on the Tasks page) always
-   resolves to a populated set. Keep in sync with ATTEMPTS_TYPES in TasksPage. */
-const QUIZ_NAMES = [
-  "EPA 608 Type I Final Exam",
-  "Airflow Calibration Quiz",
-  "Combustion Analysis",
-  "Manifold Gauge Use",
-  "Subcooling Calculation Quiz",
-  "Field Visit – Brazing Joints",
-  "HVAC Field Tools Walkthrough",
-  "OSHA 10 Safety Course",
-];
-
-/* The two reviewed exams, one of each kind — kept OUT of QUIZ_NAMES so their
-   attempts come only from `buildReviewedAttempts`, and every row on them
-   carries a coherent review state. The exams match the Exam Reviews console's
-   own lists: EPA 608 Universal is live-proctored, NATE Ready To Work is an ID
-   check only. */
-const PROCTORED_EXAM = "EPA 608 Universal Final Exam";
-const ID_ONLY_EXAM = "NATE RTW Final Exam";
+/* The two reviewed exams, one of each kind — the Exam Reviews console's own
+   lists: EPA 608 Universal is live-proctored, NATE Ready To Work an ID check
+   only. Their attempts carry a coherent review state. */
+const REVIEWED: Record<string, AttemptReview> = {
+  "T-1198": "proctored", // EPA 608 Universal Final Exam
+  "T-1289": "id-only", // NATE RTW Final Exam
+};
 
 /** Reasons the Proctoring Team gives when rejecting an attempt's footage. */
 const REJECTION_REASONS = [
@@ -97,25 +109,6 @@ const ID_REJECTION_REASONS = [
   "The uploaded ID was too blurred to read.",
 ];
 
-const FIRST = [
-  "James", "Maria", "Robert", "Linda", "Michael", "Patricia", "David", "Jennifer",
-  "Carlos", "Ashley", "Daniel", "Jessica", "Anthony", "Sarah", "Marcus", "Emily",
-  "Kevin", "Nicole", "Brian", "Amanda", "Jose", "Megan", "Tyler", "Rachel",
-  "Derek", "Brittany", "Andre", "Crystal", "Victor", "Tiffany",
-];
-const LAST = [
-  "Anderson", "Martinez", "Johnson", "Nguyen", "Williams", "Garcia", "Brown",
-  "Davis", "Rodriguez", "Wilson", "Thompson", "Lee", "Hernandez", "Clark",
-  "Lewis", "Walker", "Hall", "Allen", "Young", "King", "Wright", "Scott",
-  "Green", "Adams", "Baker", "Nelson", "Carter", "Mitchell", "Perez", "Roberts",
-];
-
-const AREA = ["415", "510", "408", "650", "213", "312", "713", "305", "602", "206"];
-
-function pick<T>(arr: T[], i: number): T {
-  return arr[i % arr.length];
-}
-
 /** Deterministic pseudo-random in [0,1) from an integer seed. */
 function rng(seed: number): number {
   const x = Math.sin(seed * 12.9898) * 43758.5453;
@@ -126,10 +119,10 @@ function pad(n: number): string {
   return String(n).padStart(2, "0");
 }
 
-/** Build an ISO-ish "Mon DD, YYYY · h:mm AM" label from day/minute offsets. */
+/** Build a "Mon DD, YYYY · h:mm AM" label from day/minute offsets. */
 function stamp(dayOffset: number, minutes: number): string {
   // Anchor on a fixed window in 2026 so the data is stable across renders.
-  const base = new Date(Date.UTC(2026, 4, 1, 9, 0, 0)); // May 1, 2026 09:00
+  const base = new Date(Date.UTC(2026, 3, 1, 9, 0, 0)); // Apr 1, 2026 09:00
   const d = new Date(base.getTime() + dayOffset * 86_400_000 + minutes * 60_000);
   const month = d.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
   const day = d.getUTCDate();
@@ -148,182 +141,205 @@ function durationLabel(totalMinutes: number): string {
   return `${h}h ${pad(m)}m`;
 }
 
-/** Track an attempt counter per (user, quiz) pair so Attempt Number is coherent. */
-function buildAttempts(): Attempt[] {
-  const out: Attempt[] = [];
-  const attemptCounts = new Map<string, number>();
-
-  // 64 rows of varied users / quizzes.
-  for (let i = 0; i < 64; i++) {
-    const first = pick(FIRST, i * 3 + 1);
-    const last = pick(LAST, i * 5 + 2);
-    const name = `${first} ${last}`;
-    const email = `${first.toLowerCase()}.${last.toLowerCase()}@${
-      ["gmail.com", "outlook.com", "yahoo.com", "fieldpro.io", "acmehvac.com"][i % 5]
-    }`;
-    const area = pick(AREA, i * 7);
-    const phone = `(${area}) ${pad(200 + ((i * 37) % 700))}-${pad(1000 + ((i * 53) % 9000)).slice(-4)}`;
-
-    // Spread evenly across every quiz (a modular step that's coprime with the
-    // list length, nudged by a pseudo-random offset so it isn't a strict cycle).
-    const quizIdx = (i * 4 + Math.floor(rng(i + 1) * 3)) % QUIZ_NAMES.length;
-    const quizName = QUIZ_NAMES[quizIdx];
-
-    const key = `${name}::${quizName}`;
-    const attemptNumber = (attemptCounts.get(key) ?? 0) + 1;
-    attemptCounts.set(key, attemptNumber);
-
-    const inProgress = rng(i + 11) < 0.22;
-    const dayOffset = Math.floor(rng(i + 3) * 50); // spread across ~7 weeks
-    const startMinute = Math.floor(rng(i + 5) * 600);
-    const startedAt = stamp(dayOffset, startMinute);
-
-    if (inProgress) {
-      out.push({
-        id: `A-${5000 + i}`,
-        name,
-        email,
-        phone,
-        quizName,
-        attemptNumber,
-        status: "In Progress",
-        startedAt,
-        completedAt: null,
-        grade: null,
-      });
-      continue;
-    }
-
-    const durMinutes = 8 + Math.floor(rng(i + 9) * 95); // 8–103 min
-    const completedAt = stamp(dayOffset, startMinute + durMinutes);
-    // Grades skew toward passing, with a tail of lower scores.
-    const grade = Math.min(100, 38 + Math.floor(rng(i + 13) * 62));
-
-    out.push({
-      id: `A-${5000 + i}`,
-      name,
-      email,
-      phone,
-      quizName,
-      attemptNumber,
-      status: gradeStatus(grade),
-      startedAt,
-      completedAt,
-      grade,
-    });
+/** A grade (and per-Section grades, on a sectioned Quiz) that lands on the
+ *  wanted side of the Quiz's own rule. */
+function gradesFor(
+  t: Task,
+  pass: boolean,
+  seed: number,
+): { grade: number; sectionGrades?: number[] } {
+  const g = quizGradingOf(t);
+  const secs = t.quizSections ?? [];
+  if (!secs.length) {
+    const mark = g.passPct;
+    const grade = pass
+      ? Math.min(100, mark + Math.floor(rng(seed) * (101 - mark)))
+      : Math.max(20, mark - 1 - Math.floor(rng(seed) * 30));
+    return { grade };
   }
-  return out;
-}
-
-/** Attempts for one reviewed exam. Every review state is represented, and each
- *  attempt is graded on submission; the status reflects where the review stands
- *  rather than the score alone. Called once per review kind — the two differ
- *  only in their rejection reasons and in how long the review takes. */
-function buildReviewedAttempts(
-  exam: string,
-  review: AttemptReview,
-  /** Offsets the id / name / phone seeds so each exam reads as its own roster. */
-  base: number,
-): Attempt[] {
-  /* Status mix, in row order: two whose review signed off (the grade then
-     decides Passed / Failed — `graded` below), two still awaiting review, two
-     Rejected with a reason, one still running. */
-  const plan: { status: AttemptStatus | "graded"; reasonIdx?: number }[] = [
-    { status: "graded" },
-    { status: "In Review" },
-    { status: "Rejected", reasonIdx: 0 },
-    { status: "In Review" },
-    { status: "graded" },
-    { status: "Rejected", reasonIdx: 1 },
-    { status: "Rejected", reasonIdx: 2 },
-    { status: "In Progress" },
-  ];
-  const reasons = review === "proctored" ? REJECTION_REASONS : ID_REJECTION_REASONS;
-  /* Footage takes longer to sit through than a single ID photo, so the two
-     kinds turn their reviews around at different speeds. */
-  const reviewHours = review === "proctored" ? 30 : 6;
-
-  const out: Attempt[] = [];
-  const attemptCounts = new Map<string, number>();
-
-  plan.forEach((p, i) => {
-    const seed = i + base;
-    const first = pick(FIRST, seed * 3 + 2);
-    const last = pick(LAST, seed * 5 + 1);
-    const name = `${first} ${last}`;
-    const email = `${first.toLowerCase()}.${last.toLowerCase()}@${
-      ["gmail.com", "outlook.com", "yahoo.com", "fieldpro.io", "acmehvac.com"][i % 5]
-    }`;
-    const area = pick(AREA, seed * 7);
-    const phone = `(${area}) ${pad(200 + ((seed * 37) % 700))}-${pad(1000 + ((seed * 53) % 9000)).slice(-4)}`;
-
-    const key = `${name}::${exam}`;
-    const attemptNumber = (attemptCounts.get(key) ?? 0) + 1;
-    attemptCounts.set(key, attemptNumber);
-
-    const dayOffset = Math.floor(rng(seed + 3) * 50);
-    const startMinute = Math.floor(rng(seed + 5) * 600);
-    const startedAt = stamp(dayOffset, startMinute);
-
-    const row = {
-      id: `A-${5000 + base + i}`,
-      name,
-      email,
-      phone,
-      quizName: exam,
-      attemptNumber,
-      startedAt,
-      review,
-    };
-
-    if (p.status === "In Progress") {
-      out.push({ ...row, status: "In Progress", completedAt: null, grade: null });
-      return;
-    }
-
-    const durMinutes = 42 + Math.floor(rng(seed + 9) * 70); // 42–111 min
-    const endMinute = startMinute + durMinutes;
-    const completedAt = stamp(dayOffset, endMinute);
-    // Rejected/In Review attempts still passed the quiz — the hold is on the
-    // review, not the score — so grades skew high.
-    const grade = Math.min(100, 72 + Math.floor(rng(seed + 13) * 26));
-    /* The review lands some hours after the attempt was submitted, spread so
-       the column doesn't read as one fixed turnaround. */
-    const reviewedAt = stamp(
-      dayOffset,
-      endMinute + 60 * (1 + Math.floor(rng(seed + 17) * reviewHours)),
-    );
-
-    if (p.status === "Rejected") {
-      out.push({
-        ...row,
-        status: "Rejected",
-        completedAt,
-        grade,
-        reviewedAt,
-        rejectionReason: reasons[(p.reasonIdx ?? 0) % reasons.length],
-      });
-      return;
-    }
-
-    /* An In Review row is exactly the one that has NO decision yet, so it is
-       the one case that leaves `reviewedAt` off. */
-    if (p.status === "In Review") {
-      out.push({ ...row, status: "In Review", completedAt, grade });
-      return;
-    }
-
-    out.push({ ...row, status: gradeStatus(grade), completedAt, grade, reviewedAt });
+  /* Sectioned: each Section near its own mark. A failing attempt misses the
+     mark that decides it — a Must Pass Section under section-level grading,
+     else the overall one — so the rule really is what fails it. */
+  const sectionGrades = secs.map((s, i) => {
+    const r = rng(seed + i * 17);
+    return pass
+      ? Math.min(100, s.passingPct + Math.floor(r * (101 - s.passingPct)))
+      : Math.max(20, s.passingPct - 12 + Math.floor(r * 30));
   });
+  if (!pass) {
+    if (g.model === "section_level") {
+      const i = Math.max(0, secs.findIndex((s) => s.requiredToPass));
+      sectionGrades[i] = Math.max(20, secs[i].passingPct - 8 - Math.floor(rng(seed + 99) * 20));
+    } else {
+      const cut = g.passPct - 5;
+      for (let i = 0; i < sectionGrades.length; i++) sectionGrades[i] = Math.min(sectionGrades[i], cut);
+    }
+  }
+  const grade = Math.round(sectionGrades.reduce((a, b) => a + b, 0) / sectionGrades.length);
+  return { grade, sectionGrades };
+}
 
+/** Every library Quiz's attempts, taken by real app users, each learner's in
+ *  time order and numbered in that order. A learner keeps trying until they
+ *  pass (or run out): earlier attempts fail, and the last one may still be
+ *  running. The reviewed exams add their review states on top. */
+function buildSeed(): Attempt[] {
+  const out: Attempt[] = [];
+  seedTasks
+    .filter((t) => t.type === "Quiz")
+    .forEach((t, qi) => {
+      const review = REVIEWED[t.id];
+      const learners = 6 + Math.floor(rng(qi * 7 + 1) * 5); // 6–10
+      const first = Math.floor(rng(qi * 13 + 2) * users.length);
+      const limit = t.maxAttempts ?? 3;
+      for (let k = 0; k < learners; k++) {
+        const u = users[(first + k * 7) % users.length];
+        const seed = qi * 1000 + k * 10;
+        const count = 1 + Math.floor(rng(seed + 3) * Math.min(3, limit));
+        let day = Math.floor(rng(seed + 5) * 120);
+        for (let n = 1; n <= count; n++) {
+          const last = n === count;
+          const startMinute = Math.floor(rng(seed + n * 31) * 600);
+          const startedAt = stamp(day, startMinute);
+          const row = {
+            id: `A-${t.id}-${u.id}-${n}`,
+            taskId: t.id,
+            userId: u.id,
+            name: u.name,
+            email: u.email,
+            phone: u.phone,
+            quizName: t.name,
+            attemptNumber: n,
+            startedAt,
+            ...(review ? { review } : {}),
+          };
+          const running = last && rng(seed + 11) < 0.2;
+          if (running) {
+            out.push({ ...row, status: "In Progress", completedAt: null, grade: null });
+            break;
+          }
+          const pass = last && rng(seed + 13) < 0.65;
+          const { grade, sectionGrades } = gradesFor(t, pass, seed + n);
+          const dur = (review ? 42 : 8) + Math.floor(rng(seed + n * 9) * 70);
+          const completedAt = stamp(day, startMinute + dur);
+          const status = gradeStatus(grade, t, sectionGrades);
+          const base: Attempt = { ...row, status, completedAt, grade, ...(sectionGrades ? { sectionGrades } : {}) };
+          if (review && status === "Passed") {
+            /* A passing attempt on a reviewed exam waits on the review, which
+               can still reject it — the hold is on the review, not the score. */
+            const r = rng(seed + 17);
+            const reviewedAt = stamp(day, startMinute + dur + 60 * (1 + Math.floor(r * (review === "proctored" ? 30 : 6))));
+            if (r < 0.3) out.push({ ...base, status: "In Review" });
+            else if (r < 0.55) {
+              const reasons = review === "proctored" ? REJECTION_REASONS : ID_REJECTION_REASONS;
+              out.push({ ...base, status: "Rejected", reviewedAt, rejectionReason: reasons[k % reasons.length] });
+            } else out.push({ ...base, reviewedAt });
+          } else {
+            out.push(base);
+          }
+          day += 1 + Math.floor(rng(seed + n * 5) * 6);
+        }
+      }
+    });
   return out;
 }
 
-export const attempts: Attempt[] = [
-  ...buildAttempts(),
-  ...buildReviewedAttempts(PROCTORED_EXAM, "proctored", 100),
-  ...buildReviewedAttempts(ID_ONLY_EXAM, "id-only", 200),
-];
+/** The seed set, as the app opened. */
+export const attempts: Attempt[] = buildSeed();
+
+/* ── The working attempts store ──
+   Deleting an attempt, and granting extra ones, outlast the page that did it:
+   Quiz Attempts and Who Paid both read this one store, so the two always
+   describe the same data. */
+export type AttemptGrant = {
+  id: string;
+  taskId: string;
+  userId: string;
+  count: number;
+  /** ISO date (yyyy-mm-dd). */
+  date: string;
+  by: string;
+};
+
+type Store = {
+  attempts: Attempt[];
+  /** Paid attempts that were deleted — the purchase is given back unused. */
+  deletedPaid: Attempt[];
+  grants: AttemptGrant[];
+  /** Purchases revoked on Who Paid, by purchase id → ISO date. */
+  revoked: Record<string, string>;
+};
+
+let store: Store = { attempts, deletedPaid: [], grants: [], revoked: {} };
+const listeners = new Set<() => void>();
+function setStore(next: Store) {
+  store = next;
+  listeners.forEach((l) => l());
+}
+
+export function getAttemptStore(): Store {
+  return store;
+}
+
+export function useAttemptStore(): Store {
+  return useSyncExternalStore(
+    (l) => {
+      listeners.add(l);
+      return () => listeners.delete(l);
+    },
+    getAttemptStore,
+  );
+}
+
+/** The Quiz name to show for an attempt — the live Task's, so a rename
+ *  carries through. */
+export function attemptQuizName(a: Pick<Attempt, "taskId" | "quizName">): string {
+  return taskById(a.taskId)?.name ?? a.quizName;
+}
+
+/** Delete an attempt: the learner's later attempts on the Quiz move up a
+ *  number, and — on a paid Quiz — the attempt they paid for comes back unused. */
+export function deleteAttempt(a: Attempt) {
+  const task = taskById(a.taskId);
+  const rest = store.attempts
+    .filter((x) => x.id !== a.id)
+    .map((x) =>
+      x.taskId === a.taskId &&
+      x.name === a.name &&
+      x.userId === a.userId &&
+      x.attemptNumber > a.attemptNumber
+        ? { ...x, attemptNumber: x.attemptNumber - 1 }
+        : x,
+    );
+  setStore({
+    ...store,
+    attempts: rest,
+    deletedPaid: task && isPaid(task) && a.userId ? [...store.deletedPaid, a] : store.deletedPaid,
+  });
+}
+
+/** Give each user `count` extra attempts on one Quiz — the Grant Additional
+ *  Attempts flow on Quiz Attempts and Who Paid alike. */
+export function grantAttempts(taskId: string, userIds: string[], count: number, date: string, by: string) {
+  const stampId = Date.now();
+  setStore({
+    ...store,
+    grants: [
+      ...userIds.map((userId, i) => ({ id: `G-${stampId}-${i}`, taskId, userId, count, date, by })),
+      ...store.grants,
+    ],
+  });
+}
+
+/** Revoke an unused purchased (or granted) attempt on Who Paid. */
+export function revokePurchase(purchaseId: string, date: string) {
+  setStore({ ...store, revoked: { ...store.revoked, [purchaseId]: date } });
+}
+
+/** Attempts a user has taken on one Quiz — the grant picker's Attempts column. */
+export function attemptsTaken(s: Store, taskId: string, userId: string): number {
+  return s.attempts.filter((a) => a.taskId === taskId && a.userId === userId).length;
+}
 
 /** Minutes elapsed for an attempt, derived from its start/complete stamps.
  *  Stored alongside so the table can show Duration without re-parsing labels. */
@@ -350,9 +366,6 @@ export function attemptReviewedOn(a: Attempt): string | null {
   return a.reviewedAt ?? null;
 }
 
-/** Distinct quiz names present in the attempt set, for the Quiz filter. */
-export const ATTEMPT_QUIZ_NAMES: string[] = [...new Set(attempts.map((a) => a.quizName))].sort();
-
 /** Filter options for the Status pill — the full union, in lifecycle order
  *  rather than alphabetical, so the list reads as a progression. */
 export const ATTEMPT_STATUSES: AttemptStatus[] = [
@@ -367,15 +380,10 @@ export const ATTEMPT_STATUSES: AttemptStatus[] = [
    An attempt carries only its Task's name, so the Certification filter resolves
    through the Tasks library's `usedIn` — the same source the Hands-On review
    queue uses for its Certifications column. */
-const CERTS_BY_TASK = new Map<string, string[]>(tasks.map((t) => [t.name, t.usedIn]));
-
-/** Certifications the attempt's Task is used in. Empty for a Task outside the
- *  library (nothing to filter on, so it never matches a Certification pill). */
-export function attemptCertifications(quizName: string): string[] {
-  return CERTS_BY_TASK.get(quizName) ?? [];
+/** Certifications the attempt's Task is used in, by canonical name. Empty
+ *  for a Task outside the library (nothing to filter on, so it never matches
+ *  a Certification pill). */
+export function attemptCertifications(taskId: string): string[] {
+  const t = taskById(taskId);
+  return t ? taskCertifications(t).map((c) => c.name) : [];
 }
-
-/** Distinct certifications reachable from the attempt set, for the pill. */
-export const ATTEMPT_CERTIFICATION_NAMES: string[] = [
-  ...new Set(attempts.flatMap((a) => attemptCertifications(a.quizName))),
-].sort();

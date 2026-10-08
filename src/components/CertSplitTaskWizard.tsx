@@ -34,7 +34,7 @@ export function CertSplitTaskWizard({ taskType, onClose, onAdd, onQuestionCreate
         onClose={onClose}
         onQuestionCreated={onQuestionCreated}
         primaryLabel="Add to Certification"
-        onPrimary={(taskName, requiresSubscription, timeToComplete) =>
+        onPrimary={(taskName, requiresSubscription, timeToComplete, record) =>
           onAdd({
             id: `t-${Date.now()}`,
             name: taskName,
@@ -42,6 +42,9 @@ export function CertSplitTaskWizard({ taskType, onClose, onAdd, onQuestionCreate
             // The wizard's Time to Complete; left blank, the row shows no length.
             duration: formatTaskDuration(timeToComplete) || undefined,
             requiresSubscription,
+            // Filed in the Task library when the Certification is saved, as
+            // the Add Tasks step promises.
+            record,
           })
         }
       />

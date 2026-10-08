@@ -264,7 +264,8 @@ function track(target: EventTarget | null, x: number, y: number) {
   }
 }
 
-async function writeClipboard(text: string): Promise<boolean> {
+/** Copies `text`; resolves true only when the write actually went through. */
+export async function writeClipboard(text: string): Promise<boolean> {
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);

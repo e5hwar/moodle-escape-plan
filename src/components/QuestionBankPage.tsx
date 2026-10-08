@@ -1,8 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   attemptCount,
-  categories as seedCategories,
-  questions as allQuestions,
+  fileRulesOf,
   flattenCategories,
   longQuestionType,
   matchesUsage,
@@ -13,6 +12,7 @@ import {
   questionDates,
   questionCreatedAt,
   questionModifiedAt,
+  questionAtVersion,
   shortQuestionType,
   QUESTION_TYPE_OPTIONS,
   supportsGrading,
@@ -46,8 +46,6 @@ import { useLandingMorph } from "../hooks/useLandingMorph";
 
 const PAGE_SIZE = 50;
 
-/* The seed set is a sample of a much larger bank, so the landing's counts are
-   the mock figures the category counts add up to — not `questions.length`. */
 const formatCount = (n: number) => n.toLocaleString("en-US");
 /* A Sub-Category card's second line (Figma 1494:1459) — "28 Questions". */
 const questionsLine = (n: number) => `${formatCount(n)} ${n === 1 ? "Question" : "Questions"}`;
@@ -59,6 +57,19 @@ const parentOf = (label: string) => label.split(" > ")[0];
    Sub-Category filter's values. A question with no sub-category yields the bare
    category, which no Sub-Category value ever equals. */
 const subPathOf = (q: Question) => q.categoryPath.slice(0, 2).join(" > ");
+
+/* The Sub-Category filter over rows already scoped to the open categories —
+   see `filtered`. */
+function narrowToSubs(rows: Question[], subFilter: string[], selection: string[]): Question[] {
+  if (subFilter.length === 0) return rows;
+  const picked = new Set(subFilter);
+  const narrowed = new Set(subFilter.map(parentOf));
+  return rows.filter((row) =>
+    narrowed.has(row.categoryPath[0])
+      ? picked.has(row.categoryPath[0]) || picked.has(subPathOf(row))
+      : selection.length > 0,
+  );
+}
 
 /* Every filter is a multi-select, matching the Tasks row: empty = unapplied,
    values inside one filter OR together, filters AND together. */
@@ -134,7 +145,6 @@ type QSortKey =
   | "version"
   | "status"
   | "category"
-  | "usage"
   | "createdOn"
   | "lastModified";
 type SortDir = "asc" | "desc";
@@ -169,10 +179,6 @@ function compareQuestions(
       return attemptCount(a) - attemptCount(b);
     case "status":
       return STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
-    case "usage":
-      return (
-        a.quizzes.length + a.forms.length - (b.quizzes.length + b.forms.length)
-      );
   }
 }
 
@@ -383,7 +389,10 @@ export function QuestionBankPage({
   onNewQuestion,
   onEditQuestion,
   onBackToTasks,
-  initialQuestions,
+  questions,
+  setQuestions,
+  categories,
+  setCategories,
   initialHistoryId,
   initialPath,
   restore,
@@ -394,7 +403,13 @@ export function QuestionBankPage({
   onNewQuestion?: (categoryPath?: string[], type?: QuestionType, from?: QbViewState) => void;
   onEditQuestion?: (question: Question, from?: QbViewState) => void;
   onBackToTasks: () => void;
-  initialQuestions?: Question[];
+  /* The bank and its category tree are App's (the page unmounts on every trip
+     into the editor), so every change here — archive, delete, category edits,
+     an import — writes straight back through these. */
+  questions: Question[];
+  setQuestions: React.Dispatch<React.SetStateAction<Question[]>>;
+  categories: Category[];
+  setCategories: React.Dispatch<React.SetStateAction<Category[]>>;
   /** Open straight on the table, scoped to this category path — [category] or
    *  [category, sub-category]. Set when the editor hands back a new question. */
   initialPath?: string[];
@@ -407,8 +422,6 @@ export function QuestionBankPage({
    *  from a version opened in the editor). */
   initialHistoryId?: string;
 }) {
-  const [categories, setCategories] = useState<Category[]>(seedCategories);
-  const [questions, setQuestions] = useState<Question[]>(initialQuestions ?? allQuestions);
   const [rowMenu, setRowMenu] = useState<{ q: Question; rect: DOMRect } | null>(null);
   // The question whose row was clicked, read back in the row preview panel —
   // held by id so the panel follows the question through an archive.
@@ -594,15 +607,25 @@ export function QuestionBankPage({
   /* Sub-Category narrows the category its picks belong to. A category with no
      picks shows whole when it was opened by name (two categories via the
      search, one narrowed) — but at All Questions nothing was opened, so there
-     the picks ARE the scope and everything else drops out. */
-  const filtered = useMemo(() => {
-    if (subFilter.length === 0) return preSub;
-    const picked = new Set(subFilter);
-    const narrowed = new Set(subFilter.map(parentOf));
-    return preSub.filter((row) =>
-      narrowed.has(row.categoryPath[0]) ? picked.has(subPathOf(row)) : selection.length > 0,
-    );
-  }, [preSub, subFilter, selection]);
+     the picks ARE the scope and everything else drops out. A bare category
+     pick (All Questions' Category pill) takes that whole category. */
+  const filtered = useMemo(
+    () => narrowToSubs(preSub, subFilter, selection),
+    [preSub, subFilter, selection],
+  );
+
+  /* What the search's "N questions" counts run over: the open scope (category
+     and sub-category picks) under the Status filter — so a suggestion counts
+     the rows its pick would bring back, Archived left out by default. */
+  const searchCountPool = useMemo(
+    () =>
+      narrowToSubs(
+        inCategory.filter((row) => !statusFilter.length || statusFilter.includes(row.status)),
+        subFilter,
+        selection,
+      ),
+    [inCategory, statusFilter, subFilter, selection],
+  );
 
   // Created / modified times, worked out once per question rather than per
   // comparison (the seed's come from its mocked version history).
@@ -728,23 +751,6 @@ export function QuestionBankPage({
     setCatModalOpen(true);
   }
 
-  // Nothing else is mid-flight: no menu, popover or modal.
-  const idle =
-    catModal.kind === "none" &&
-    !catMenu &&
-    !catModalOpen &&
-    !deleteQ &&
-    !archiveQ &&
-    !panelId &&
-    subModal == null;
-
-  // "C" opens the editor (Multiple Choice) on every screen; "A" opens the New
-  // Category modal from both — the landing's index head plus is its only
-  // on-screen trigger since the rail went, so the table keeps the key.
-  useCreateShortcut(() => startCreate("Multiple choice"), idle);
-  useCreateShortcut(openNewCategory, idle, "a");
-
-
   // Toggle a question between Active and Archived from the row menu.
   function toggleArchive(id: string) {
     setQuestions((prev) =>
@@ -865,9 +871,9 @@ export function QuestionBankPage({
   }
 
   /* Deletion is gated on the questions that actually exist, NOT on the seeded
-     `count`: those are the mock figures of a much larger bank (see formatCount),
-     so a subcategory the table renders as empty could still carry a count of 31
-     and refuse to delete. Counting rows keeps the gate honest with what the user
+     `count` (only the filler generator reads that now), so a subcategory the
+     table renders as empty could never carry a count of 31 and refuse to
+     delete. Counting rows keeps the gate honest with what the user
      can see — and it deliberately ignores the status/type filters, since an
      archived or drafted question still blocks the delete. */
   function questionCount(catLabel: string, subLabel?: string) {
@@ -930,6 +936,18 @@ export function QuestionBankPage({
     [categories, indexGrid.n],
   );
 
+  /* The index's per-category counts, from the live bank under the table's
+     default Status filter (Active) — so a category's number is exactly the
+     "All Questions" count its click opens on, and it moves with every create,
+     import, archive, delete and rename. */
+  const indexCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const q of questions) {
+      if (q.status === "Active") m.set(q.categoryPath[0], (m.get(q.categoryPath[0]) ?? 0) + 1);
+    }
+    return m;
+  }, [questions]);
+
   // RECENT shows only labels that still exist (a rename drops its entry).
   const recentShown = useMemo(
     () => recent.filter((l) => categoryLabels.includes(l)),
@@ -949,21 +967,30 @@ export function QuestionBankPage({
 
   /* The Sub-Category pill's options: every sub-category in scope, one section
      per category that has any — just the open category's, or all of them at
-     All Questions. Values are "Parent > Sub" paths; the rows show the leaf. */
+     All Questions. Values are "Parent > Sub" paths; the rows show the leaf.
+     At All Questions the pill is "Category" and leads with a Categories
+     section of every bare category, so a flat category (no sub-categories)
+     can be filtered too; a bare pick takes the whole category. */
   const subSections = useMemo(() => {
     const scoped = selection.length
       ? categories.filter((c) => selection.includes(c.label))
       : categories;
-    return scoped
+    const subs = scoped
       .filter((c) => c.subcategories?.length)
       .map((c) => ({
         label: c.label,
         items: c.subcategories!.map((sc) => `${c.label} > ${sc.label}`),
       }));
+    if (selection.length) return subs;
+    const bare = [...categories].map((c) => c.label).sort((a, b) => a.localeCompare(b));
+    return [{ label: "Categories", items: bare }, ...subs];
   }, [categories, selection]);
   const subOptions = useMemo(() => subSections.flatMap((sec) => sec.items), [subSections]);
   const subLeaves = useMemo(
-    () => Object.fromEntries(subOptions.map((l) => [l, l.slice(parentOf(l).length + 3)])),
+    () =>
+      Object.fromEntries(
+        subOptions.map((l) => [l, l === parentOf(l) ? l : l.slice(parentOf(l).length + 3)]),
+      ),
     [subOptions],
   );
 
@@ -990,38 +1017,58 @@ export function QuestionBankPage({
   const [setToast, toastNode] = useToast(flash, onFlashDone);
   const draggingFiles = (e: React.DragEvent) => e.dataTransfer.types.includes("Files");
 
-  /* Confirmed import: create whatever categories the file names (counts
-     included, so the landing index keeps telling the truth), add the questions,
-     then open the table scoped to what just arrived. */
+  /* Nothing else is mid-flight: no menu, popover, modal or panel — and not on
+     Version History (its own page, where neither key means anything; "A" used
+     to open New Category behind it). */
+  const idle =
+    catModal.kind === "none" &&
+    !catMenu &&
+    !catModalOpen &&
+    !deleteQ &&
+    !archiveQ &&
+    !panelId &&
+    !rowMenu &&
+    !bulk &&
+    historyId == null &&
+    versionPanel == null &&
+    subModal == null;
+
+  // "C" opens the editor (Multiple Choice) on the landing and the table; "A"
+  // opens the New Category modal from both — the landing's index head plus is
+  // its only on-screen trigger since the rail went, so the table keeps the key.
+  useCreateShortcut(() => startCreate("Multiple choice"), idle);
+  useCreateShortcut(openNewCategory, idle, "a");
+
+  /* Confirmed import: create whatever categories the file names, add the
+     questions, then land on the index. The file's spelling only decides a
+     category that doesn't exist yet: a row naming one that does ("epa 608")
+     is filed under the existing label ("EPA 608"), so it shows under that
+     category, counts on the index and holds its delete gate. */
   function applyImport(report: ImportReport) {
-    const created = questionsFromImport(report.rows, new Set(questions.map((q) => q.id)));
-
-    setCategories((prev) => {
-      const next = prev.map((c) => ({
-        ...c,
-        subcategories: [...(c.subcategories ?? [])],
-      }));
-      const stamp = Date.now();
-      let seq = 0;
-      for (const row of report.rows) {
-        const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
-        let cat = next.find((c) => same(c.label, row.category));
-        if (!cat) {
-          cat = { key: `cat-${stamp}-${seq++}`, label: row.category, count: 0, subcategories: [] };
-          next.push(cat);
-        }
-        cat.count += 1;
-        if (!row.sub) continue;
-        let sub = cat.subcategories.find((sc) => same(sc.label, row.sub));
-        if (!sub) {
-          sub = { key: `sub-${stamp}-${seq++}`, label: row.sub, count: 0 };
-          cat.subcategories.push(sub);
-        }
-        sub.count += 1;
+    const next = categories.map((c) => ({
+      ...c,
+      subcategories: [...(c.subcategories ?? [])],
+    }));
+    const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+    const stamp = Date.now();
+    let seq = 0;
+    const rows = report.rows.map((row) => {
+      let cat = next.find((c) => same(c.label, row.category));
+      if (!cat) {
+        cat = { key: `cat-${stamp}-${seq++}`, label: row.category, count: 0, subcategories: [] };
+        next.push(cat);
       }
-      return next;
+      if (!row.sub) return { ...row, category: cat.label };
+      let sub = cat.subcategories.find((sc) => same(sc.label, row.sub));
+      if (!sub) {
+        sub = { key: `sub-${stamp}-${seq++}`, label: row.sub, count: 0 };
+        cat.subcategories.push(sub);
+      }
+      return { ...row, category: cat.label, sub: sub.label };
     });
+    const created = questionsFromImport(rows, new Set(questions.map((q) => q.id)));
 
+    setCategories(next);
     setQuestions((prev) => [...created, ...prev]);
     setBulk(null);
     /* The import always leaves the user on the landing (2026-10-03, user) —
@@ -1036,12 +1083,11 @@ export function QuestionBankPage({
   if (historyId && historyQ) {
     /* View opens that version in the row preview panel — read-only by nature,
        so a past version needs no locked editor or "can't edit" notice (user,
-       2026-10-06). A version differs from the current question in its text. */
+       2026-10-06). It shows the version as it was saved — its options, grades,
+       grading and feedback, not today's (`questionAtVersion`). */
     const history = versionHistory(historyQ);
     const versionRow = versionPanel !== null ? history.find((v) => v.version === versionPanel) : undefined;
-    const versionQ = versionRow
-      ? { ...historyQ, text: versionRow.text, version: versionRow.version }
-      : null;
+    const versionQ = versionRow ? questionAtVersion(historyQ, versionRow.version) : null;
     /* The Overview's dates read off the history itself: created = v1's row,
        last modified = when THIS version was saved. */
     const versionDates = versionRow
@@ -1225,6 +1271,7 @@ export function QuestionBankPage({
             <div className="toolbar">
               <QuestionSearch
                 questions={questions}
+                countIn={searchCountPool}
                 categoryOptions={categoryLabels}
                 selection={scopeLabels}
                 onSelectionChange={applyScope}
@@ -1402,7 +1449,9 @@ export function QuestionBankPage({
                               data-tip-overflow
                             >
                               <span className="qbl-index-name">{c.label}</span>
-                              <span className="qbl-index-count">{formatCount(c.count)}</span>
+                              <span className="qbl-index-count">
+                                {formatCount(indexCounts.get(c.label) ?? 0)}
+                              </span>
                             </button>
                           ))}
                         </div>
@@ -2223,7 +2272,9 @@ function QuestionPanel({
   const lines = (names: string[]) => names.length > 0 && names.map((n) => <div key={n}>{n}</div>);
   /* Answers (user, 2026-10-07): a Short Answer has none to show; a Linear
      Scale and a File Upload read back as label/value pairs; the option types
-     keep the shared read-only list. */
+     keep the shared read-only list. A File Upload with no limits of its own
+     reads the system-wide default. */
+  const files = q.type === "File upload" ? fileRulesOf(q) : null;
   const answers =
     q.type === "Short answer" ? null : q.scale ? (
       <ConfirmCard
@@ -2236,13 +2287,14 @@ function QuestionPanel({
           [`Label for ${q.scale.max}`, q.scale.maxLabel],
         ]}
       />
-    ) : q.fileRules ? (
+    ) : files ? (
       <ConfirmCard
         title="Answers"
         fillBlanks
         rows={[
-          ["Max. Files Allowed", String(q.fileRules.maxFiles)],
-          ["Max. File Size", `${q.fileRules.maxSizeMb} MB`],
+          ["Max. Files Allowed", String(files.maxFiles)],
+          ["Max. File Size", `${files.maxSizeMb} MB`],
+          ["Allowed File Types", files.fileTypes.join(", ")],
         ]}
       />
     ) : q.options && q.options.length > 0 ? (
@@ -2264,10 +2316,17 @@ function QuestionPanel({
         ]}
       />
     ) : q.type === "True/False" ? (
+      /* An ungraded True/False has no correct answer — "-", like an
+         ungraded MCQ's. */
       <ConfirmCard
         title="Answers"
         fillBlanks
-        rows={[["Correct Answer", q.tfAnswer === undefined ? "" : q.tfAnswer ? "True" : "False"]]}
+        rows={[
+          [
+            "Correct Answer",
+            !isGraded(q) || q.tfAnswer === undefined ? "" : q.tfAnswer ? "True" : "False",
+          ],
+        ]}
       />
     ) : q.pairs && q.pairs.length > 0 ? (
       /* Match the Following: the editor's ANSWER side is the label here and

@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  idRecords as seedRecords,
+  SEEDED_ID_USERS,
+  approveIdRecord,
+  idRecordForUser,
   matchesIdQuery,
-  nowIdStamp,
+  replaceIdRecord,
+  useIdDecisions,
   type IdRecord,
   type IdStatus,
 } from "../data/manageIds";
+import { useUsers } from "../data/users";
 import { SortIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { ManageIdsSearch, STATUS_LABEL } from "./ManageIdsSearch";
 import { IdModal } from "./IdModal";
@@ -41,7 +45,18 @@ function compareRows(a: IdRecord, b: IdRecord, key: SortKey): number {
 }
 
 export function ManageIdsPage({ onBack }: { onBack: () => void }) {
-  const [records, setRecords] = useState<IdRecord[]>(seedRecords);
+  /* The review queue's documents, with each person read off the live roster
+     and every decision from the shared ID store (manageIds.ts). */
+  const roster = useUsers();
+  const decisions = useIdDecisions();
+  const records = useMemo<IdRecord[]>(
+    () =>
+      SEEDED_ID_USERS.flatMap((id) => {
+        const u = roster.find((x) => x.id === id);
+        return u ? [idRecordForUser(u, decisions)] : [];
+      }),
+    [roster, decisions],
+  );
   const [query, setQuery] = useState("");
   // Both filters are applied from inside the search bar — this page has no pills.
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
@@ -79,39 +94,6 @@ export function ManageIdsPage({ onBack }: { onBack: () => void }) {
   const paged = sorted.slice(start, start + PAGE_SIZE);
 
   const active = activeId ? records.find((r) => r.id === activeId) ?? null : null;
-
-  /* Replacing an ID keeps the popup open on the (new) document and moves the
-     record to whichever status the reviewer picked. The upload stamp follows
-     the new file, so the popup's subtitle isn't left describing the old one —
-     and the approval stamp is re-taken or dropped with it, since it described
-     the document that was just replaced. */
-  function applyReplace(id: string, status: IdStatus) {
-    const now = nowIdStamp();
-    setRecords((prev) =>
-      prev.map((r) =>
-        r.id === id
-          ? {
-              ...r,
-              status,
-              uploadedAt: now,
-              approvedAt: status === "approved" ? now : undefined,
-            }
-          : r,
-      ),
-    );
-  }
-
-  /* Approving from the popup decides the ID that is already on file, so unlike
-     a replace it leaves the upload stamp alone and only records the decision. */
-  function setStatus(id: string, status: IdStatus) {
-    setRecords((prev) =>
-      prev.map((r) =>
-        r.id === id
-          ? { ...r, status, approvedAt: status === "approved" ? nowIdStamp() : r.approvedAt }
-          : r,
-      ),
-    );
-  }
 
   return (
     <div className="main">
@@ -211,8 +193,8 @@ export function ManageIdsPage({ onBack }: { onBack: () => void }) {
         <IdModal
           record={active}
           onClose={() => setActiveId(null)}
-          onReplace={(status) => applyReplace(active.id, status)}
-          onApprove={() => setStatus(active.id, "approved")}
+          onReplace={(status) => replaceIdRecord(active, status)}
+          onApprove={() => approveIdRecord(active)}
         />
       )}
     </div>
@@ -247,6 +229,7 @@ const STATUS_TONE: Record<IdStatus, string> = {
   approved: "green",
   "in-review": "yellow",
   "reupload-requested": "grey",
+  "not-started": "grey",
 };
 
 function StatusPill({ status }: { status: IdStatus }) {

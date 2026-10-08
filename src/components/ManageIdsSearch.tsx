@@ -297,6 +297,7 @@ export const STATUS_LABEL: Record<IdRecord["status"], string> = {
   approved: "Approved",
   "in-review": "Review Pending",
   "reupload-requested": "Reupload Requested",
+  "not-started": "Not Started",
 };
 
 type NameCounts = { names: string[]; counts: Map<string, number> };

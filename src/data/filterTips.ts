@@ -44,7 +44,8 @@ export const FILTER_TIPS = {
     status: "Show only companies whose subscription is in the chosen state.",
     industry: "Show only companies working in the chosen Industries.",
     partnership: "Show only companies that came in through the chosen partnerships.",
-    dateRange: "Show only companies created inside the chosen dates.",
+    // The range never hides a row — it only sets the window Seat Changes sums.
+    dateRange: "Sets the period the Seat Changes column counts. Doesn't filter companies.",
   },
 
   /** Users list and everything built on UsersFilters. */
@@ -106,6 +107,11 @@ export const FILTER_TIPS = {
   /** The Full Profile's Purchases & Bills card. */
   profile: {
     purchaseType: "Show only subscription charges, certification purchases, quiz attempts or physical products.",
+  },
+
+  /** Name Change Requests. */
+  nameChanges: {
+    status: "Show only requests waiting on a review, or only those waiting on the user's ID proof.",
   },
 
   /** Scholarships. */

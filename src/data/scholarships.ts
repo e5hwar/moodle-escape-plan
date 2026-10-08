@@ -1,97 +1,48 @@
-export type ScholarshipUser = {
-  id: string;
-  name: string;
-  email?: string;
-  phone?: string;
-};
+import { isoDaysFromToday, sharedStore, todayIso } from "./sharedStore";
+import { pooledScholarships } from "./learnerPool";
 
+/* A scholarship names its recipient by id only — who they are (name, email,
+   phone) is read off the Users roster wherever it is shown, so a rename there
+   shows up here too. Recipients are always B2C: B2B users get Pro through their
+   company. */
 export type Scholarship = {
   id: string;
-  user: ScholarshipUser;
+  userId: string;
   assignedOn: string; // ISO date
   expiresOn: string; // ISO date
   assignedBy: string;
-  /** Set when an admin ended it early — the record stays, expired as of this
-   *  date. Distinguishes "revoked today" from "ran its term out today", which
-   *  the dates alone can't, since revoking also pulls `expiresOn` back. */
-  revokedOn?: string; // ISO date
 };
 
-/** A bank of users that can be selected when adding a new scholarship.
- *  Only a subset of these will have a scholarship by default. */
-export const userBank: ScholarshipUser[] = [
-  { id: "U-10044", name: "Marcus Holloway", email: "marcus.holloway@gmail.com", phone: "+1 (415) 555-0142" },
-  { id: "U-10089", name: "Priya Venkatesan", email: "priya.v@outlook.com", phone: "+1 (213) 555-0181" },
-  { id: "U-10132", name: "Diego Ramirez", phone: "+1 (832) 555-0117" },
-  { id: "U-10157", name: "Ayesha Khan", email: "ayesha.khan@yahoo.com" },
-  { id: "U-10203", name: "Jordan Whitfield", email: "j.whitfield@gmail.com", phone: "+1 (404) 555-0103" },
-  { id: "U-10248", name: "Sophia Andersson", email: "sophia.a@protonmail.com", phone: "+1 (646) 555-0134" },
-  { id: "U-10291", name: "Tyrese Booker", email: "ty.booker@gmail.com" },
-  { id: "U-10330", name: "Lena Petrov", email: "lena.petrov@outlook.com", phone: "+1 (305) 555-0177" },
-  { id: "U-10376", name: "Carlos Mendoza", phone: "+1 (915) 555-0142" },
-  { id: "U-10412", name: "Hana Yamamoto", email: "hana.y@gmail.com", phone: "+1 (206) 555-0156" },
-  { id: "U-10458", name: "Brandon O'Connor", email: "boconnor@gmail.com" },
-  { id: "U-10491", name: "Naomi Sato", email: "naomi.sato@gmail.com", phone: "+1 (503) 555-0189" },
-  { id: "U-10537", name: "Ezekiel Adeoye", email: "z.adeoye@outlook.com" },
-  { id: "U-10584", name: "Mira Singh", email: "mira.singh@yahoo.com", phone: "+1 (718) 555-0162" },
-  { id: "U-10618", name: "Felix Becker", phone: "+1 (267) 555-0148" },
+/* Dates count from the real today, so the active ones stay active however
+   long the prototype runs. The four users the roster marks "Scholarship" hold
+   the active ones; the rest are lapsed history on other B2C accounts. */
+const SEED: Scholarship[] = [
+  { id: "SC-1031", userId: "U-10376", assignedOn: isoDaysFromToday(-120), expiresOn: isoDaysFromToday(62), assignedBy: "Akash Patel" },
+  { id: "SC-1028", userId: "U-10903", assignedOn: isoDaysFromToday(-75), expiresOn: isoDaysFromToday(9), assignedBy: "Maya Chen" },
+  { id: "SC-1026", userId: "U-11224", assignedOn: isoDaysFromToday(-30), expiresOn: isoDaysFromToday(150), assignedBy: "Priya Iyer" },
+  { id: "SC-1025", userId: "U-11461", assignedOn: isoDaysFromToday(-12), expiresOn: isoDaysFromToday(170), assignedBy: "Akash Patel" },
+  { id: "SC-1024", userId: "U-10044", assignedOn: isoDaysFromToday(-420), expiresOn: isoDaysFromToday(-240), assignedBy: "Akash Patel" },
+  { id: "SC-1019", userId: "U-10089", assignedOn: isoDaysFromToday(-300), expiresOn: isoDaysFromToday(-120), assignedBy: "Maya Chen" },
+  { id: "SC-1003", userId: "U-10203", assignedOn: isoDaysFromToday(-380), expiresOn: isoDaysFromToday(-200), assignedBy: "Diego Ramos" },
+  { id: "SC-0991", userId: "U-10291", assignedOn: isoDaysFromToday(-210), expiresOn: isoDaysFromToday(-34), assignedBy: "Maya Chen" },
+  // The generated learners on a Scholarship (learnerPool.ts).
+  ...pooledScholarships(),
 ];
 
-export const scholarships: Scholarship[] = [
-  {
-    id: "SC-1024",
-    user: userBank[0],
-    assignedOn: "2026-02-12",
-    expiresOn: "2026-08-12",
-    assignedBy: "Akash Patel",
-  },
-  {
-    id: "SC-1019",
-    user: userBank[1],
-    assignedOn: "2026-01-30",
-    expiresOn: "2026-07-30",
-    assignedBy: "Maya Chen",
-  },
-  {
-    id: "SC-1011",
-    user: userBank[2],
-    assignedOn: "2025-12-04",
-    expiresOn: "2026-06-04",
-    assignedBy: "Akash Patel",
-  },
-  {
-    id: "SC-1007",
-    user: userBank[3],
-    assignedOn: "2025-11-18",
-    expiresOn: "2026-05-18",
-    assignedBy: "Maya Chen",
-  },
-  {
-    id: "SC-1003",
-    user: userBank[4],
-    assignedOn: "2025-10-22",
-    expiresOn: "2026-04-22",
-    assignedBy: "Diego Ramos",
-  },
-  {
-    id: "SC-0998",
-    user: userBank[5],
-    assignedOn: "2025-09-08",
-    expiresOn: "2026-03-08",
-    assignedBy: "Akash Patel",
-  },
-  {
-    id: "SC-0991",
-    user: userBank[6],
-    assignedOn: "2026-03-04",
-    expiresOn: "2026-09-04",
-    assignedBy: "Maya Chen",
-  },
-  {
-    id: "SC-0985",
-    user: userBank[7],
-    assignedOn: "2026-04-19",
-    expiresOn: "2026-10-19",
-    assignedBy: "Priya Iyer",
-  },
-];
+/** The live list — Scholarships writes it, and the Users roster reads it to
+ *  decide who is on a Scholarship (see users.ts). Shared across tabs. */
+export const scholarshipStore = sharedStore<Scholarship[]>("scholarships", SEED);
+export const useScholarships = scholarshipStore.use;
+
+/** `expiresOn` is the day access ends, so a scholarship is active only
+ *  before it. Revoking just moves that date to today — there is no separate
+ *  revoked state, and a revoked one is extended like any expired one. */
+export function isScholarshipActive(s: Scholarship, today = todayIso()): boolean {
+  return s.expiresOn > today;
+}
+
+/** The user's one running scholarship, if any. */
+export function activeScholarshipOf(userId: string, list = scholarshipStore.get()): Scholarship | undefined {
+  const today = todayIso();
+  return list.find((s) => s.userId === userId && isScholarshipActive(s, today));
+}

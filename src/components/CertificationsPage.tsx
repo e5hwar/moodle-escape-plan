@@ -6,10 +6,13 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import {
   CERT_OPTIONAL_COLUMNS,
   CERT_FIXED_COLUMNS,
-  topIndustry,
+  isSkillCatCert,
+  certReferences,
   type Certification,
+  type CertReference,
 } from "../data/certifications";
 import { type Award } from "../data/awards";
+import { certIndustryText, industryTagLabels, useLiveIndustries } from "../data/industries";
 import {
   CertFilters,
   certMatches,
@@ -53,7 +56,13 @@ const PAGE_SIZE = 50;
    "Mark as Done" (persisted per admin) and the session's "Set up later". */
 export type SetupStepKey = "industries" | "links" | "award" | "feedback";
 /** One step, as App.tsx derives it: done, with a one-line summary when so. */
-export type SetupStep = { done: boolean; detail?: string };
+export type SetupStep = {
+  done: boolean;
+  detail?: string;
+  /** The step doesn't apply to this Certification (Industries on a
+   *  company-created one): not shown, not counted, never offered. */
+  na?: boolean;
+};
 export type SetupSteps = Record<SetupStepKey, SetupStep>;
 /** The banner's session state, held in App.tsx so it survives the round trip
  *  through a flow: "Set up later" (cleared by the next create), and the
@@ -63,6 +72,8 @@ export type SetupBannerState = { dismissed: boolean };
 
 type SetupStatus = {
   steps: SetupSteps;
+  /** The steps that apply to this Certification, keycapped 1…n in order. */
+  list: SetupStepDef[];
   done: number;
   left: number;
   /** "Mark as Done" was pressed — the remaining steps don't apply. */
@@ -71,7 +82,7 @@ type SetupStatus = {
   pending: boolean;
 };
 
-const SETUP_STEPS: {
+type SetupStepDef = {
   key: SetupStepKey;
   short: string;
   label: string;
@@ -79,7 +90,8 @@ const SETUP_STEPS: {
   doneTitle: string;
   kbd: string;
   icon: JSX.Element;
-}[] = [
+};
+const SETUP_STEPS: SetupStepDef[] = [
   /* Labels, bodies and "Industries Added" are Figma 1592:2588's copy; the
      other three done titles follow that pattern (not drawn yet). */
   {
@@ -119,8 +131,6 @@ const SETUP_STEPS: {
     icon: <MenuResponsesIcon />,
   },
 ];
-
-const SETUP_KEYS = SETUP_STEPS.map((s) => s.kbd);
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
@@ -185,11 +195,18 @@ const STAGE_RANK: Record<string, number> = {
   Master: 3,
 };
 
+/** CEUs as a number for sorting: blank / non-numeric is -1, below every real
+ *  value (CEUs are never negative). */
+function ceusValue(ceus: string | undefined): number {
+  const n = parseFloat(ceus ?? "");
+  return Number.isFinite(n) ? n : -1;
+}
+
 function compare(a: Certification, b: Certification, key: SortKey): number {
   switch (key) {
     case "id": return a.id.localeCompare(b.id);
     case "name": return a.name.localeCompare(b.name);
-    case "industry": return a.industry.localeCompare(b.industry);
+    case "industry": return certIndustryText(a.industries).localeCompare(certIndustryText(b.industries));
     case "careerStage":
       return (
         (a.careerStage ? STAGE_RANK[a.careerStage] : 99) -
@@ -198,7 +215,8 @@ function compare(a: Certification, b: Certification, key: SortKey): number {
     case "type": return (a.type ?? "").localeCompare(b.type ?? "");
     // Free certs sort first, then paid (Consumable / Non-consumable) alphabetically.
     case "payment": return (a.payment ?? "").localeCompare(b.payment ?? "");
-    case "ceus": return parseFloat(a.ceus) - parseFloat(b.ceus);
+    // A blank (or unreadable) CEUs value sorts as the lowest, never NaN.
+    case "ceus": return ceusValue(a.ceus) - ceusValue(b.ceus);
     case "tasks": return a.tasks - b.tasks;
     case "createdBy": return a.createdBy.localeCompare(b.createdBy);
     case "tradeTag": return (pickTag(a.tags, TRADE_TAGS) ?? "").localeCompare(pickTag(b.tags, TRADE_TAGS) ?? "");
@@ -229,6 +247,7 @@ export function CertificationsPage({
   onManageContentLinks,
   onManageProgress,
   onArchiveCert,
+  onDeleteCert,
   onManageAward,
   awardForCert,
   onOpenIndustries,
@@ -265,6 +284,10 @@ export function CertificationsPage({
   onManageContentLinks: (cert: Certification) => void;
   onManageProgress: (cert: Certification) => void;
   onArchiveCert: (cert: Certification) => void;
+  /** Deletes the Certification and everything tied to it — its Content
+   *  Links (both directions), its Award and its Feedback Form triggers
+   *  (App.tsx). The page clears its own setup flag and raises the toast. */
+  onDeleteCert: (cert: Certification) => void;
   /** Opens this Certification's Award — adding one, or managing the one it
    *  already has. Awards have no page of their own any more. */
   onManageAward: (cert: Certification) => void;
@@ -272,8 +295,12 @@ export function CertificationsPage({
    *  menu reads "Add Award" or "Manage Award". */
   awardForCert: (cert: Certification) => Award | undefined;
   onOpenIndustries?: () => void;
-  onOpenFeedback?: () => void;
+  /** No argument: the Feedback Forms list (header button). With a
+   *  Certification: the form it fires (its done Setup step). */
+  onOpenFeedback?: (cert?: Certification) => void;
 }) {
+  // Re-render when an Industry is renamed, so the Industries column follows.
+  const liveInds = useLiveIndustries();
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   // The upload path picked from the Create menu, if any — each opens its own
   // modal, and confirming it continues into the wizard.
@@ -289,6 +316,15 @@ export function CertificationsPage({
   const [blockedEdit, setBlockedEdit] = useState<Certification | null>(null);
   // The Certification awaiting the delete confirm, if any.
   const [deleting, setDeleting] = useState<Certification | null>(null);
+  /* A Delete that other Certifications block: they require it in a Condition
+     Set or imported its Courses (certReferences), so it can't go until those
+     references are removed. Shown instead of the delete confirm. */
+  const [deleteBlocked, setDeleteBlocked] = useState<{ cert: Certification; refs: CertReference[] } | null>(null);
+  function requestDelete(cert: Certification) {
+    const refs = certReferences(cert.id, certList);
+    if (refs.length > 0) setDeleteBlocked({ cert, refs });
+    else setDeleting(cert);
+  }
   // The Certification awaiting a Hide confirmation — the Tasks page's Hide
   // modal (Figma 667:884). Unhiding is instant; only hiding routes through it.
   const [hideTarget, setHideTarget] = useState<Certification | null>(null);
@@ -310,6 +346,21 @@ export function CertificationsPage({
   /* ── Post-creation setup state (see SETUP_STEPS) ── */
   // "Mark as Done": per Certification, per admin — the one flag that persists.
   const [closedSetup, setClosedSetup] = usePersisted<Record<string, true>>("cert-setup-closed", {});
+  /* The flag is keyed by id, so it must never outlive its Certification: a
+     delete clears its entry (deleteCert), and an entry whose Certification
+     isn't in the list (one created before a reload, which the prototype
+     doesn't keep) is dropped here. Ids are never re-issued either (App's
+     high-water mark), so a new Certification can't inherit an old "done". */
+  useEffect(() => {
+    setClosedSetup((prev) => {
+      const ids = new Set(certs.map((c) => c.id));
+      const stale = Object.keys(prev).filter((id) => !ids.has(id));
+      if (stale.length === 0) return prev;
+      const next = { ...prev };
+      for (const id of stale) delete next[id];
+      return next;
+    });
+  }, [certs, setClosedSetup]);
   // The Industries modal, opened from the Setup card for an existing Cert.
   const [industriesFor, setIndustriesFor] = useState<{ cert: Certification; value: string[] } | null>(null);
   // The page's toast: a flow's `flash` on arrival, or one raised here
@@ -333,13 +384,20 @@ export function CertificationsPage({
   const setupFor = useCallback(
     (cert: Certification): SetupStatus => {
       const steps = setupStepsFor(cert);
-      const done = SETUP_STEPS.filter((s) => steps[s.key].done).length;
-      const left = SETUP_STEPS.length - done;
+      // A step that doesn't apply (Industries on a company-created
+      // Certification) is left out, and the rest keycap 1…n.
+      const list = SETUP_STEPS.filter((s) => !steps[s.key].na).map((s, i) => ({
+        ...s,
+        kbd: String(i + 1),
+      }));
+      const done = list.filter((s) => steps[s.key].done).length;
+      const left = list.length - done;
       // The seed's long-settled Certifications arrive closed (data); a new one
       // closes when this admin presses Mark as Done.
       const closed = !!cert.setupClosed || !!closedSetup[cert.id];
       return {
         steps,
+        list,
         done,
         left,
         closed,
@@ -387,10 +445,12 @@ export function CertificationsPage({
      flows come back to this page with a toast; nothing reopens on its own. */
   function runSetupStep(cert: Certification, key: SetupStepKey) {
     const steps = setupFor(cert).steps;
+    // Industries on a company-created Certification: not a step, no modal.
+    if (steps[key].na) return;
     closePanelThen(() => {
       switch (key) {
         case "industries":
-          setIndustriesFor({ cert, value: cert.industry ? [cert.industry] : [] });
+          setIndustriesFor({ cert, value: cert.industries });
           break;
         case "links":
           onManageContentLinks(cert);
@@ -399,7 +459,8 @@ export function CertificationsPage({
           onManageAward(cert);
           break;
         case "feedback":
-          if (steps.feedback.done) onOpenFeedback?.();
+          // Done: that Certification's own form, not the whole list.
+          if (steps.feedback.done) onOpenFeedback?.(cert);
           else onAddFeedbackForm(cert);
           break;
       }
@@ -409,9 +470,9 @@ export function CertificationsPage({
   function saveIndustries() {
     if (!industriesFor) return;
     const { cert, value } = industriesFor;
-    const had = cert.industry.trim().length > 0;
+    const had = cert.industries.length > 0;
     setCertList((prev) =>
-      prev.map((c) => (c.id === cert.id ? { ...c, industry: value[0] ?? "" } : c)),
+      prev.map((c) => (c.id === cert.id ? { ...c, industries: value } : c)),
     );
     setIndustriesFor(null);
     if (value.length > 0) setToast(had ? "Industries Updated" : "Industries Added");
@@ -454,12 +515,21 @@ export function CertificationsPage({
 
   // Keyboard shortcuts, mirroring the Tasks page: "C" opens the Create menu;
   // once open, each method's letter starts it. Ignored while typing in a field,
-  // with a modifier held, or while an upload modal or the drawer owns the
+  // with a modifier held, or while a modal, a row menu or the drawer owns the
   // screen (the menu would open above the drawer's scrim).
+  const overlayOpen =
+    !!importMode ||
+    !!drawerId ||
+    !!industriesFor ||
+    !!deleting ||
+    !!deleteBlocked ||
+    !!hideTarget ||
+    !!blockedEdit ||
+    !!menu;
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (importMode || drawerId || industriesFor) return;
+      if (overlayOpen) return;
       const target = e.target as HTMLElement | null;
       if (
         target &&
@@ -498,7 +568,7 @@ export function CertificationsPage({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [createMenuOpen, importMode, drawerId, industriesFor, showPendingBanner, pendingCerts, onNewCert]);
+  }, [createMenuOpen, overlayOpen, showPendingBanner, pendingCerts, onNewCert]);
 
   // With the panel open on a Certification mid-setup, 1–4 start that step —
   // the same as its Add / Manage button. Esc is the panel's own.
@@ -520,10 +590,11 @@ export function CertificationsPage({
       ) {
         return;
       }
-      const i = SETUP_KEYS.indexOf(e.key);
-      if (i < 0) return;
+      // The keycaps of the steps that apply to this Certification.
+      const step = setupFor(drawerCert!).list.find((s) => s.kbd === e.key);
+      if (!step) return;
       e.preventDefault();
-      runSetupStep(drawerCert!, SETUP_STEPS[i].key);
+      runSetupStep(drawerCert!, step.key);
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -572,10 +643,13 @@ export function CertificationsPage({
   const catalog = useMemo(
     () => ({
       certs: certList.length,
-      // A Certification with no Industry yet (setup pending) isn't one.
-      industries: new Set(certList.map((c) => topIndustry(c.industry)).filter(Boolean)).size,
+      // The Industries tagged directly (exact tags: a Sub-Industry tag doesn't
+      // tag its Industry). An untagged Certification (setup pending) adds none.
+      industries: new Set(
+        certList.flatMap((c) => c.industries.filter((k) => liveInds.some((i) => i.key === k))),
+      ).size,
     }),
-    [certList],
+    [certList, liveInds],
   );
 
   // Natural table width so columns scroll horizontally instead of crushing.
@@ -609,7 +683,12 @@ export function CertificationsPage({
     );
   }
 
+  /* Hide / Show flips Visible ⇄ Hidden and nothing else. Archive is its own
+     state, entered and left only on the Archive & Replace page, so an
+     archived Certification has no visibility toggle (row bar or menu) and
+     this never touches one. */
   function toggleHidden(cert: Certification) {
+    if (cert.visibility === "Archived") return;
     // Making a Certification visible again is instant — only hiding needs
     // confirming, as it does for a Task.
     if ((cert.visibility ?? "Visible") !== "Visible") {
@@ -638,7 +717,23 @@ export function CertificationsPage({
   }
 
   function deleteCert(cert: Certification) {
-    setCertList((prev) => prev.filter((c) => c.id !== cert.id));
+    // Referenced since the confirm opened: explain instead (App won't delete it).
+    const refs = certReferences(cert.id, certList);
+    if (refs.length > 0) {
+      setDeleting(null);
+      setDeleteBlocked({ cert, refs });
+      return;
+    }
+    // The record and everything tied to it go in App (links, Award, form
+    // triggers); the page's own "Mark as Done" flag goes here.
+    onDeleteCert(cert);
+    setClosedSetup((prev) => {
+      if (!(cert.id in prev)) return prev;
+      const next = { ...prev };
+      delete next[cert.id];
+      return next;
+    });
+    if (drawerId === cert.id) setDrawerId(null);
     setDeleting(null);
     setToast("Certification Deleted");
   }
@@ -809,7 +904,7 @@ export function CertificationsPage({
                           columns={columns}
                           setup={(() => {
                             const st = setupFor(cert);
-                            return st.pending ? { done: st.done, left: st.left } : undefined;
+                            return st.pending ? { done: st.done, left: st.left, total: st.list.length } : undefined;
                           })()}
                           onOpen={() => setDrawerId(cert.id)}
                           onEdit={() => editCert(cert)}
@@ -845,7 +940,7 @@ export function CertificationsPage({
           onClose={() => setMenu(null)}
           onEdit={() => closePanelThen(() => editCert(menu.cert))}
           onToggleVisibility={() => closePanelThen(() => toggleHidden(menu.cert))}
-          onDelete={() => closePanelThen(() => setDeleting(menu.cert))}
+          onDelete={() => closePanelThen(() => requestDelete(menu.cert))}
           onViewPayers={() => closePanelThen(() => onViewPayers(menu.cert))}
           onViewAllTasks={() => closePanelThen(() => onViewAllTasks(menu.cert))}
           hasAward={!!awardForCert(menu.cert)}
@@ -901,8 +996,8 @@ export function CertificationsPage({
           danger
           doubleConfirm={
             <>
-              <strong>{deleting.name}</strong> and its content links will be permanently
-              deleted. This can't be undone.
+              <strong>{deleting.name}</strong>, its Content Links, its Award and its Feedback
+              Form triggers will be permanently deleted. This can't be undone.
             </>
           }
           onCancel={() => setDeleting(null)}
@@ -912,9 +1007,18 @@ export function CertificationsPage({
               convention for a confirm (Figma 483:588). */}
           <p className="prm-content">
             “{deleting.name}” ({deleting.id}) is removed from the Certifications list along
-            with its content links. This can't be undone.
+            with its Content Links, its Award and its Feedback Form triggers. This can't be
+            undone.
           </p>
         </PrmModal>
+      )}
+
+      {deleteBlocked && (
+        <DeleteBlockedModal
+          cert={deleteBlocked.cert}
+          refs={deleteBlocked.refs}
+          onClose={() => setDeleteBlocked(null)}
+        />
       )}
 
       {hideTarget && (
@@ -933,7 +1037,7 @@ export function CertificationsPage({
         <CertDrawer
           key={drawerCert.id}
           cert={drawerCert}
-          contentLinks={contentLinksFor(drawerCert.name, contentLinks)}
+          contentLinks={contentLinksFor(drawerCert.id, contentLinks)}
           setupCard={
             drawerSetupCard && drawerSetup ? (
               <SetupCard
@@ -1104,20 +1208,25 @@ function SetupCard({
           </button>
         </div>
         <div className="cs-progress" aria-hidden="true">
-          {SETUP_STEPS.map((s) => (
+          {status.list.map((s) => (
             <span key={s.key} className={`cs-seg${status.steps[s.key].done ? " cs-seg--done" : ""}`} />
           ))}
         </div>
         <p className="cs-help">
-          Optional, but most Certifications need all four before learners can find and finish
-          them.
+          Optional, but most Certifications need{" "}
+          {status.list.length === 1
+            ? "it"
+            : status.list.length === 2
+              ? "both"
+              : `all ${status.list.length === 3 ? "three" : "four"}`}{" "}
+          before learners can find and finish them.
         </p>
       </div>
       <div className="cs-list">
         <div className="cs-rows">
-          {SETUP_STEPS.map((s) => {
+          {status.list.map((s) => {
             const step = status.steps[s.key];
-            const detail = s.key === "industries" ? cert.industry : step.detail;
+            const detail = s.key === "industries" ? certIndustryText(cert.industries) : step.detail;
             return (
               <div
                 key={s.key}
@@ -1186,10 +1295,20 @@ function CertDrawer({
 }) {
   const pv = useCertPreview(cert);
   const vis = cert.visibility ?? "Visible";
+  /* Live = Visible with at least one Task in its stored tree (a hidden one,
+     or one whose Courses hold no Tasks yet, reads "Not live yet"). Only the
+     seed has enrolment history; a Certification created this session starts
+     at zero. */
   const live = vis === "Visible" && pv.taskCount > 0;
   const enrolled = seededInt(cert.id, "enrolled", 140, 4200);
   const completed = Math.round((enrolled * seededInt(cert.id, "rate", 38, 84)) / 100);
-  const stats: PreviewStat[] = live
+  const stats: PreviewStat[] = live && !pv.hasHistory
+    ? [
+        { count: "0", title: "Enrollments", sub: "+0 / month" },
+        { count: "0", title: "Completions", sub: "0% of enrolled" },
+        { count: "0", title: "Active", sub: "This month" },
+      ]
+    : live
     ? [
         { count: formatCount(enrolled), title: "Enrollments", sub: `+${seededInt(cert.id, "month", 8, 140)} / month` },
         {
@@ -1247,14 +1366,15 @@ function HideCertModal({
       <p className="prm-content">
         Hiding the Certification temporarily removes it for all users.
       </p>
-      {cert.industry && (
+      {cert.industries.length > 0 && (
         <div className="prm-content">
           <p>
-            This Certification is currently in the following Industry. Hiding it removes it
-            temporarily from here.
+            This Certification is currently in the following{" "}
+            {cert.industries.length === 1 ? "Industry" : "Industries"}. Hiding it removes it
+            temporarily from {cert.industries.length === 1 ? "there" : "them"}.
           </p>
           <ul>
-            <li>{cert.industry}</li>
+            {industryTagLabels(cert.industries).map((l) => <li key={l}>{l}</li>)}
           </ul>
         </div>
       )}
@@ -1318,7 +1438,7 @@ function CertRow({
   cert: Certification;
   columns: CertColumnState;
   /** Set while post-creation setup steps are left: the "Setup n/4" pill. */
-  setup?: { done: number; left: number };
+  setup?: { done: number; left: number; total: number };
   /** A click anywhere on the row outside its action buttons. */
   onOpen: () => void;
   onEdit: () => void;
@@ -1329,6 +1449,7 @@ function CertRow({
 }) {
   const vis = cert.visibility ?? "Visible";
   const hidden = vis === "Hidden";
+  const archived = vis === "Archived";
   return (
     <tr
       className={`${vis !== "Visible" ? "task-dim" : ""} ${menuOpen ? "menu-open" : ""}`}
@@ -1346,12 +1467,12 @@ function CertRow({
             Setup card. */}
         {setup && (
           <span className="pr-name-flag" data-tip={`${stepsLeftLabel(setup.left)}`}>
-            Setup {setup.done}/{SETUP_STEPS.length}
+            Setup {setup.done}/{setup.total}
           </span>
         )}
       </td>
       {columns.id && <td className="col-id">{cert.id}</td>}
-      {columns.industry && <td className="col-used" data-tip={cert.industry}>{cert.industry}</td>}
+      {columns.industry && <td className="col-used" data-tip={certIndustryText(cert.industries)}>{certIndustryText(cert.industries)}</td>}
       {columns.careerStage && <td className="col-type">{cert.careerStage ?? ""}</td>}
       {columns.type && <td className="col-type">{cert.type ?? ""}</td>}
       {columns.payment && (
@@ -1391,8 +1512,9 @@ function CertRow({
           >
             <RowEditIcon />
           </button>
-          {/* Archived is permanent — no visibility to toggle (the menu drops it too). */}
-          {vis !== "Archived" && (
+          {/* Hide / Show only flips Visible ⇄ Hidden. Archive is separate
+              (its own page), so an archived row has no toggle. */}
+          {!archived && (
             <button
               className="row-action-btn"
               aria-label={hidden ? "Make visible" : "Hide certification"}
@@ -1518,8 +1640,8 @@ function CertActionsMenu({
       onClick={(e) => e.stopPropagation()}
     >
       {item(<RowEditIcon />, "Edit Certification", onEdit)}
-      {/* An archived Cert is retired from the catalog for good, so there is no
-          visibility left to toggle. */}
+      {/* Hide / Show only flips Visible ⇄ Hidden; an archived Cert has no
+          visibility entry (Unarchive lives on its Archive & Replace page). */}
       {!archived &&
         item(
           hidden ? <RowEyeIcon /> : <RowEyeOffIcon />,
@@ -1528,7 +1650,9 @@ function CertActionsMenu({
         )}
       {/* Only paid certifications have payers to view. */}
       {cert.payment && item(<MenuPaidIcon />, "View Who Paid", onViewPayers)}
-      {item(<MenuLinkIcon />, "Manage Content Links", onManageContentLinks)}
+      {/* Content Links are SkillCat-catalog only: a company-created Cert has
+          none to manage (no Setup step either — App `setupStepsFor`). */}
+      {isSkillCatCert(cert) && item(<MenuLinkIcon />, "Manage Content Links", onManageContentLinks)}
       {item(<MenuProgressIcon />, "Manage User Progress", onManageProgress)}
       {/* Opens the Tasks page with this Certification already in the filter
           row — the Tasks a Cert is built from, without retyping the name. */}
@@ -1539,9 +1663,14 @@ function CertActionsMenu({
       {item(<MenuAwardIcon />, hasAward ? "Manage Award" : "Add Award", onManageAward)}
       {item(<MenuBackupIcon />, "Backup Certification", onBackup)}
       {/* Archiving used to be an edit-only step inside the Cert wizard; it's
-          now this entry, opening its own full-page Archive & Replace view. An
-          already-archived Cert can't be archived again. */}
-      {!archived && item(<MenuArchiveReplaceIcon />, "Archive & Replace", onArchive)}
+          now this entry, opening its own full-page Archive & Replace view.
+          Every archived Cert reopens that page, prefilled with what was
+          saved — it is also where Unarchive lives. */}
+      {item(
+        <MenuArchiveReplaceIcon />,
+        archived ? "Manage Archive & Replace Settings" : "Archive & Replace",
+        onArchive,
+      )}
       {item(<RowDeleteIcon />, "Delete Certification", onDelete, true)}
     </div>
   );
@@ -1572,6 +1701,56 @@ function SortableHeader({
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>
+  );
+}
+
+/** Delete, blocked: other Certifications build on this one (a Condition Set
+ *  requires it, or they imported its Courses). Acknowledgment only, no
+ *  destructive CTA — the same shape as the Tasks page's blocked Hide/Delete.
+ *  Each referencing Certification is named with where it holds the reference. */
+function DeleteBlockedModal({
+  cert,
+  refs,
+  onClose,
+}: {
+  cert: Certification;
+  refs: CertReference[];
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <PrmModal
+      title="Can't Delete Certification"
+      confirmLabel="Okay"
+      hideCancel
+      onCancel={onClose}
+      onConfirm={onClose}
+    >
+      <div className="prm-content">
+        <p>
+          <strong>{cert.name}</strong> is used by{" "}
+          {refs.length === 1 ? "another Certification" : `${refs.length} other Certifications`}:
+        </p>
+        <ul>
+          {refs.map((r) => (
+            <li key={r.cert.id}>
+              <strong>{r.cert.name}</strong>
+              {r.where.map((w) => (
+                <div key={w}>{w}</div>
+              ))}
+            </li>
+          ))}
+        </ul>
+        <p>Remove it from {refs.length === 1 ? "that Certification" : "those Certifications"} first, then delete it.</p>
+      </div>
+    </PrmModal>
   );
 }
 

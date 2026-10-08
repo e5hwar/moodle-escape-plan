@@ -1,4 +1,6 @@
 import { tasks, type Task } from "./tasks";
+import type { PickedImage } from "../components/ImageUploadField";
+import { seededInt } from "../components/PreviewPanel";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Skills & Mastery Skills (spec §11)
@@ -24,8 +26,9 @@ export type Skill = {
   description?: string;
   descriptionEs?: string;
   status: SkillStatus;
-  /** Emoji glyph used as the badge artwork in this prototype. */
-  image: string;
+  /** The uploaded icon (required). Seed records carry an emoji drawn as an
+   *  SVG, as if it had been uploaded through the icon field. */
+  image: PickedImage;
   /** Tasks whose completion contributes to this Skill. */
   taskIds: string[];
   /** Only meaningful when taskIds.length > 1. */
@@ -44,7 +47,7 @@ export type MasterySkill = {
   description?: string;
   descriptionEs?: string;
   status: SkillStatus;
-  image: string;
+  image: PickedImage;
   /** Constituent Skills — all must be held for the Mastery Skill to be awarded. */
   skillIds: string[];
   createdBy: string;
@@ -52,6 +55,15 @@ export type MasterySkill = {
   dateCreated: string;
   dateModified: string;
 };
+
+/** A seed emoji as an uploaded SVG icon, named after its record. */
+function seedIcon(name: string, emoji: string): PickedImage {
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">` +
+    `<text x="24" y="26" font-size="34" text-anchor="middle" dominant-baseline="middle">${emoji}</text></svg>`;
+  const file = name.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return { name: `${file}.svg`, size: 0, ext: "SVG", url: `data:image/svg+xml,${encodeURIComponent(svg)}` };
+}
 
 const S = (
   id: string,
@@ -66,7 +78,7 @@ const S = (
 ): Skill => ({
   id,
   name,
-  image,
+  image: seedIcon(name, image),
   taskIds,
   rule,
   holders,
@@ -92,25 +104,25 @@ export const skills: Skill[] = [
   S("SK-104", "Manifold Gauge Use", "📊", ["T-1788"], "all", 1042, "Jul 14, 2025", "Apr 05, 2026", {
     nameEs: "Uso del manómetro de colector",
   }),
-  S("SK-105", "Vacuum & Evacuation", "🫧", ["T-1821"], "all", 651, "Jul 02, 2025", "Apr 03, 2026", {
+  S("SK-105", "Vacuum & Evacuation", "🫧", ["T-1810"], "all", 651, "Jul 02, 2025", "Apr 03, 2026", {
     nameEs: "Vacío y evacuación",
   }),
-  S("SK-106", "Superheat & Subcooling", "📈", ["T-1689", "T-1722"], "all", 498, "Aug 04, 2025", "Apr 18, 2026", {
+  S("SK-106", "Superheat & Subcooling", "📈", ["T-1722", "T-2350"], "all", 498, "Aug 04, 2025", "Apr 18, 2026", {
     nameEs: "Sobrecalentamiento y subenfriamiento",
     description: "Reads and interprets superheat and subcooling to verify a correct charge.",
   }),
-  S("SK-107", "Electrical Safety Basics", "⚡", ["T-2024", "T-0987"], "any", 1455, "Apr 12, 2025", "Apr 16, 2026", {
+  S("SK-107", "Electrical Safety Basics", "⚡", ["T-2020", "T-0987"], "any", 1455, "Apr 12, 2025", "Apr 16, 2026", {
     nameEs: "Conceptos básicos de seguridad eléctrica",
     description: "Understands lockout/tagout and safe work practices around live circuits.",
   }),
-  S("SK-108", "Capacitor Replacement", "🔋", ["T-2132"], "all", 372, "Apr 01, 2025", "Apr 21, 2026", {
-    nameEs: "Reemplazo de capacitor",
+  S("SK-108", "Compressor Replacement", "🛠️", ["T-1930"], "all", 372, "Apr 01, 2025", "Apr 21, 2026", {
+    nameEs: "Reemplazo de compresor",
   }),
-  S("SK-109", "Combustion Analysis", "🔬", ["T-1955"], "all", 207, "May 14, 2025", "Apr 02, 2026", {
-    nameEs: "Análisis de combustión",
-    description: "Performs combustion analysis on gas-fired equipment and interprets readings.",
+  S("SK-109", "Indoor Air Quality Testing", "🔬", ["T-1989"], "all", 207, "May 14, 2025", "Apr 02, 2026", {
+    nameEs: "Pruebas de calidad del aire interior",
+    description: "Tests indoor air quality around gas-fired equipment and interprets the readings.",
   }),
-  S("SK-110", "Furnace Ignition Repair", "🔧", ["T-1088", "T-1055"], "all", 289, "Feb 09, 2026", "Apr 25, 2026", {
+  S("SK-110", "Furnace Ignition Repair", "🔧", ["T-1610"], "all", 289, "Feb 09, 2026", "Apr 25, 2026", {
     nameEs: "Reparación de encendido de horno",
   }),
   S("SK-111", "OSHA 10 Safety", "🦺", ["T-0987"], "all", 1876, "Nov 18, 2023", "Jan 11, 2026", {
@@ -126,15 +138,15 @@ export const skills: Skill[] = [
     nameEs: "Cableado de termostato",
     description: "Wires a low-voltage thermostat and verifies call-for-heat and call-for-cool.",
   }),
-  S("SK-114", "Heat Pump Diagnostics", "🌀", ["T-2287", "T-2391"], "any", 254, "Mar 02, 2025", "Apr 18, 2026", {
-    nameEs: "Diagnóstico de bombas de calor",
+  S("SK-114", "Leak Detection", "🔍", ["T-1690", "T-1788"], "any", 254, "Mar 02, 2025", "Apr 18, 2026", {
+    nameEs: "Detección de fugas",
   }),
-  S("SK-115", "PEX & PVC Joining", "🔩", ["T-1521", "T-1555"], "all", 391, "Oct 02, 2025", "Apr 17, 2026", {
-    nameEs: "Unión de PEX y PVC",
-    description: "Joins PEX and PVC supply lines to code with leak-free connections.",
+  S("SK-115", "Pipe Joining", "🔩", ["T-1555", "T-1488"], "all", 391, "Oct 02, 2025", "Apr 17, 2026", {
+    nameEs: "Unión de tuberías",
+    description: "Joins PVC and soldered copper supply lines to code with leak-free connections.",
   }),
-  S("SK-116", "Gas Line Pressure Testing", "🧯", ["T-1121"], "all", 176, "Feb 01, 2026", "Apr 19, 2026", {
-    nameEs: "Prueba de presión de líneas de gas",
+  S("SK-116", "Tankless Heater Install", "🚿", ["T-1321"], "all", 176, "Feb 01, 2026", "Apr 19, 2026", {
+    nameEs: "Instalación de calentador sin tanque",
   }),
 ];
 
@@ -150,7 +162,7 @@ const M = (
 ): MasterySkill => ({
   id,
   name,
-  image,
+  image: seedIcon(name, image),
   skillIds,
   holders,
   createdBy: "SkillCat",
@@ -174,7 +186,7 @@ export const masterySkills: MasterySkill[] = [
     nameEs: "Preparación para el campo HVAC",
     description: "Recognizes hands-on readiness across brazing, charge verification, and airflow.",
   }),
-  M("MS-03", "Electrical Competency", "⚙️", ["SK-107", "SK-108"], 531, "Apr 12, 2025", "Apr 21, 2026", {
+  M("MS-03", "Electrical Competency", "⚙️", ["SK-107", "SK-108"], 298, "Apr 12, 2025", "Apr 21, 2026", {
     nameEs: "Competencia eléctrica",
   }),
   // The one archived Mastery Skill — exercises the archived group row.
@@ -214,6 +226,16 @@ export function masteryUsing(
   return list.filter((m) => m.skillIds.includes(skillId));
 }
 
+/** The Mastery Skills that stop this Skill being archived or deleted — every
+ *  Mastery Skill that lists it, archived or not. An archived Mastery Skill can
+ *  be unarchived later, so the admin removes the Skill from its criteria first. */
+export function blockingMastery(
+  skillId: string,
+  list: MasterySkill[] = masterySkills,
+): MasterySkill[] {
+  return masteryUsing(skillId, list);
+}
+
 /** Short, human-readable summary of a Skill's awarding criteria. */
 export function criteriaSummary(skill: Skill): string {
   const n = skill.taskIds.length;
@@ -226,6 +248,53 @@ export function criteriaSummary(skill: Skill): string {
 export function criteriaRule(skill: Skill): string {
   if (skill.taskIds.length <= 1) return "";
   return skill.rule === "all" ? "All" : "Any";
+}
+
+/* ─── Holders on save ───
+   The prototype keeps no per-user completion records, so a Task's completers
+   are the figure its preview panel shows (attempts × pass rate for a graded
+   Task, completions otherwise — the same seeded numbers as TasksPage), and the
+   users who finish more are taken to be the same users. The sets nest: "any"
+   reaches the largest Task's completers, "all" the smallest, and a Mastery
+   Skill the fewest holders among its Skills. */
+function taskCompleters(id: string): number {
+  const t = taskById(id);
+  if (!t) return 0;
+  const graded = t.type === "Quiz" || t.type === "Hands-On Task";
+  const attempts = seededInt(t.id, "attempts", 90, 5200);
+  const rate = seededInt(t.id, "rate", graded ? 58 : 70, graded ? 92 : 97);
+  return graded ? Math.round((attempts * rate) / 100) : attempts;
+}
+
+/** Users who already satisfy a Skill's rule — awarded the moment it's saved. */
+export function qualifyingSkillHolders(taskIds: string[], rule: AwardRule): number {
+  const counts = taskIds.map(taskCompleters);
+  if (counts.length === 0) return 0;
+  return rule === "any" ? Math.max(...counts) : Math.min(...counts);
+}
+
+/** Users who already hold every one of a Mastery Skill's Skills. */
+export function qualifyingMasteryHolders(skillIds: string[], all: Skill[]): number {
+  const counts = skillIds.map((id) => all.find((s) => s.id === id)?.holders ?? 0);
+  return counts.length ? Math.min(...counts) : 0;
+}
+
+/** The next free id after the highest in use ("SK-116" → "SK-117"), so a
+    create after a delete never reuses — and overwrites — a live record. */
+export function nextRecordId(prefix: "SK" | "MS", ids: string[], pad: number): string {
+  const max = ids.reduce((n, id) => {
+    const m = new RegExp(`^${prefix}-(\\d+)$`).exec(id);
+    return m ? Math.max(n, Number(m[1])) : n;
+  }, 0);
+  return `${prefix}-${String(max + 1).padStart(pad, "0")}`;
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** Today in the seed's "Apr 05, 2026" shape — stamped on create, edit, archive
+    and unarchive. */
+export function skillDateToday(): string {
+  const d = new Date();
+  return `${MONTHS[d.getMonth()]} ${String(d.getDate()).padStart(2, "0")}, ${d.getFullYear()}`;
 }
 
 /** Number rendered with thousands separators. */

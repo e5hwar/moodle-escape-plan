@@ -1,7 +1,7 @@
 import { UserAvatar } from "./UserAvatar";
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  mergeUsers,
+  findMergeUser,
   categoryRecords,
   conflictDefs,
   loginId,
@@ -9,6 +9,7 @@ import {
   type MergeUser,
   type ConflictDef,
 } from "../data/mergeAccounts";
+import { findUser, mergeAccounts, mergePlanOutcome, useUsers } from "../data/users";
 import {
   ArrowLeftLongIcon,
   ExpandVerticalIcon,
@@ -34,13 +35,16 @@ import { SkeletonOverlay } from "./SkeletonOverlay";
 import { useLeaveGuard } from "./LeaveGuard";
 
 /**
- * Merge Accounts — a four-step wizard for collapsing two learner accounts into
- * one. Step 1 picks the Primary (kept) and Secondary (deleted) accounts and
- * enforces that B2B/company accounts must be the Primary. Step 2 resolves
- * subscription and duplicate add-on billing. Step 3 merges learning records and
- * resolves per-record conflicts. Step 4 is a read-only review, gated behind a
- * final confirmation modal, after which the merge "runs" and an audit-log entry
- * is shown.
+ * Merge Accounts — a three-step wizard for collapsing two learner accounts
+ * into one. Step 1 picks the Primary (kept) and Secondary (deleted) accounts,
+ * enforces that a B2B/company account must be the Primary, and blocks a pair
+ * that both still renew a personal plan (one has to be cancelled first).
+ * Step 2 resolves the per-record conflicts. Step 3 is a read-only review of
+ * everything that moves — records, the subscription, paid Certifications and
+ * purchased attempts — gated behind a final confirmation. Confirming runs the
+ * merge for real (users.mergeAccounts): the Secondary leaves Users, its
+ * records, purchases and (when it is the only one) its plan land on the
+ * Primary, and the page returns to Users with a toast.
  *
  * Everything here is assembled from the parts every other wizard uses — the
  * page owns no visual language of its own (re-synced 2026-09-22, the same
@@ -59,7 +63,7 @@ import { useLeaveGuard } from "./LeaveGuard";
  *   result       -> .wizard-body--success
  * The page-local .mgf-* rules are layout-only (see the block in index.css).
  *
- * All data is demo data (see ../data/mergeAccounts). Nothing is persisted.
+ * Accounts are read off the live Users roster (../data/mergeAccounts).
  */
 
 type Side = "primary" | "secondary";
@@ -94,7 +98,7 @@ const STEPS = [
 
 
 function getUser(id: string | null): MergeUser | null {
-  return mergeUsers.find((u) => u.id === id) ?? null;
+  return findMergeUser(id);
 }
 
 /* ─────────────── Shared primitives ───────────────
@@ -513,6 +517,8 @@ export function MergeAccountsPage({
   const guard = useLeaveGuard(!!(primId || secId));
 
   useEffect(() => { setMaxStep((m) => Math.max(m, step)); }, [step]);
+  // Re-read the accounts whenever the roster changes (another tab's edit).
+  useUsers();
   useEscape(showModal, () => setShowModal(false));
 
   /* ⌘K opens the account picker while step 1 is still missing a side — the
@@ -544,6 +550,13 @@ export function MergeAccountsPage({
      alarm about a pairing that does not exist. */
   const bothB2B = !!(p?.company && s?.company);
   const b2bViolation = both && !!s?.company && !bothB2B;
+  /* What happens to the two plans (users.mergePlanOutcome): one personal plan
+     carries to the Primary; two still renewing block the merge until one is
+     cancelled; a company account can't take one on at all. */
+  const pu = findUser(primId);
+  const su = findUser(secId);
+  const plan = pu && su && !b2bViolation && !bothB2B ? mergePlanOutcome(pu, su) : null;
+  const planBlocked = plan?.blocked ?? null;
 
   /* S swaps the roles, the shortcut the B2B banner's button advertises — so it
      is live on exactly the terms that button is, and never in the dead-end
@@ -584,7 +597,7 @@ export function MergeAccountsPage({
 
   /* Whether step `i` has what it needs to be left going forwards. */
   function cleared(i: number) {
-    if (i === 0) return both && !b2bViolation && !bothB2B;
+    if (i === 0) return both && !b2bViolation && !bothB2B && !planBlocked;
     if (i === 1) return allResolved;
     return true;
   }
@@ -597,7 +610,9 @@ export function MergeAccountsPage({
     : step === 0
       ? !both
         ? "Select both accounts"
-        : "A company account must be the Account to Keep — swap the roles"
+        : planBlocked
+          ? "Both accounts have an active subscription — cancel one first"
+          : "A company account must be the Account to Keep — swap the roles"
       : `${openConflicts} ${openConflicts === 1 ? "conflict" : "conflicts"} still ${
           openConflicts === 1 ? "needs" : "need"
         } a decision`;
@@ -616,11 +631,17 @@ export function MergeAccountsPage({
   }
   useWizardEnterShortcut(advance);
 
-  /* Changing who is Primary invalidates the billing and conflict decisions
-     downstream, so the rail's reach collapses back to this step. */
+  /* Changing either account — or which one is Primary — invalidates every
+     decision downstream: the conflict choices and what was expanded go, and
+     the rail's reach collapses back to this step. */
+  function resetDecisions() {
+    setConflictChoices({});
+    setExpanded({});
+    setMaxStep(0);
+  }
   function pickAccount(set: (id: string | null) => void, id: string | null) {
     set(id);
-    setMaxStep(0);
+    resetDecisions();
   }
   /* The picker hands back up to two ids in tick order. An account that already
      held a role keeps it, so re-opening from one field to change the other
@@ -631,18 +652,20 @@ export function MergeAccountsPage({
     const fresh = ids.filter((id) => id !== keepP && id !== keepS);
     setPrimId(keepP ?? fresh.shift() ?? null);
     setSecId(keepS ?? fresh.shift() ?? null);
-    setMaxStep(0);
+    resetDecisions();
     setShowPicker(false);
   }
   function swapRoles() {
     setPrimId(secId);
     setSecId(primId);
-    setMaxStep(0);
+    resetDecisions();
   }
-  /* No running screen: a confirmed merge lands straight back on Manage Users
-     with its toast. */
+  /* The merge itself (users.mergeAccounts): the Secondary leaves Users and its
+     records, purchases and plan land on the Primary. No running screen — it
+     lands straight back on Users with its toast. */
   function confirmMerge() {
     setShowModal(false);
+    if (p && s) mergeAccounts(p.id, s.id);
     onMerged?.("Accounts Merged");
   }
   /* ── derived for steps 3 & 4 ── */
@@ -656,11 +679,57 @@ export function MergeAccountsPage({
         return { key, count, samples, def, resolved, isExpanded: !!expanded[key] };
       })
     : [];
-  const allCollapsed = recordRows.every((r) => !r.isExpanded);
+  /* Paid Certifications and purchased attempts from BOTH accounts, as they
+     land on the Primary. Every purchase is kept — the same item bought on
+     both accounts is two purchases, listed twice — each saying where it is
+     from. */
+  const purchaseGroups =
+    both && p && s
+      ? (
+          [
+            ["Paid Certifications", "Certification"],
+            ["Purchased Attempts", "Quiz Attempt"],
+          ] as const
+        )
+          .map(([key, type]) => {
+            const mine = p.addons.filter((a) => a.type === type);
+            const theirs = s.addons.filter((a) => a.type === type);
+            const items = [
+              ...mine.map((a) => ({ id: a.id, name: a.name, meta: "Already on the Primary" })),
+              ...theirs.map((a) => ({ id: a.id, name: a.name, meta: "Moving from the Secondary" })),
+            ];
+            const moving = theirs.length;
+            return { key, items, moving, isExpanded: !!expanded[key] };
+          })
+          .filter((g) => g.items.length > 0)
+      : [];
+  const allCollapsed = [...recordRows, ...purchaseGroups].every((r) => !r.isExpanded);
   function toggleAll() {
     const open = allCollapsed;
-    setExpanded(Object.fromEntries(recordRows.map((r) => [r.key, open])));
+    setExpanded(Object.fromEntries([...recordRows, ...purchaseGroups].map((r) => [r.key, open])));
   }
+
+  /* The Subscription row of the review: ONE row, the plan the Primary ends up
+     on. A plan carried across arrives with the green ↑; the Secondary's own
+     goes with the account. */
+  const was = (v: ReactNode) => <s className="mgf-was">{v}</s>;
+  const subRow =
+    p && s
+      ? plan?.carry
+        ? {
+            k: "Subscription",
+            a: p.sub.active ? was(subLabel(p.sub)) : null,
+            gain: subLabel(s.sub),
+            b: subLabel(s.sub),
+            strikeB: true,
+          }
+        : {
+            k: "Subscription",
+            a: p.sub.active ? subLabel(p.sub) : "—",
+            b: s.sub.active ? subLabel(s.sub) : "—",
+            strikeB: s.sub.active,
+          }
+      : null;
 
   /* The card head's own button (Figma 1285:2768) — 24px, so it sits inside the
      head row rather than growing it. */
@@ -794,7 +863,28 @@ export function MergeAccountsPage({
                 />
               )}
 
-              {both && p && s && p.name === s.name && !b2bViolation && !bothB2B && (
+              {/* Two personal plans can't both survive a merge — one has to be
+                  cancelled first. One already cancelling doesn't count: it
+                  runs out on its own. */}
+              {planBlocked && p && s && (
+                <NoteCard
+                  tone="danger"
+                  icon={<WarnTriangleIcon />}
+                  className="mgf-note"
+                  title={
+                    planBlocked === "both"
+                      ? "Both accounts have an active subscription"
+                      : `${s.name} has an active subscription`
+                  }
+                  body={
+                    planBlocked === "both"
+                      ? `${p.name} (${subLabel(p.sub)}) and ${s.name} (${subLabel(s.sub)}) are both still renewing. Cancel one of the subscriptions first — a plan that is already cancelling doesn't block the merge.`
+                      : `${p.name} is on ${p.company}'s Company Plan, which can't take on a personal subscription. Cancel ${s.name}'s ${subLabel(s.sub)} subscription first.`
+                  }
+                />
+              )}
+
+              {both && p && s && p.name === s.name && !b2bViolation && !bothB2B && !planBlocked && (
                 <NoteCard
                   tone="accent"
                   icon={<InfoCircleIcon />}
@@ -934,6 +1024,7 @@ export function MergeAccountsPage({
                       delta: totalMerged || undefined,
                       strikeB: totalMerged > 0,
                     },
+                    ...(subRow ? [subRow] : []),
                     { k: "Account After Merge", a: "Active", b: "Permanently deleted" },
                   ]}
                 />
@@ -1002,6 +1093,43 @@ export function MergeAccountsPage({
 
                       </Fragment>
                     ))}
+                    {purchaseGroups.map((g) => (
+                      <Fragment key={g.key}>
+                        <tr
+                          className="skg-group"
+                          aria-expanded={g.isExpanded}
+                          onClick={() => setExpanded((e) => ({ ...e, [g.key]: !e[g.key] }))}
+                        >
+                          <td className="col-name">
+                            <button
+                              type="button"
+                              className={`skg-caret ${g.isExpanded ? "is-open" : ""}`}
+                              aria-label={g.isExpanded ? "Collapse" : "Expand"}
+                              aria-expanded={g.isExpanded}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpanded((x) => ({ ...x, [g.key]: !x[g.key] }));
+                              }}
+                            >
+                              <TreeCaretIcon />
+                            </button>
+                            <span className="skg-name">{g.key}</span>
+                          </td>
+                          <td>
+                            {g.moving
+                              ? `+${g.moving} moving from the Secondary`
+                              : "Already on the Primary"}
+                          </td>
+                        </tr>
+                        {g.isExpanded &&
+                          g.items.map((it) => (
+                            <tr className="skg-row skg-child" key={it.id}>
+                              <td className="col-name">{it.name}</td>
+                              <td>{it.meta}</td>
+                            </tr>
+                          ))}
+                      </Fragment>
+                    ))}
                   </tbody>
                 </table>
               </TableCard>
@@ -1067,9 +1195,10 @@ export function MergeAccountsPage({
           {/* Pop-up content (Figma 667:884), not a grey subtitle under the title. */}
           <p className="prm-content">
             Everything on <strong>{loginId(s)}</strong> — {totalMerged} learning records, its
-            certifications, skills, awards and purchases — moves into{" "}
-            <strong>{loginId(p)}</strong>, which keeps its own login. {s.name}'s account and
-            login are then permanently deleted. This cannot be undone.
+            certifications, skills, awards and purchases
+            {plan?.carry ? <>, and its <strong>{subLabel(s.sub)}</strong> subscription</> : null} —
+            moves into <strong>{loginId(p)}</strong>, which keeps its own login. {s.name}'s
+            account and login are then permanently deleted. This cannot be undone.
           </p>
         </PrmModal>
       )}

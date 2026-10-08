@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
-  spotlights as seedSpotlights,
+  daysUntil,
+  spotlightToday,
   type Spotlight,
 } from "../data/spotlights";
 import {
@@ -42,12 +43,13 @@ const DISPLAY_STATUS_PILL: Record<DisplayStatus, string> = {
   rejected: "red",
 };
 
-// An approved Spotlight reads as "Ended" once its end date arrives — which is
-// also how a deactivated one reads, since deactivating stamps today's date.
+// A Spotlight runs THROUGH its end date and reads as "Ended" the day after.
+// One still In-Review when that day comes ends too — it can no longer be
+// approved. A disabled one reads as Ended at once (its end date is today).
 function deriveStatus(s: Spotlight): DisplayStatus {
-  if (s.status === "pending") return "pending";
   if (s.status === "rejected") return "rejected";
-  return daysUntil(s.endDate) <= 0 ? "ended" : "active";
+  if (s.disabled || daysUntil(s.endDate) < 0) return "ended";
+  return s.status === "pending" ? "pending" : "active";
 }
 
 /* 14px square-cap check / cross (Figma 192:385 / 192:388). */
@@ -93,21 +95,27 @@ const SpColGroup = () => (
 const SP_TABLE_MIN = SP_COL_WIDTHS.reduce((a, b) => a + b, 0);
 
 
-/* The prototype's "today". Deactivating stamps this as the end date, so it has
-   to be the same date `daysUntil` measures against or the row wouldn't flip to
-   Ended. */
-const TODAY = "2026-05-15";
-
-function daysUntil(iso: string): number {
-  const d = new Date(iso);
-  const today = new Date(TODAY);
-  return Math.round((d.getTime() - today.getTime()) / 86400000);
-}
-
 /* Active or In-Review — a Spotlight in the Home-Screen queue. */
 function isLive(s: Spotlight): boolean {
   const ds = deriveStatus(s);
   return ds === "active" || ds === "pending";
+}
+
+/* Active rows numbered 1, 2, 3… in list order — the Order column. */
+function activePositions(arr: Spotlight[]): Map<string, number> {
+  const m = new Map<string, number>();
+  let p = 0;
+  arr.forEach((s) => {
+    if (deriveStatus(s) === "active") m.set(s.id, ++p);
+  });
+  return m;
+}
+
+/* The position an In-Review Spotlight goes live at when approved: one past
+   the Active rows ahead of it in the queue as shown. */
+function approvePosition(arr: Spotlight[], item: Spotlight): number {
+  const at = arr.findIndex((s) => s.id === item.id);
+  return arr.slice(0, Math.max(0, at)).filter((s) => deriveStatus(s) === "active").length + 1;
 }
 
 /* The index just past the last Active / In-Review row — where a Spotlight
@@ -119,13 +127,20 @@ function endOfLive(arr: Spotlight[]): number {
   }, 0);
 }
 
-export function SpotlightsPage() {
+export function SpotlightsPage({
+  spotlights: committed,
+  setSpotlights: setCommitted,
+}: {
+  /** The saved Spotlights, in queue order — App state, so approvals, edits
+   *  and saved reorders outlast a visit to another page. */
+  spotlights: Spotlight[];
+  setSpotlights: React.Dispatch<React.SetStateAction<Spotlight[]>>;
+}) {
   // `committed` is the saved order; `list` is the working copy shown in the
   // table. Drag-reordering only touches `list`, so the order diverges until the
   // user saves — Discard (or leaving the page) restores `committed`. Every other
   // action commits to both immediately via `applyBoth`.
-  const [committed, setCommitted] = useState<Spotlight[]>(seedSpotlights);
-  const [list, setList] = useState<Spotlight[]>(seedSpotlights);
+  const [list, setList] = useState<Spotlight[]>(committed);
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
   // Set alongside `creating` when the page was opened from a row's Edit action.
@@ -169,17 +184,10 @@ export function SpotlightsPage() {
   // Reordering by drag only makes sense against the full, unfiltered queue.
   const canReorder = !query.trim();
 
-  // Only rows still in the Home-Screen queue (active / pending) get a position
-  // number; rejected and ended rows are out of the queue.
-  const positions = useMemo(() => {
-    const m = new Map<string, number>();
-    let p = 0;
-    list.forEach((s) => {
-      const ds = deriveStatus(s);
-      if (ds === "active" || ds === "pending") m.set(s.id, ++p);
-    });
-    return m;
-  }, [list]);
+  // Only Active rows — the ones users actually see — get a position number.
+  // In-Review rows sit in the queue (and can be dragged) but have no number
+  // until approved; rejected and ended rows are out of the queue.
+  const positions = useMemo(() => activePositions(list), [list]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -213,7 +221,10 @@ export function SpotlightsPage() {
     setCreating(true);
   }
 
-  useCreateShortcut(openCreate, !creating);
+  /* Not while a confirm, the Preview viewer or a row menu is up: the hook
+     itself stands down for any of those in the DOM, and these flags cover the
+     frame before they render. */
+  useCreateShortcut(openCreate, !creating && !confirming && !previewing && !menu);
 
   // Cancel — nothing is kept.
   function cancelCreate() {
@@ -224,19 +235,23 @@ export function SpotlightsPage() {
 
   /* The live queue (Active + In-Review, in order) the wizard's Queue Position
      step places into — less the Spotlight being edited, which the wizard slots
-     back in itself. Taken from the working copy, so it is the order on screen. */
+     back in itself. Taken from the SAVED order, not the working copy: an
+     unsaved drag-reorder is only saved by the reorder footer, never by
+     submitting the wizard. */
   const wizardQueue = useMemo(
-    () => list.filter((s) => isLive(s) && s.id !== editing?.id),
-    [list, editing],
+    () => committed.filter((s) => isLive(s) && s.id !== editing?.id),
+    [committed, editing],
   );
   /* Where that step starts the Spotlight: an edit at its current slot, a new
      or re-enabled one at the end of the queue. */
   const wizardStart = editing && !enabling
-    ? Math.max(0, list.filter(isLive).findIndex((s) => s.id === editing.id))
+    ? Math.max(0, committed.filter(isLive).findIndex((s) => s.id === editing.id))
     : wizardQueue.length;
 
-  /* Saving the wizard puts the Spotlight at `position` in the live queue and
-     commits the queue as the wizard showed it. */
+  /* Saving the wizard puts the Spotlight at `position` in the saved live
+     queue. An unsaved drag-reorder stays exactly that: the same edit is
+     applied to the working copy, so the reorder footer still offers to save
+     or discard it. */
   function handleSubmit(draft: SpotlightDraft, position: number) {
     const place = (l: Spotlight[], item: Spotlight) => {
       const without = l.filter((s) => s.id !== item.id);
@@ -246,9 +261,11 @@ export function SpotlightsPage() {
       next.splice(at, 0, item);
       return next;
     };
-    const commit = (next: Spotlight[]) => {
-      setList(next);
-      setCommitted(next);
+    const commit = (item: Spotlight) => {
+      setCommitted((l) => place(l, item));
+      // No unsaved reorder: the working copy is the saved order. Otherwise
+      // keep the working order and only slot the Spotlight into it.
+      setList((l) => (dirty ? place(l, item) : place(committed, item)));
     };
 
     // Editing writes the draft back over the existing row: its id, submitter
@@ -264,19 +281,26 @@ export function SpotlightsPage() {
         ctaTextEs: draft.ctaTextEs || undefined,
         ctaUrl: draft.ctaUrl || undefined,
         endDate: draft.endDate,
-        imageHint: draft.imageHint ?? s.imageHint,
+        // The editor's image is the whole truth: replaced, kept or removed.
+        imageHint: draft.imageHint,
+        imageUrl: draft.imageUrl,
       });
 
-      const target = list.find((s) => s.id === editing.id);
+      const target = committed.find((s) => s.id === editing.id);
       if (target) {
-        /* Enabling puts an archived Spotlight back in the queue with its new
-           end date. One that was approved before (it simply ran out) goes
-           straight back to Active; a rejected one was never signed off, so it
-           returns as In-Review. */
+        /* Enabling puts an archived Spotlight — Ended or Rejected — back in
+           the queue as Active, with its new end date and queue slot, and
+           starts a new run (the 6-month cap counts from today). Everyone in
+           the prototype can approve, so it needs no second sign-off. */
         const updated: Spotlight = enabling
-          ? { ...rewrite(target), status: target.status === "rejected" ? "pending" : "approved" }
+          ? {
+              ...rewrite(target),
+              status: "approved",
+              disabled: undefined,
+              createdAt: spotlightToday(),
+            }
           : rewrite(target);
-        commit(place(list, updated));
+        commit(updated);
         flash(enabling ? "Spotlight Enabled" : "Spotlight Updated");
       }
 
@@ -286,7 +310,13 @@ export function SpotlightsPage() {
       return;
     }
 
-    const id = `SP-${String(Math.floor(Math.random() * 9000) + 1000)}`;
+    // One past the highest id on record, saved or not — never a repeat.
+    const top = [...committed, ...list].reduce(
+      (n, s) => Math.max(n, parseInt(s.id.replace(/\D/g, ""), 10) || 0),
+      0,
+    );
+    const id = `SP-${String(top + 1).padStart(4, "0")}`;
+    const today = spotlightToday();
     const newSpotlight: Spotlight = {
       id,
       headingEn: draft.headingEn || "Untitled Spotlight",
@@ -298,11 +328,13 @@ export function SpotlightsPage() {
       ctaUrl: draft.ctaUrl || undefined,
       endDate: draft.endDate,
       imageHint: draft.imageHint,
+      imageUrl: draft.imageUrl,
       submittedBy: "You",
-      submittedAt: TODAY,
+      submittedAt: today,
+      createdAt: today,
       status: "pending",
     };
-    commit(place(list, newSpotlight));
+    commit(newSpotlight);
     setCreating(false);
     setEditing(null);
     flash("Spotlight Created");
@@ -314,14 +346,15 @@ export function SpotlightsPage() {
   }
 
   /* Disable — the Spotlight comes off the Home Screen now. It is not a status
-     of its own: the row stays approved and its end date is stamped with today,
-     so it reads as Ended and archives like any Spotlight that ran its course.
+     of its own: the row stays approved, its end date is stamped with today and
+     it is flagged disabled, so it reads as Ended and archives like any
+     Spotlight that ran its course.
      It moves to the end of the list, the way Reject does, so the stored order
      matches where the row now shows. */
   function disable(item: Spotlight) {
     applyBoth((l) => [
       ...l.filter((s) => s.id !== item.id),
-      { ...item, endDate: TODAY },
+      { ...item, endDate: spotlightToday(), disabled: true },
     ]);
     flash("Spotlight Disabled");
   }
@@ -420,6 +453,7 @@ export function SpotlightsPage() {
           key={s.id}
           spotlight={s}
           position={positions.get(s.id) ?? null}
+          inQueue={isLive(s)}
           canReorder={canReorder}
           isDragging={dragIndex === idx}
           isOver={overIndex === idx && dragIndex !== idx}
@@ -626,7 +660,7 @@ export function SpotlightsPage() {
         <ConfirmActionModal
           kind={confirming.kind}
           item={confirming.item}
-          position={positions.get(confirming.item.id) ?? null}
+          position={confirming.kind === "approve" ? approvePosition(list, confirming.item) : null}
           onCancel={() => setConfirming(null)}
           onConfirm={() => {
             const { kind, item } = confirming;
@@ -659,7 +693,7 @@ function ConfirmActionModal({
 }: {
   kind: ConfirmKind;
   item: Spotlight;
-  /** The Spotlight's slot in the queue, when it is in one. */
+  /** Approve only: the Active position it goes live at. */
   position: number | null;
   onCancel: () => void;
   onConfirm: () => void;
@@ -732,6 +766,7 @@ function ConfirmActionModal({
 function SpotlightRow({
   spotlight,
   position,
+  inQueue,
   canReorder,
   isDragging,
   isOver,
@@ -745,8 +780,10 @@ function SpotlightRow({
   menuOpen,
 }: {
   spotlight: Spotlight;
-  /** Queue position — null for rows out of the queue (rejected / ended). */
+  /** Active position — null for In-Review rows and rows out of the queue. */
   position: number | null;
+  /** Active or In-Review: in the Home-Screen queue, so draggable. */
+  inQueue: boolean;
   canReorder: boolean;
   isDragging: boolean;
   isOver: boolean;
@@ -762,10 +799,12 @@ function SpotlightRow({
 }) {
   const s = spotlight;
   const ds = deriveStatus(s);
-  const isPending = s.status === "pending";
-  // Out-of-queue rows (no position) can't be dragged, but still accept drops so
-  // queue rows can be moved past them.
-  const canDrag = canReorder && position !== null;
+  // Only an In-Review row can still be decided — one past its end date has
+  // Ended and lost Approve / Reject.
+  const isPending = ds === "pending";
+  // Out-of-queue rows can't be dragged, but still accept drops so queue rows
+  // can be moved past them.
+  const canDrag = canReorder && inQueue;
 
   return (
     <tr
@@ -784,7 +823,7 @@ function SpotlightRow({
             can be reordered right now — dropping the element while a search is
             on would slide the whole Order column left as you type. Filtering
             just stops it appearing on hover. */}
-        {position !== null && (
+        {inQueue && (
           <span
             className={`sp-drag-handle${canDrag ? "" : " sp-drag-handle--off"}`}
             aria-hidden
@@ -1113,6 +1152,7 @@ function SpotlightPreviewModal({
               cta={item.ctaTextEn ?? ""}
               ctaEnabled={Boolean(item.ctaTextEn)}
               ctaHref={hasCta ? item.ctaUrl : undefined}
+              imageUrl={item.imageUrl}
             />
           </div>
         );

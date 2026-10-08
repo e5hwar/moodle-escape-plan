@@ -1,13 +1,22 @@
+import { useSyncExternalStore } from "react";
 import { users } from "./users";
-import { tasks } from "./tasks";
+import { getTasks, handsOnPassScore, useLiveTasks, type Task } from "./tasks";
 
 export type SubmissionMedia =
   | { kind: "video"; seed: string; duration: string }
   | { kind: "image"; seed: string };
 
-export type EvaluationCriterion = { id: string; label: string };
-
 export type SubmissionStatus = "Rejected" | "Review Pending" | "Completed";
+
+/** The verdict on an attempt: its score out of 10 and the reviewer's feedback.
+ *  Passed or Rejected is never stored — it is read against the Task's Passing
+ *  Grade ({@link passScoreOf}), so it can't disagree with the Task. */
+export type SubmissionReview = {
+  score: number;
+  feedback: string;
+  reviewer: string;
+  reviewedOn: string;
+};
 
 export type TaskSubmission = {
   id: string;
@@ -42,10 +51,12 @@ export type TaskSubmission = {
   hasAudio: boolean;
   audioLabel: string; // voice-note label
   audioDuration: string; // e.g. "0:48"
-  criteria: EvaluationCriterion[];
-  /** "Fail if:" conditions the task author lists under the pass criteria
-   * (reviewer's checklist, Figma 263:1045). */
-  failCriteria: EvaluationCriterion[];
+  /** The Task's Reviewer's Checklist — the wizard's one rich-text field,
+   *  shown to the grader as written. */
+  checklist: string;
+  /** The current attempt's verdict — set once it is Completed or Rejected
+   *  (seeded, or submitted this session via {@link submitReview}). */
+  review?: SubmissionReview;
 };
 
 /* The Hands-On Tasks the review queue draws submissions from, split by owner.
@@ -90,8 +101,18 @@ const B2B_TASK_NAMES = [...SKILLCAT_TASK_NAMES, ...COMPANY_TASK_NAMES];
 /* Every name above is a real Hands-On Task in the Tasks library, so a
    submission's Task ID, Certifications and creator are read from that record
    rather than invented here — the review table shows the same values the Tasks
-   page does. */
-const taskRecordByName = new Map(tasks.map((t) => [t.name, t] as const));
+   page does. Read off the LIVE list (seed + this session's edits), so what the
+   Task wizard saves — Passing Grade, checklist, Completion Criteria — reaches
+   the review page and console. */
+const taskRecordByName = (name: string) => getTasks().find((t) => t.name === name);
+function taskRecordById(id: string, tasks: Task[] = getTasks()): Task | undefined {
+  return id ? tasks.find((t) => t.id === id) : undefined;
+}
+/** The submission's Task: by id, so a renamed Task still resolves; by name for
+ *  a row whose Task had no id. */
+function taskOf(s: Pick<TaskSubmission, "taskId" | "taskName">): Task | undefined {
+  return taskRecordById(s.taskId) ?? taskRecordByName(s.taskName);
+}
 
 const DESCRIPTIONS = [
   "I installed the HVAC split system by first confirming the work area was safe and isolating electrical power. I mounted the indoor air handler and outdoor condenser according to the specifications. I ran and connected the refrigerant line set, ensuring all flare fittings were tightened and properly insulated. I installed the condensate drain line with proper slope and connected the thermostat wiring. After completing all connections, I pressure tested the system for leaks, evacuated the lines using a vacuum pump, and charged the system with refrigerant to manufacturer specifications. Finally, I restored power, tested system operation in cooling mode, verified proper airflow and temperature drop, and confirmed there were no leaks or abnormal noises.",
@@ -100,27 +121,16 @@ const DESCRIPTIONS = [
   "I set up the recovery machine with the correct hoses and a recovery cylinder rated for the refrigerant type. I verified the cylinder was not overfilled by weight, opened the appropriate valves in sequence, and started recovery while monitoring pressures. I purged the hoses at the end and recorded the recovered weight.",
 ];
 
-/* The task author's checklist, verbatim from the design's worked example
-   (Figma 1172:2196) — written for the HVAC system-identification task the
-   frame shows, and used for every seeded submission. */
-const CRITERIA: EvaluationCriterion[] = [
-  { id: "c1", label: "Clearly shows real equipment in its installed location" },
-  { id: "c2", label: "Student selects one system type (Split AC/Heat Pump/Package Unit)" },
-  {
-    id: "c3",
-    label:
-      "Explanation references specific visible evidence (labeling, form factor, installation style, line configuration)",
-  },
-  { id: "c4", label: "No panel removal described or implied" },
-  { id: "c5", label: "Explanation is logical and consistent with the photo" },
-];
-
-const FAIL_CRITERIA: EvaluationCriterion[] = [
-  { id: "f1", label: "Guessing system type without referencing any clues" },
-  { id: "f2", label: "Internet image used instead of real equipment" },
-  { id: "f3", label: "Unsafe behavior described (touching moving fan, opening electrical areas)" },
-  { id: "f4", label: "System type selected contradicts evidence in photo" },
-];
+/* The task author's Reviewer's Checklist (Figma 1172:2196) — written for the
+   HVAC system-identification task the frame shows, and used for every seeded
+   submission. One rich-text field in the wizard, so one string here. */
+const CHECKLIST = [
+  "• Clearly shows real equipment in its installed location",
+  "• Student selects one system type (Split AC/Heat Pump/Package Unit)",
+  "• Explanation references specific visible evidence (labeling, form factor, installation style, line configuration)",
+  "• No panel removal described or implied",
+  "• Explanation is logical and consistent with the photo",
+].join("\n");
 
 function uhash(s: string): number {
   let h = 2166136261;
@@ -131,19 +141,29 @@ function uhash(s: string): number {
   return h >>> 0;
 }
 
-/** Fixed "today" the demo dataset is generated against — exported so views can
- * compute waiting-time labels consistent with the seeded dates. */
-export const REVIEW_TODAY = new Date("2026-06-18");
+/** Today on the real clock (local midnight) — the seeded queue is dated
+ *  back from it and submitted reviews are stamped with it, so waiting times
+ *  and Reviewed On dates read true on any day. */
+export const REVIEW_TODAY = (() => {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+})();
 const TODAY = REVIEW_TODAY;
+/** A local date as "YYYY-MM-DD" — never toISOString, which is UTC and can
+ *  slip a day either side of midnight. */
+function isoLocal(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
 function isoDaysAgo(n: number): string {
   const d = new Date(TODAY);
   d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
+  return isoLocal(d);
 }
 function isoDaysAhead(n: number): string {
   const d = new Date(TODAY);
   d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0, 10);
+  return isoLocal(d);
 }
 
 function activityLabel(days: number): string {
@@ -152,6 +172,52 @@ function activityLabel(days: number): string {
   if (days < 7) return `${days} days ago`;
   if (days < 14) return "1 week ago";
   return `${Math.floor(days / 7)} weeks ago`;
+}
+
+/* Reviewers' feedback and names, hash-picked for seeded verdicts. */
+const PAST_FEEDBACK = [
+  "Missing pressure test and lockout/tagout steps. Please resubmit with the full safety procedure visible.",
+  "Refrigerant manifold readings aren't shown — record the gauge readings and charge weight on the next attempt.",
+  "Voice note skips torque specs and the wiring sequence verification — include those next time.",
+  "Lighting on the brazed joints makes verification impossible. Use better lighting on resubmission.",
+];
+
+const PASSED_FEEDBACK = [
+  "Clean, complete work — every step is visible and the readings check out.",
+  "Good documentation of the safety steps. Tighten up the photo framing next time.",
+  "Meets the standard. The voice note walks through the procedure clearly.",
+];
+
+const PAST_REVIEWERS = ["Aarti Sharma", "Marcus Lee", "Jenna Park", "Devon Reyes"];
+
+/** A Hands-On Task whose Completion Criteria is "Submission Made": it
+ *  completes the moment the learner submits, so nobody reviews or scores it. */
+function completesOnSubmissionTask(task: Task | undefined): boolean {
+  return task?.type === "Hands-On Task" && task.handsOn?.graded === false;
+}
+
+/** The verdict a seeded Completed / Rejected submission already carries —
+ *  scored on the right side of its Task's Passing Grade. Pending ones have
+ *  none yet. */
+function seededReview(
+  status: SubmissionStatus,
+  k: number,
+  task: Task | undefined,
+  submittedOn: string,
+): SubmissionReview | undefined {
+  if (status === "Review Pending" || completesOnSubmissionTask(task)) return undefined;
+  const pass = handsOnPassScore(task);
+  const h = uhash(`${k}:review`);
+  const passed = status === "Completed";
+  return {
+    score: passed ? pass + (h % (11 - pass)) : 1 + (h % Math.max(1, pass - 1)),
+    feedback: passed
+      ? PASSED_FEEDBACK[h % PASSED_FEEDBACK.length]
+      : PAST_FEEDBACK[h % PAST_FEEDBACK.length],
+    reviewer: PAST_REVIEWERS[h % PAST_REVIEWERS.length],
+    // Two days after it came in — but never later than today.
+    reviewedOn: [isoOffset(submittedOn, 2), isoLocal(TODAY)].sort()[0],
+  };
 }
 
 /** Build the review queue: every learner in the user list, each with one to
@@ -172,7 +238,7 @@ function buildSubmissions(): TaskSubmission[] {
       // Stride 5 over a pool whose length is coprime to it, so a learner's
       // submissions are always against distinct Tasks.
       const taskName = pool[(base + a * 5) % pool.length];
-      const taskRecord = taskRecordByName.get(taskName);
+      const taskRecord = taskRecordByName(taskName);
       const submittedDaysAgo = (k % 21) + 1;
       const mediaCount = 2 + (k % 3); // 2–4 media items
       const media: SubmissionMedia[] = Array.from({ length: mediaCount }, (_, m) =>
@@ -184,12 +250,16 @@ function buildSubmissions(): TaskSubmission[] {
             }
           : { kind: "image" as const, seed: `${u.id}-${a}-${m}` },
       );
+      // A "Submission Made" Task completes on its first submission — one
+      // attempt, nothing to review.
+      const onSubmit = completesOnSubmissionTask(taskRecord);
       // Newest-first version list, always anchored at V1. A user with 3 attempts
       // gets ["V3","V2","V1"] — never "V5" with no V1 underneath it.
-      const versionCount = 1 + (k % 5);
+      const versionCount = onSubmit ? 1 : 1 + (k % 5);
       const versions = Array.from({ length: versionCount }, (_, vi) => `V${versionCount - vi}`);
-      const status: SubmissionStatus =
-        k % 9 === 0 ? "Rejected" : k % 11 === 0 ? "Completed" : "Review Pending";
+      const status: SubmissionStatus = onSubmit
+        ? "Completed"
+        : k % 9 === 0 ? "Rejected" : k % 11 === 0 ? "Completed" : "Review Pending";
       out.push({
         id: `RS-${2400 - out.length * 7}`,
         userId: u.id,
@@ -220,8 +290,8 @@ function buildSubmissions(): TaskSubmission[] {
         hasAudio: k % 3 !== 0,
         audioLabel: "Voice note",
         audioDuration: `0:${String(20 + (k % 40)).padStart(2, "0")}`,
-        criteria: CRITERIA,
-        failCriteria: FAIL_CRITERIA,
+        checklist: CHECKLIST,
+        review: seededReview(status, k, taskRecord, isoDaysAgo(submittedDaysAgo)),
       });
     }
   });
@@ -269,7 +339,12 @@ export function submissionForLearner(args: {
         }
       : { kind: "image" as const, seed: `${args.userId}-link-${m}` },
   );
-  const versionCount = Math.max(1, args.attempts);
+  const taskRecord = taskRecordById(args.taskId) ?? taskRecordByName(args.taskName);
+  const onSubmit = completesOnSubmissionTask(taskRecord);
+  const status: SubmissionStatus = onSubmit
+    ? "Completed"
+    : args.reviewPending ? "Review Pending" : args.complete ? "Completed" : "Rejected";
+  const versionCount = onSubmit ? 1 : Math.max(1, args.attempts);
   return {
     id: `RS-L${k % 9000}`,
     userId: args.userId,
@@ -284,7 +359,7 @@ export function submissionForLearner(args: {
     submittedOn: isoDaysAgo(submittedDaysAgo),
     createdBy: args.createdBy,
     durationLabel: "Hands-on Task · 2 Hours",
-    status: args.reviewPending ? "Review Pending" : args.complete ? "Completed" : "Rejected",
+    status,
     progress: 100,
     completion: isoDaysAgo(submittedDaysAgo),
     dueDate: args.userType === "B2B" ? isoDaysAhead(15 + (k % 30)) : undefined,
@@ -295,15 +370,44 @@ export function submissionForLearner(args: {
     hasAudio: k % 3 !== 0,
     audioLabel: "Voice note",
     audioDuration: `0:${String(20 + (k % 40)).padStart(2, "0")}`,
-    criteria: CRITERIA,
-    failCriteria: FAIL_CRITERIA,
+    checklist: CHECKLIST,
+    review: seededReview(status, k, taskRecord, isoDaysAgo(submittedDaysAgo)),
   };
 }
 
-/** A company-created Task is graded by that company, so SkillCat reviewers can
- * only look at it — the review console opens it read-only. */
+/** The open Task's Passing Grade (1–10): scores at or above it pass, below it
+ *  are rejected. */
+export function passScoreOf(s: TaskSubmission): number {
+  return handsOnPassScore(taskOf(s));
+}
+
+/** The submission's Task completes on submission ("Submission Made") — it
+ *  is listed for reference but has nothing to grade. */
+export function completesOnSubmission(s: TaskSubmission): boolean {
+  return completesOnSubmissionTask(taskOf(s));
+}
+
+/** The submission's live Task record — the console reads its checklist (and
+ *  links its name to the Task editor) through this. */
+export function taskRecordOf(s: TaskSubmission, tasks: Task[] = getTasks()): Task | undefined {
+  return taskRecordById(s.taskId, tasks) ?? tasks.find((t) => t.name === s.taskName);
+}
+
+/** The row as the live Task now reads: its name, Certifications and creator
+ *  follow wizard edits. The Task's own fields (Passing Grade, completion) are
+ *  read on demand by {@link passScoreOf} / {@link completesOnSubmission}. */
+export function withLiveTask(s: TaskSubmission, tasks: Task[]): TaskSubmission {
+  const t = taskRecordById(s.taskId, tasks);
+  if (!t) return s;
+  if (t.name === s.taskName && t.usedIn === s.certifications && t.createdBy === s.createdBy) return s;
+  return { ...s, taskName: t.name, certifications: t.usedIn, createdBy: t.createdBy };
+}
+
+/** Nothing for a SkillCat reviewer to grade, so the review console opens it
+ * read-only: a company-created Task is graded by that company, and a
+ * "Submission Made" Task isn't graded at all. */
 export function isReadOnly(s: TaskSubmission): boolean {
-  return s.createdBy !== "SkillCat";
+  return s.createdBy !== "SkillCat" || completesOnSubmission(s);
 }
 
 /** What the submissions table shows in Status: read-only submissions aren't
@@ -339,7 +443,7 @@ export function mediaUrl(seed: string, w = 800, h = 600): string {
 function isoOffset(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00`);
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return isoLocal(d);
 }
 
 /** Derived submission for an older attempt (idx 0 returns the latest as-is). */
@@ -360,32 +464,78 @@ export function pastVersionOf(s: TaskSubmission, idx: number): TaskSubmission {
   };
 }
 
-export type PastReview = {
-  score: number;
-  feedback: string;
-  reviewer: string;
-  reviewedOn: string;
-  passedCriteria: string[];
-};
 
-const PAST_FEEDBACK = [
-  "Missing pressure test and lockout/tagout steps. Please resubmit with the full safety procedure visible.",
-  "Refrigerant manifold readings aren't shown — record the gauge readings and charge weight on the next attempt.",
-  "Voice note skips torque specs and the wiring sequence verification — include those next time.",
-  "Lighting on the brazed joints makes verification impossible. Use better lighting on resubmission.",
-];
-
-const PAST_REVIEWERS = ["Aarti Sharma", "Marcus Lee", "Jenna Park", "Devon Reyes"];
-
-/** Read-only past review for an older attempt. */
-export function pastReviewOf(s: TaskSubmission, idx: number): PastReview {
+/** Read-only past review for an older attempt. An older attempt is older
+ *  because it was rejected, so it scores below its Task's Passing Grade. */
+export function pastReviewOf(s: TaskSubmission, idx: number): SubmissionReview {
   const h = uhash(s.id + ":r" + idx);
   const submitted = isoOffset(s.submittedOn, -idx * 18);
   return {
-    score: 1 + (h % 4), // older attempts sit in the 1–4 "rejected" band
+    score: 1 + (h % Math.max(1, passScoreOf(s) - 1)),
     feedback: PAST_FEEDBACK[h % PAST_FEEDBACK.length],
     reviewer: PAST_REVIEWERS[h % PAST_REVIEWERS.length],
     reviewedOn: isoOffset(submitted, 2),
-    passedCriteria: s.criteria.filter((_, ci) => ((h + ci) % 3) > 0).map((c) => c.id),
   };
+}
+
+/* ── Reviews submitted this session ─────────────────────────────────────────
+   One store for every view of the queue — the sidebar badge, the run cards,
+   the table and the console all read pending-ness through it, so a submitted
+   review leaves all of them at once. Keyed by submission id; applied on read
+   with {@link withSubmittedReview}. ── */
+
+/** The signed-in reviewer — the prototype has no auth, so one stand-in name. */
+const CURRENT_REVIEWER = "You";
+
+let submittedReviews = new Map<string, SubmissionReview>();
+const reviewListeners = new Set<() => void>();
+
+function subscribeReviews(l: () => void) {
+  reviewListeners.add(l);
+  return () => reviewListeners.delete(l);
+}
+
+/** Record a reviewer's verdict on the current attempt. Its status follows
+ *  from the score against the Task's Passing Grade. */
+export function submitReview(id: string, score: number, feedback: string) {
+  submittedReviews = new Map(submittedReviews).set(id, {
+    score,
+    feedback,
+    reviewer: CURRENT_REVIEWER,
+    // Stamped when it is submitted, not when the page loaded.
+    reviewedOn: isoLocal(new Date()),
+  });
+  reviewListeners.forEach((l) => l());
+}
+
+/** Re-renders on every submitted review; pass the map to {@link withSubmittedReview}. */
+export function useSubmittedReviews(): ReadonlyMap<string, SubmissionReview> {
+  return useSyncExternalStore(subscribeReviews, () => submittedReviews);
+}
+
+/** The submission as it stands after this session's reviews. */
+export function withSubmittedReview(
+  s: TaskSubmission,
+  reviews: ReadonlyMap<string, SubmissionReview> = submittedReviews,
+): TaskSubmission {
+  const review = reviews.get(s.id);
+  if (!review) return s;
+  return { ...s, review, status: review.score >= passScoreOf(s) ? "Completed" : "Rejected" };
+}
+
+/** Still waiting on a SkillCat reviewer — the one test behind every pending
+ *  count (sidebar badge, run cards, the console's Skip count). */
+export function isPendingReview(s: TaskSubmission): boolean {
+  return displayStatus(s) === "Review Pending";
+}
+
+/** The sidebar's Hands-On Tasks badge: the seeded queue, live — re-read when
+ *  a review lands or a Task changes (a Task switched to "Submission Made"
+ *  leaves the queue). */
+export function usePendingHandsOnCount(): number {
+  const reviews = useSubmittedReviews();
+  const tasks = useLiveTasks();
+  return reviewSubmissions.filter((s) =>
+    isPendingReview(withSubmittedReview(withLiveTask(s, tasks), reviews)),
+  ).length;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { CAREER_STAGES, certifications, type Certification } from "../data/certifications";
-import { CERT_DEEP_LINK_BASE, SYSTEM_DEEP_LINKS, slugify } from "../data/deepLinks";
+import { CAREER_STAGES, useLiveCerts, type Certification } from "../data/certifications";
+import { SYSTEM_DEEP_LINKS, certDeepLink } from "../data/deepLinks";
 import { PrmModal } from "./PrmModal";
 import { CertFilters, certMatches, type CertFilterState } from "./CertFilters";
 import { CertificationsSearch } from "./CertificationsSearch";
@@ -8,6 +8,7 @@ import { RowChevronIcon, SearchIcon, SortIcon, PagePrevIcon, PageNextIcon } from
 import { SearchTrailing } from "./SearchPanelParts";
 import { TableCols } from "./TableCols";
 import { TableEmpty } from "./TableEmpty";
+import { certIndustryText } from "../data/industries";
 
 /* "Need help finding a Deep Link?" — Create Spotlight's reference for the
    Button Destination field. The shared PrmModal shell (no footer) with the
@@ -38,8 +39,9 @@ type Row = { id: string; name: string; link: string; extra: string; stage?: stri
 const certRow = (c: Certification): Row => ({
   id: c.id,
   name: c.name,
-  link: `${CERT_DEEP_LINK_BASE}${slugify(c.name)}`,
-  extra: c.industry,
+  // The Certification's stored slug — a customised one included.
+  link: certDeepLink(c),
+  extra: certIndustryText(c.industries),
   stage: c.careerStage ?? "",
 });
 
@@ -84,6 +86,8 @@ export function DeepLinkModal({
   /** The picked link, with its scheme, ready to use as the button's URL. */
   onPick: (url: string) => void;
 }) {
+  // The live list: Certifications created, renamed or re-slugged this session.
+  const certifications = useLiveCerts();
   const [tab, setTab] = useState<Tab>("cert");
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<CertFilterState>(DEFAULT_CERT_FILTERS);
@@ -123,7 +127,7 @@ export function DeepLinkModal({
       key === "stage" ? stageRank(a) - stageRank(b) || a.name.localeCompare(b.name) : a[key].localeCompare(b[key]),
     );
     return sort.dir === "desc" ? out.reverse() : out;
-  }, [tab, query, filters, sort]);
+  }, [tab, query, filters, sort, certifications]);
 
   const total = rows.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -143,7 +147,8 @@ export function DeepLinkModal({
     setSort((prev) => (prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
   }
 
-  const pick = (r: Row) => onPick(`https://${r.link}`);
+  // Every link already carries its scheme (https://skillcat.app/<slug>).
+  const pick = (r: Row) => onPick(r.link);
 
   /* The shared width rule (`TableCols`): content-sized base widths — the
      Certifications picker's 340px name, a nested Industry ("Plumbing ›

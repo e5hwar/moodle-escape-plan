@@ -1,4 +1,13 @@
+import { useMemo, useSyncExternalStore } from "react";
 import { users } from "./users";
+import {
+  gatedByIdUpload,
+  isIdUpload,
+  tasks as seedTasks,
+  useLiveTasks,
+  type Task,
+} from "./tasks";
+import { useLiveCerts, type Certification } from "./certifications";
 
 export type ProctoringKind = "proctoring" | "id-review" | "id-reupload";
 
@@ -13,30 +22,54 @@ export type WebcamFrame = {
   flag?: FlagReason;
 };
 
-/** Exams that are live-proctored via webcam for the duration of the exam. */
-export const PROCTORED_EXAMS = [
-  "EPA 608 Universal Certificate",
-  "EPA 608 Type 2 Certificate",
-  "EPA 608 Type 3 Certificate",
-] as const;
+/* ── Which Quizzes are reviewed here ──
+   Not a fixed list: a Quiz comes to Exam Reviews when it has Proctoring on
+   (its attempts are recorded, and the footage reviewed) or when the ID Upload
+   Task gates it through an Access Restriction (the learner's ID is checked
+   before the attempt counts). Both are authored elsewhere — the Quiz wizard's
+   Proctoring field, the seeded chains and a Certification's Add Access
+   Restriction — so the list is read off the live Tasks and Certifications. */
 
-/** Exams that only require an ID review — no webcam footage is captured. */
-export const ID_ONLY_EXAMS = [
-  "EPA 608 Type 1 Certificate",
-  "NATE Ready To Work",
-  "EPA 609 Certificate",
-] as const;
+/** The Quiz names a Certification's own Add Tasks tree gates behind the ID
+ *  Upload Task. Tree Tasks link to the library by name. */
+function idGatedInCerts(tasks: Task[], certs: Certification[]): Set<string> {
+  const idUploads = tasks.filter(isIdUpload);
+  const idUploadNames = new Set(idUploads.map((t) => t.name));
+  const out = new Set<string>();
+  for (const c of certs) {
+    const tree = (c.courses ?? []).flatMap((co) =>
+      co.children.flatMap((ch) => (ch.kind === "task" ? [ch.task] : ch.lesson.tasks)),
+    );
+    /* A gate is the library ID Upload Task itself (Add Access Restriction
+       offers it by its library id) or a tree copy of it by name. */
+    const gates = new Set([
+      ...idUploads.map((t) => t.id),
+      ...tree.filter((t) => idUploadNames.has(t.name)).map((t) => t.id),
+    ]);
+    for (const t of tree) {
+      if (t.restriction?.enabled && t.restriction.taskIds.some((id) => gates.has(id))) out.add(t.name);
+    }
+  }
+  return out;
+}
 
-export const ALL_EXAMS: string[] = [...PROCTORED_EXAMS, ...ID_ONLY_EXAMS];
+/** The Quizzes whose attempts Exam Reviews reviews — see above. */
+export function reviewedQuizzes(tasks: Task[], certs: Certification[]): Task[] {
+  const certGated = idGatedInCerts(tasks, certs);
+  return tasks.filter(
+    (t) => t.type === "Quiz" && (!!t.proctoring || gatedByIdUpload(t) || certGated.has(t.name)),
+  );
+}
 
-const EXAM_SHORT: Record<string, string> = {
-  "EPA 608 Universal Certificate": "EPA 608 Universal",
-  "EPA 608 Type 2 Certificate": "EPA 608 Type 2",
-  "EPA 608 Type 3 Certificate": "EPA 608 Type 3",
-  "EPA 608 Type 1 Certificate": "EPA 608 Type 1",
-  "NATE Ready To Work": "NATE Ready To Work",
-  "EPA 609 Certificate": "EPA 609",
-};
+/** The reviewed Quizzes' names, A–Z — the Quiz pill's options, live. */
+export function useReviewedQuizNames(): string[] {
+  const tasks = useLiveTasks();
+  const certs = useLiveCerts();
+  return useMemo(
+    () => reviewedQuizzes(tasks, certs).map((t) => t.name).sort((a, b) => a.localeCompare(b)),
+    [tasks, certs],
+  );
+}
 
 export type Submission = {
   id: string;
@@ -47,8 +80,11 @@ export type Submission = {
   candidatePhone: string;
   /** B2B candidates only — the company on their User record. */
   companyName?: string;
+  /** The Quiz Task this is an attempt at. */
+  taskId: string;
+  /** That Quiz's name — kept live by {@link useSubmissions}, so a rename in
+   *  the Task wizard shows here. */
   exam: string;
-  examShort: string;
   grade: string;
   submittedAt: string; // ISO-like display string
   /** When the candidate sent the new ID back. Set on `id-reupload` rows that
@@ -214,7 +250,7 @@ function idDocOf(
 type SeedRow = {
   id: string;
   userId: string;
-  exam: string;
+  taskId: string;
   grade: string;
   submittedAt: string;
   reuploadRequestedAt?: string;
@@ -225,42 +261,75 @@ type SeedRow = {
   idType: string;
   idDetectedName?: string;
   idPreviouslyVerified?: { at: string; by: string };
-  webcamFlaggedCount: number;
+  /** Proctored Quizzes only — an ID-only one captures no footage, so its rows
+   *  carry `[]`. The flagged count and total are read off these. */
   frames: WebcamFrame[];
   integrityNote?: string;
   rejectionReasons?: string[];
 };
 
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+const ordinal = (n: number) =>
+  n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th");
+
+/** A moment in the seed rows' display form — "October 8th, 2026, 3:15 PM" —
+ *  for dates the session writes (a re-upload request). */
+export function displayDateTime(d: Date): string {
+  const h = d.getHours() % 12 || 12;
+  const m = String(d.getMinutes()).padStart(2, "0");
+  return `${MONTHS[d.getMonth()]} ${ordinal(d.getDate())}, ${d.getFullYear()}, ${h}:${m} ${d.getHours() < 12 ? "AM" : "PM"}`;
+}
+
+/** Today at local midnight. Seed moments are offsets from it (as the Hands-On
+ *  queue's are), so waiting times and date filters read true on any day. */
+const SEED_TODAY = (() => {
+  const n = new Date();
+  return new Date(n.getFullYear(), n.getMonth(), n.getDate());
+})();
+/** `ago(-79, "9:20 AM")` — three days before today, at that time. */
+function ago(days: number, time: string): string {
+  const d = new Date(SEED_TODAY);
+  d.setDate(d.getDate() - days);
+  const m = /^(\d+):(\d+) (AM|PM)$/.exec(time);
+  if (m) {
+    let h = Number(m[1]) % 12;
+    if (m[3] === "PM") h += 12;
+    d.setHours(h, Number(m[2]), 0, 0);
+  }
+  return displayDateTime(d);
+}
+
 const seedRows: SeedRow[] = [
   /* ── 2026-08-25: 20 more pending submissions so the queue, the run cards and
      the By Quiz "+ N more" row all have realistic volume. Every one draws a
      distinct candidate from the Manage Users roster; `kind` follows the exam's
-     category (PROCTORED_EXAMS → proctoring, ID_ONLY_EXAMS → id-review) except
+     category (a Quiz with Proctoring on → proctoring, ID check only → id-review) except
      the two re-uploads at the end. ── */
   {
     id: "PR-1064",
     userId: "U-10044", // Marcus Holloway
-    exam: "EPA 608 Universal Certificate",
+    taskId: "T-1198", // EPA 608 Universal Final Exam
     grade: "9.1",
-    submittedAt: "July 18th, 2026, 9:20 AM",
+    submittedAt: ago(1, "9:20 AM"),
     kind: "proctoring",
     status: "pending",
     idConfidence: 98,
     idType: "US Driver's License",
-    webcamFlaggedCount: 0,
     frames: makeFrames(FRAME_SAMPLE, []),
   },
   {
     id: "PR-1063",
     userId: "U-10157", // Ayesha Khan
-    exam: "EPA 608 Type 2 Certificate",
+    taskId: "T-1149", // EPA 608 Type II Final Exam
     grade: "8.7",
-    submittedAt: "July 9th, 2026, 3:05 PM",
+    submittedAt: ago(10, "3:05 PM"),
     kind: "proctoring",
     status: "pending",
     idConfidence: 94,
     idType: "US Passport",
-    webcamFlaggedCount: 2,
     frames: makeFrames(FRAME_SAMPLE, [
       { at: 6, reason: "Looking Away" },
       { at: 17, reason: "Looking Away" },
@@ -269,28 +338,26 @@ const seedRows: SeedRow[] = [
   {
     id: "PR-1062",
     userId: "U-10291", // Tyrese Booker
-    exam: "NATE Ready To Work",
+    taskId: "T-1289", // NATE RTW Final Exam
     grade: "9.4",
-    submittedAt: "June 28th, 2026, 11:45 AM",
+    submittedAt: ago(21, "11:45 AM"),
     kind: "id-review",
     status: "pending",
     idConfidence: 91,
     idType: "US State ID",
-    webcamFlaggedCount: 0,
-    frames: makeFrames(FRAME_SAMPLE, []),
+    frames: [],
   },
   {
     id: "PR-1061",
     userId: "U-10330", // Lena Petrov
-    exam: "EPA 608 Type 3 Certificate",
+    taskId: "T-1142", // EPA 608 Type III Final Exam
     grade: "7.9",
-    submittedAt: "June 15th, 2026, 8:30 AM",
+    submittedAt: ago(34, "8:30 AM"),
     kind: "proctoring",
     status: "pending",
     idConfidence: 88,
     idType: "US Driver's License",
     idDetectedName: "Yelena Petrova",
-    webcamFlaggedCount: 3,
     frames: makeFrames(FRAME_SAMPLE, [
       { at: 4, reason: "Face Not Visible" },
       { at: 11, reason: "Looking Away" },
@@ -300,80 +367,73 @@ const seedRows: SeedRow[] = [
   {
     id: "PR-1060",
     userId: "U-10376", // Carlos Mendoza
-    exam: "EPA 609 Certificate",
+    taskId: "T-1407", // EPA 609 Final Exam
     grade: "9.0",
-    submittedAt: "June 2nd, 2026, 4:15 PM",
+    submittedAt: ago(47, "4:15 PM"),
     kind: "id-review",
     status: "pending",
     idConfidence: 97,
     idType: "US Passport",
-    webcamFlaggedCount: 0,
-    frames: makeFrames(FRAME_SAMPLE, []),
+    frames: [],
   },
   {
     id: "PR-1059",
     userId: "U-10458", // Brandon O'Connor
-    exam: "EPA 608 Universal Certificate",
+    taskId: "T-1198", // EPA 608 Universal Final Exam
     grade: "8.4",
-    submittedAt: "May 21st, 2026, 1:50 PM",
+    submittedAt: ago(59, "1:50 PM"),
     kind: "proctoring",
     status: "pending",
     idConfidence: 93,
     idType: "US Driver's License",
-    webcamFlaggedCount: 1,
     frames: makeFrames(FRAME_SAMPLE, [{ at: 8, reason: "Multiple Faces" }]),
   },
   {
     id: "PR-1058",
     userId: "U-10491", // Naomi Sato
-    exam: "EPA 608 Type 1 Certificate",
+    taskId: "T-1156", // EPA 608 Type I Final Exam
     grade: "9.6",
-    submittedAt: "May 8th, 2026, 10:10 AM",
+    submittedAt: ago(72, "10:10 AM"),
     kind: "id-review",
     status: "pending",
     idConfidence: 99,
     idType: "US Passport",
-    idPreviouslyVerified: { at: "March 2nd, 2026, 9:00 AM", by: "Maxwell Wesonga" },
-    webcamFlaggedCount: 0,
-    frames: makeFrames(FRAME_SAMPLE, []),
+    frames: [],
   },
   {
     id: "PR-1057",
     userId: "U-10655", // Olivia Tran
-    exam: "EPA 608 Type 2 Certificate",
+    taskId: "T-1149", // EPA 608 Type II Final Exam
     grade: "8.9",
-    submittedAt: "April 30th, 2026, 2:40 PM",
+    submittedAt: ago(80, "2:40 PM"),
     kind: "proctoring",
     status: "pending",
     idConfidence: 95,
     idType: "US State ID",
-    webcamFlaggedCount: 0,
     frames: makeFrames(FRAME_SAMPLE, []),
   },
   {
     id: "PR-1056",
     userId: "U-10778", // Kwame Mensah
-    exam: "NATE Ready To Work",
+    taskId: "T-1289", // NATE RTW Final Exam
     grade: "9.3",
-    submittedAt: "April 17th, 2026, 12:05 PM",
+    submittedAt: ago(93, "12:05 PM"),
     kind: "id-review",
     status: "pending",
     idConfidence: 90,
     idType: "US Driver's License",
-    webcamFlaggedCount: 0,
-    frames: makeFrames(FRAME_SAMPLE, []),
+    frames: [],
   },
   {
     id: "PR-1055",
     userId: "U-10859", // Mateo Garcia
-    exam: "EPA 608 Universal Certificate",
+    taskId: "T-1198", // EPA 608 Universal Final Exam
     grade: "7.6",
-    submittedAt: "April 3rd, 2026, 9:55 AM",
+    submittedAt: ago(107, "9:55 AM"),
     kind: "proctoring",
     status: "pending",
     idConfidence: 86,
     idType: "US Driver's License",
-    webcamFlaggedCount: 4,
     frames: makeFrames(FRAME_SAMPLE, [
       { at: 2, reason: "Looking Away" },
       { at: 7, reason: "No Face" },
@@ -385,93 +445,86 @@ const seedRows: SeedRow[] = [
   {
     id: "PR-1054",
     userId: "U-10903", // Chloe Bennett
-    exam: "EPA 608 Type 3 Certificate",
+    taskId: "T-1142", // EPA 608 Type III Final Exam
     grade: "9.2",
-    submittedAt: "March 24th, 2026, 3:30 PM",
+    submittedAt: ago(117, "3:30 PM"),
     kind: "proctoring",
     status: "pending",
     idConfidence: 96,
     idType: "US Passport",
-    webcamFlaggedCount: 0,
     frames: makeFrames(FRAME_SAMPLE, []),
   },
   {
     id: "PR-1053",
     userId: "U-10987", // Emma Schneider
-    exam: "EPA 609 Certificate",
+    taskId: "T-1407", // EPA 609 Final Exam
     grade: "8.8",
-    submittedAt: "March 11th, 2026, 8:05 AM",
+    submittedAt: ago(130, "8:05 AM"),
     kind: "id-review",
     status: "pending",
     idConfidence: 92,
     idType: "US State ID",
-    webcamFlaggedCount: 0,
-    frames: makeFrames(FRAME_SAMPLE, []),
+    frames: [],
   },
   {
     id: "PR-1052",
     userId: "U-11021", // Andre Dubois
-    exam: "EPA 608 Type 2 Certificate",
+    taskId: "T-1149", // EPA 608 Type II Final Exam
     grade: "9.7",
-    submittedAt: "February 26th, 2026, 1:20 PM",
+    submittedAt: ago(143, "1:20 PM"),
     kind: "proctoring",
     status: "pending",
     idConfidence: 99,
     idType: "US Driver's License",
-    webcamFlaggedCount: 0,
     frames: makeFrames(FRAME_SAMPLE, []),
   },
   {
     id: "PR-1051",
     userId: "U-11066", // Zoe Campbell
-    exam: "EPA 608 Type 1 Certificate",
+    taskId: "T-1156", // EPA 608 Type I Final Exam
     grade: "8.1",
-    submittedAt: "February 12th, 2026, 10:45 AM",
+    submittedAt: ago(157, "10:45 AM"),
     kind: "id-review",
     status: "pending",
     idConfidence: 89,
     idType: "US Driver's License",
     idDetectedName: "Zoey Campbell",
-    webcamFlaggedCount: 0,
-    frames: makeFrames(FRAME_SAMPLE, []),
+    frames: [],
   },
   {
     id: "PR-1050",
     userId: "U-11103", // Yusuf Demir
-    exam: "EPA 608 Universal Certificate",
+    taskId: "T-1198", // EPA 608 Universal Final Exam
     grade: "9.0",
-    submittedAt: "January 29th, 2026, 4:00 PM",
+    submittedAt: ago(171, "4:00 PM"),
     kind: "proctoring",
     status: "pending",
     idConfidence: 94,
     idType: "US Passport",
-    webcamFlaggedCount: 1,
     frames: makeFrames(FRAME_SAMPLE, [{ at: 15, reason: "Looking Away" }]),
   },
   {
     id: "PR-1049",
     userId: "U-11147", // Harper Wright
-    exam: "NATE Ready To Work",
+    taskId: "T-1289", // NATE RTW Final Exam
     grade: "9.5",
-    submittedAt: "January 14th, 2026, 11:30 AM",
+    submittedAt: ago(186, "11:30 AM"),
     kind: "id-review",
     status: "pending",
     idConfidence: 98,
     idType: "US Passport",
-    webcamFlaggedCount: 0,
-    frames: makeFrames(FRAME_SAMPLE, []),
+    frames: [],
   },
   {
     id: "PR-1048",
     userId: "U-11189", // Nina Kowalski
-    exam: "EPA 608 Type 3 Certificate",
+    taskId: "T-1142", // EPA 608 Type III Final Exam
     grade: "8.3",
-    submittedAt: "December 18th, 2025, 9:15 AM",
+    submittedAt: ago(213, "9:15 AM"),
     kind: "proctoring",
     status: "pending",
     idConfidence: 91,
     idType: "US State ID",
-    webcamFlaggedCount: 2,
     frames: makeFrames(FRAME_SAMPLE, [
       { at: 5, reason: "Looking Away" },
       { at: 18, reason: "Multiple Faces" },
@@ -480,106 +533,96 @@ const seedRows: SeedRow[] = [
   {
     id: "PR-1047",
     userId: "U-11224", // Theo Martin
-    exam: "EPA 608 Type 1 Certificate",
+    taskId: "T-1156", // EPA 608 Type I Final Exam
     grade: "9.1",
-    submittedAt: "December 4th, 2025, 2:55 PM",
+    submittedAt: ago(227, "2:55 PM"),
     kind: "id-review",
     status: "pending",
     idConfidence: 95,
     idType: "US Driver's License",
-    webcamFlaggedCount: 0,
-    frames: makeFrames(FRAME_SAMPLE, []),
+    frames: [],
   },
   /* Two more re-uploads so that tab has both of its states beyond the originals. */
   {
     id: "PR-1046",
     userId: "U-10044", // Marcus Holloway — second attempt, ID sent back
-    exam: "EPA 608 Type 2 Certificate",
+    taskId: "T-1149", // EPA 608 Type II Final Exam
     grade: "8.6",
-    submittedAt: "November 20th, 2025, 10:25 AM",
-    reuploadedAt: "November 28th, 2025, 2:15 PM",
+    submittedAt: ago(241, "10:25 AM"),
+    reuploadedAt: ago(233, "2:15 PM"),
     kind: "id-reupload",
     status: "pending",
     idConfidence: 78,
     idType: "US Driver's License",
-    webcamFlaggedCount: 0,
     frames: makeFrames(FRAME_SAMPLE, []),
   },
   {
     id: "PR-1045",
     userId: "U-10491", // Naomi Sato — waiting on the candidate
-    exam: "NATE Ready To Work",
+    taskId: "T-1289", // NATE RTW Final Exam
     grade: "9.0",
-    submittedAt: "November 6th, 2025, 3:40 PM",
-    reuploadRequestedAt: "November 11th, 2025, 9:05 AM",
+    submittedAt: ago(255, "3:40 PM"),
+    reuploadRequestedAt: ago(250, "9:05 AM"),
     kind: "id-reupload",
     status: "id-requested",
     idConfidence: 74,
     idType: "US State ID",
-    webcamFlaggedCount: 0,
-    frames: makeFrames(FRAME_SAMPLE, []),
+    frames: [],
   },
   {
     id: "PR-1042",
     userId: "U-10089", // Priya Venkatesan — priya.v@outlook.com
-    exam: "EPA 608 Type 2 Certificate",
+    taskId: "T-1149", // EPA 608 Type II Final Exam
     grade: "9.5",
-    submittedAt: "November 5th, 2025, 2:30 PM",
+    submittedAt: ago(256, "2:30 PM"),
     kind: "proctoring",
     status: "pending",
     idConfidence: 96,
     idType: "US Driver's License",
     idDetectedName: "Priya V",
-    webcamFlaggedCount: 1,
     frames: makeFrames(FRAME_SAMPLE, [{ at: 12, reason: "Looking Away" }]),
   },
   {
     id: "PR-1041",
     userId: "U-10203", // Jordan Whitfield — j.whitfield@gmail.com
-    exam: "EPA 608 Universal Certificate",
+    taskId: "T-1198", // EPA 608 Universal Final Exam
     grade: "9.5",
-    submittedAt: "November 5th, 2025, 2:30 PM",
+    submittedAt: ago(256, "2:30 PM"),
     kind: "proctoring",
     status: "pending",
     idConfidence: 99,
     idType: "US Passport",
-    idPreviouslyVerified: { at: "June 23rd, 2026, 10:15 AM", by: "Maxwell Wesonga" },
-    webcamFlaggedCount: 0,
+    idPreviouslyVerified: { at: ago(339, "10:15 AM"), by: "Maxwell Wesonga" },
     frames: makeFrames(FRAME_SAMPLE, []),
   },
   {
     id: "PR-1040",
     userId: "U-10412", // Hana Yamamoto — hana.y@gmail.com
-    exam: "NATE Ready To Work",
+    taskId: "T-1289", // NATE RTW Final Exam
     grade: "9.2",
-    submittedAt: "October 22nd, 2025, 11:15 AM",
+    submittedAt: ago(270, "11:15 AM"),
     kind: "id-review",
     status: "pending",
     idConfidence: 92,
     idType: "US Driver's License",
-    webcamFlaggedCount: 4,
-    frames: makeFrames(FRAME_SAMPLE, [
-      { at: 3, reason: "Looking Away" },
-      { at: 9, reason: "Looking Away" },
-      { at: 14, reason: "Face Not Visible" },
-      { at: 21, reason: "Looking Away" },
-    ]),
+    frames: [],
     integrityNote:
       "Copying answers from their phone and not complying with the exam rules",
   },
-  /* Hana Yamamoto's two prior rejected attempts — these drive the Integrity
-     Note's expanded "Rejected Attempts" list on her pending submission above. */
+  /* Hana Yamamoto's two prior rejected attempts — these put the "Caught
+     Cheating in Past Quizzes" card on her pending submission above, and its
+     link opens the Quiz of the latest one. Both passed on grade: a failed
+     attempt never reaches review, so it never creates an entry here. */
   {
     id: "PR-0977",
     userId: "U-10412",
-    exam: "EPA 608 Universal Certificate",
-    grade: "6.1",
-    submittedAt: "June 23rd, 2026, 9:05 AM",
+    taskId: "T-1198", // EPA 608 Universal Final Exam
+    grade: "8.2",
+    submittedAt: ago(26, "9:05 AM"),
     kind: "proctoring",
     status: "rejected",
     idConfidence: 71,
     idType: "US Driver's License",
-    webcamFlaggedCount: 5,
     frames: makeFrames(FRAME_SAMPLE, [
       { at: 2, reason: "Face Not Visible" },
       { at: 8, reason: "Multiple Faces" },
@@ -592,14 +635,13 @@ const seedRows: SeedRow[] = [
   {
     id: "PR-0954",
     userId: "U-10412",
-    exam: "EPA 608 Type 2 Certificate",
-    grade: "5.4",
-    submittedAt: "May 1st, 2026, 4:20 PM",
+    taskId: "T-1149", // EPA 608 Type II Final Exam
+    grade: "7.9",
+    submittedAt: ago(79, "4:20 PM"),
     kind: "proctoring",
     status: "rejected",
     idConfidence: 68,
     idType: "US Driver's License",
-    webcamFlaggedCount: 7,
     frames: makeFrames(FRAME_SAMPLE, [
       { at: 1, reason: "No Face" },
       { at: 6, reason: "Face Not Visible" },
@@ -611,48 +653,39 @@ const seedRows: SeedRow[] = [
   {
     id: "PR-1039",
     userId: "U-10731", // Isabella Rossi — bella.rossi@gmail.com
-    exam: "EPA 608 Type 1 Certificate",
+    taskId: "T-1156", // EPA 608 Type I Final Exam
     grade: "8.9",
-    submittedAt: "September 15th, 2025, 12:40 PM",
+    submittedAt: ago(307, "12:40 PM"),
     kind: "id-review",
     status: "pending",
     idConfidence: 98,
     idType: "US Driver's License",
-    webcamFlaggedCount: 2,
-    frames: makeFrames(FRAME_SAMPLE, [
-      { at: 1, reason: "Looking Away" },
-      { at: 4, reason: "Looking Away" },
-      { at: 11, reason: "Face Not Visible" },
-      { at: 16, reason: "Looking Away" },
-      { at: 23, reason: "Face Not Visible" },
-    ]),
+    frames: [],
   },
   {
     id: "PR-1038",
     userId: "U-10132", // Diego Ramirez — diego.ramirez@arscooling.com
-    exam: "EPA 608 Type 2 Certificate",
+    taskId: "T-1149", // EPA 608 Type II Final Exam
     grade: "9.5",
-    submittedAt: "November 10th, 2024, 2:30 PM",
+    submittedAt: ago(616, "2:30 PM"),
     kind: "proctoring",
     status: "accepted",
     idConfidence: 95,
     idType: "US Driver's License",
-    webcamFlaggedCount: 0,
     frames: makeFrames(FRAME_SAMPLE, []),
   },
   {
     id: "PR-1037",
     userId: "U-10618", // Felix Becker — felix.becker@harborcitymech.com
-    exam: "EPA 609 Certificate",
+    taskId: "T-1407", // EPA 609 Final Exam
     grade: "8.3",
-    submittedAt: "January 22nd, 2024, 10:15 AM",
-    reuploadRequestedAt: "January 24th, 2024, 11:40 AM",
+    submittedAt: ago(909, "10:15 AM"),
+    reuploadRequestedAt: ago(907, "11:40 AM"),
     kind: "id-reupload",
     status: "id-requested",
     idConfidence: 64,
     idType: "US State ID",
-    webcamFlaggedCount: 1,
-    frames: makeFrames(FRAME_SAMPLE, [{ at: 7, reason: "Looking Away" }]),
+    frames: [],
   },
   {
     /* A re-upload still waiting on the candidate ("Requested") whose exam WAS
@@ -660,15 +693,14 @@ const seedRows: SeedRow[] = [
        with PR-1043 below, the same case in the "To Review" state. */
     id: "PR-1044",
     userId: "U-10537", // Ezekiel Adeoye — z.adeoye@deltaelectrical.com
-    exam: "EPA 608 Universal Certificate",
+    taskId: "T-1198", // EPA 608 Universal Final Exam
     grade: "8.6",
-    submittedAt: "February 2nd, 2026, 4:20 PM",
-    reuploadRequestedAt: "February 5th, 2026, 2:15 PM",
+    submittedAt: ago(167, "4:20 PM"),
+    reuploadRequestedAt: ago(164, "2:15 PM"),
     kind: "id-reupload",
     status: "id-requested",
     idConfidence: 58,
     idType: "US State ID",
-    webcamFlaggedCount: 2,
     frames: makeFrames(FRAME_SAMPLE, [
       { at: 5, reason: "Looking Away" },
       { at: 17, reason: "Face Not Visible" },
@@ -681,42 +713,39 @@ const seedRows: SeedRow[] = [
        is still `id-requested`: waiting on the candidate, ID Re-uploads tab only. */
     id: "PR-1043",
     userId: "U-10248", // Sophia Andersson — sophia.a@brennanhvac.com
-    exam: "EPA 608 Type 2 Certificate",
+    taskId: "T-1149", // EPA 608 Type II Final Exam
     grade: "8.8",
-    submittedAt: "March 3rd, 2026, 9:05 AM",
-    reuploadedAt: "March 9th, 2026, 11:20 AM",
+    submittedAt: ago(138, "9:05 AM"),
+    reuploadedAt: ago(132, "11:20 AM"),
     kind: "id-reupload",
     status: "pending",
     idConfidence: 88,
     idType: "US Driver's License",
-    webcamFlaggedCount: 0,
     frames: makeFrames(FRAME_SAMPLE, []),
   },
   {
     id: "PR-1036",
     userId: "U-10692", // Samuel Okafor — sam.okafor@greenshieldsolar.com
-    exam: "EPA 608 Type 3 Certificate",
+    taskId: "T-1142", // EPA 608 Type III Final Exam
     grade: "9.0",
-    submittedAt: "April 5th, 2025, 3:45 PM",
+    submittedAt: ago(470, "3:45 PM"),
     kind: "proctoring",
     status: "pending",
     idConfidence: 97,
     idType: "US Driver's License",
-    idPreviouslyVerified: { at: "January 14th, 2025, 4:40 PM", by: "Priyanka Rao" },
-    webcamFlaggedCount: 1,
+    idPreviouslyVerified: { at: ago(551, "4:40 PM"), by: "Priyanka Rao" },
     frames: makeFrames(FRAME_SAMPLE, [{ at: 6, reason: "Looking Away" }]),
   },
   {
     id: "PR-1035",
     userId: "U-10584", // Mira Singh — mira.singh@yahoo.com
-    exam: "EPA 608 Universal Certificate",
+    taskId: "T-1198", // EPA 608 Universal Final Exam
     grade: "7.8",
-    submittedAt: "June 30th, 2025, 1:00 PM",
+    submittedAt: ago(384, "1:00 PM"),
     kind: "proctoring",
     status: "pending",
     idConfidence: 88,
     idType: "US Driver's License",
-    webcamFlaggedCount: 6,
     frames: makeFrames(FRAME_SAMPLE, [
       { at: 2, reason: "Looking Away" },
       { at: 5, reason: "Looking Away" },
@@ -731,53 +760,58 @@ const seedRows: SeedRow[] = [
   {
     id: "PR-1034",
     userId: "U-10948", // Raj Patel — raj.patel@northstarrefrig.com
-    exam: "NATE Ready To Work",
+    taskId: "T-1289", // NATE RTW Final Exam
     grade: "9.2",
-    submittedAt: "February 18th, 2026, 11:20 AM",
+    submittedAt: ago(151, "11:20 AM"),
     kind: "id-review",
     status: "pending",
     idConfidence: 91,
     idType: "US Driver's License",
-    webcamFlaggedCount: 0,
-    frames: makeFrames(FRAME_SAMPLE, []),
+    frames: [],
   },
   {
     id: "PR-1033",
     userId: "U-10814", // Grace Liu — grace.liu@gmail.com
-    exam: "EPA 608 Type 3 Certificate",
+    taskId: "T-1142", // EPA 608 Type III Final Exam
     grade: "8.7",
-    submittedAt: "March 12th, 2024, 4:00 PM",
+    submittedAt: ago(859, "4:00 PM"),
     kind: "proctoring",
     status: "accepted",
     idConfidence: 94,
     idType: "US Passport",
-    webcamFlaggedCount: 0,
     frames: makeFrames(FRAME_SAMPLE, []),
   },
 ];
 
-export const submissions: Submission[] = seedRows.map((r) => ({
-  ...candidateOf(r.userId),
-  ...idDocOf(r.userId, r.idType),
-  id: r.id,
-  exam: r.exam,
-  examShort: EXAM_SHORT[r.exam] ?? r.exam,
-  grade: r.grade,
-  submittedAt: r.submittedAt,
-  reuploadRequestedAt: r.reuploadRequestedAt,
-  reuploadedAt: r.reuploadedAt,
-  kind: r.kind,
-  status: r.status,
-  idConfidence: r.idConfidence,
-  idType: r.idType,
-  idDetectedName: r.idDetectedName,
-  idPreviouslyVerified: r.idPreviouslyVerified,
-  webcamFlaggedCount: r.webcamFlaggedCount,
-  webcamTotal: 180,
-  frames: resizeFrames(r.frames, frameSampleFor(r.id)),
-  integrityNote: r.integrityNote,
-  rejectionReasons: r.rejectionReasons,
-}));
+export const submissions: Submission[] = seedRows.map((r) => {
+  const quiz = seedTasks.find((t) => t.id === r.taskId);
+  if (!quiz) throw new Error(`Unknown Quiz ${r.taskId}`);
+  /* The wall is sampled to this row's length; a Quiz without Proctoring
+     records nothing, so it has no wall. */
+  const frames = quiz.proctoring ? resizeFrames(r.frames, frameSampleFor(r.id)) : [];
+  return {
+    ...candidateOf(r.userId),
+    ...idDocOf(r.userId, r.idType),
+    id: r.id,
+    taskId: r.taskId,
+    exam: quiz.name,
+    grade: r.grade,
+    submittedAt: r.submittedAt,
+    reuploadRequestedAt: r.reuploadRequestedAt,
+    reuploadedAt: r.reuploadedAt,
+    kind: r.kind,
+    status: r.status,
+    idConfidence: r.idConfidence,
+    idType: r.idType,
+    idDetectedName: r.idDetectedName,
+    idPreviouslyVerified: r.idPreviouslyVerified,
+    webcamFlaggedCount: frames.filter((f) => !!f.flag).length,
+    webcamTotal: frames.length,
+    frames,
+    integrityNote: r.integrityNote,
+    rejectionReasons: r.rejectionReasons,
+  };
+});
 
 /** Free-text match for the Proctoring search — the fields the placeholder
  *  promises ("User's Name, Email, or Phone") plus the exam, so typing an exam
@@ -798,12 +832,13 @@ export function matchesQuery(s: Submission, q: string): boolean {
 
 /** Whether webcam footage was captured for a submission.
  *
- *  Keyed on the EXAM, not on `kind`: the camera runs during a proctored exam,
- *  so the footage exists for the whole life of that submission — including
- *  after it moves to the ID Re-uploads queue because the ID needed re-sending.
- *  Only exams in ID_ONLY_EXAMS never have any. */
+ *  Read off the recording, not `kind` or the Quiz's Proctoring field today:
+ *  the camera ran during a proctored attempt, so the footage exists for the
+ *  whole life of that submission — including after it moves to the ID
+ *  Re-uploads queue, and even if Proctoring is later switched off. A Quiz
+ *  without Proctoring never records any. */
 export function hasProctoringFootage(s: Submission): boolean {
-  return (PROCTORED_EXAMS as readonly string[]).includes(s.exam);
+  return s.frames.length > 0;
 }
 
 /** The re-uploads an admin has asked for that the candidate hasn't sent back
@@ -814,4 +849,39 @@ export function isPendingIdReupload(s: Submission): boolean {
   return s.status === "id-requested";
 }
 
-export const pendingIdReuploads = submissions.filter(isPendingIdReupload);
+/* ── The working submissions store ──
+   Decisions, re-upload requests and renames outlast the page that made them:
+   App remounts Exam Reviews on every navigation, and Pending ID Re-Uploads
+   reads the same list, so both live here for the session (this prototype has
+   no storage layer). */
+let store: Submission[] = submissions;
+const listeners = new Set<() => void>();
+
+export function getSubmissions(): Submission[] {
+  return store;
+}
+
+export function updateSubmissions(fn: (prev: Submission[]) => Submission[]): void {
+  store = fn(store);
+  listeners.forEach((l) => l());
+}
+
+/** The store with each row's Quiz name read off the live Task list, so a
+ *  rename in the Task wizard reaches the table, filters and console. */
+export function useSubmissions(): Submission[] {
+  const list = useSyncExternalStore(
+    (l) => {
+      listeners.add(l);
+      return () => listeners.delete(l);
+    },
+    getSubmissions,
+  );
+  const tasks = useLiveTasks();
+  return useMemo(() => {
+    const names = new Map(tasks.map((t) => [t.id, t.name] as const));
+    return list.map((s) => {
+      const name = names.get(s.taskId);
+      return name && name !== s.exam ? { ...s, exam: name } : s;
+    });
+  }, [list, tasks]);
+}

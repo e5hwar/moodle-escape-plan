@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  nodes as allNodes,
+  MAX_LINKS_PER_CERT,
+  certNode,
+  linkableCerts,
   links as seedLinks,
+  pageLinks,
+  validStrength,
   type ContentNode,
   type Link,
   type LinkKind,
 } from "../data/contentLinks";
-import { certifications, formatTimeToComplete } from "../data/certifications";
+import { certById, formatTimeToComplete, useLiveCerts } from "../data/certifications";
 import { SelectRequirementModal } from "./SelectRequirementModal";
+import { NoteCard } from "./NoteCard";
 import { SearchHints, stepActive, ResultsHead, HighlightMatch, SearchNoResults } from "./SearchPanelParts";
 import { SkeletonOverlay } from "./SkeletonOverlay";
 import { draftKey, useLeaveGuard } from "./LeaveGuard";
@@ -15,6 +20,7 @@ import { useToast } from "./useToast";
 import {
   KeyCommandIcon,
   InfoIcon,
+  InfoCircleIcon,
   RowCloseIcon,
   SearchIcon,
   SearchClearIcon,
@@ -105,29 +111,26 @@ const KIND_HELP: Record<LinkKind, string> = {
 
 // Tooltip on every section's LINK STRENGTH column header.
 const LINK_STRENGTH_TIP =
-  "A value between 0 and 100 that controls the order links appear in. Higher Link Strength shows first. " +
+  "A whole number from 1 to 100 that controls the order links appear in. Higher Link Strength shows first. " +
   "Only compared against other links of the same type on this Certification - a Pre-Requisite at 90 and a Related at 80 don't compete with each other.";
 
 /* Row meta (Figma 801:2111, "HVAC · 10-12 Hours") ends on the Time to
- * Complete. Content nodes don't carry one, so it comes from the catalog
- * Certification of the same name — node names match certifications.ts. */
-const TIME_BY_NAME = new Map(
-  certifications.map((c) => [c.name, formatTimeToComplete(c.timeToComplete)])
-);
-
-/* The picker lists catalog Certifications, but a link needs a graph node:
- * these map the two by name (node names match certifications.ts). */
-const NODE_ID_BY_NAME = new Map(
-  allNodes.filter((n) => n.kind === "Certification").map((n) => [n.name, n.id]),
-);
-const LINKABLE_CERTS = certifications.filter((c) => NODE_ID_BY_NAME.has(c.name));
-
+ * Complete, read from the live Certification (node id === Certification id). */
 function rowMeta(n: ContentNode): string {
-  return [n.industry, TIME_BY_NAME.get(n.name)].filter(Boolean).join(" · ") || "—";
+  const time = formatTimeToComplete(certById(n.id)?.timeToComplete);
+  return [n.industry, time].filter(Boolean).join(" · ") || "—";
 }
 
-function nodeById(id: string): ContentNode | undefined {
-  return allNodes.find((n) => n.id === id);
+type NodeLookup = (id: string) => ContentNode | undefined;
+
+/* What a section's label row says when one of its strengths can't be saved
+ * (the card-table error, Figma 1570:3366). */
+function strengthError(items: { strength: number }[]): string | undefined {
+  const bad = items.filter((x) => !validStrength(x.strength));
+  if (bad.length === 0) return undefined;
+  return bad.some((x) => Number.isNaN(x.strength))
+    ? "Link Strength cannot be left empty"
+    : "Link Strength must be a whole number from 1 to 100";
 }
 
 function edgeKey(e: Link): string {
@@ -149,12 +152,15 @@ function partition(
   focusId: string,
   links: Link[],
   savedStrength: Map<string, number>,
+  nodeById: NodeLookup,
 ) {
   const prereqs: { other: string; strength: number; edge: Link }[] = [];
   const recommended: { other: string; strength: number; edge: Link }[] = [];
   const related: { other: string; strength: number; edge: Link }[] = [];
 
   for (const e of links) {
+    // A link to a Certification that no longer exists lists nothing.
+    if (!nodeById(e.from === focusId ? e.to : e.from)) continue;
     if (e.kind === "prerequisite" && e.to === focusId) {
       prereqs.push({ other: e.from, strength: e.strength, edge: e });
     } else if (e.kind === "recommended" && e.from === focusId) {
@@ -164,7 +170,7 @@ function partition(
       related.push({ other, strength: e.strength, edge: e });
     }
   }
-  // Strengths are 0–100, so -1 ranks unsaved links last; the sort is stable.
+  // Saved strengths are 1–100, so -1 ranks unsaved links last; the sort is stable.
   const rank = (x: { edge: Link }) => savedStrength.get(edgeKey(x.edge)) ?? -1;
   const bySaved = (a: { edge: Link }, b: { edge: Link }) => rank(b) - rank(a);
   prereqs.sort(bySaved);
@@ -201,10 +207,19 @@ export function ContentLinksPage({
   // Add-link picker state — { kind: which list we're adding to }
   const [picker, setPicker] = useState<{ kind: LinkKind } | null>(null);
 
-  // Resolve the focused node. A certification opened from the 3-dot menu may not
-  // exist in the mock content graph — fall back to the injected initialFocus so
-  // the page always shows that certification's (possibly empty) link columns
-  // instead of dropping back to the search/empty state.
+  /* The graph's nodes are the live Certifications (node id === Certification
+     id), so session-created ones are linkable and a rename shows at once. */
+  const liveCerts = useLiveCerts();
+  const nodeMap = useMemo(
+    () => new Map(liveCerts.map((c) => [c.id, certNode(c)])),
+    [liveCerts],
+  );
+  const nodeById: NodeLookup = (id) => nodeMap.get(id);
+  // Link targets: SkillCat-created Certifications only (Hidden included).
+  const linkable = useMemo(() => linkableCerts(liveCerts), [liveCerts]);
+  const searchNodes = useMemo(() => linkable.map(certNode), [linkable]);
+
+  // Resolve the focused node — the live one, else the injected initialFocus.
   const focused = focusId
     ? nodeById(focusId) ??
       (initialFocus && initialFocus.id === focusId ? initialFocus : null)
@@ -216,9 +231,25 @@ export function ContentLinksPage({
   );
 
   const groups = useMemo(
-    () => (focusId ? partition(focusId, links, savedStrength) : null),
-    [focusId, links, savedStrength]
+    () => (focusId ? partition(focusId, links, savedStrength, (id) => nodeMap.get(id)) : null),
+    [focusId, links, savedStrength, nodeMap]
   );
+
+  /* The 10-link cap counts every link listed in this Certification's three
+     sections (inbound Related included — they're edited here too). */
+  const linkTotal = groups
+    ? groups.prereqs.length + groups.recommended.length + groups.related.length
+    : 0;
+  const atCap = linkTotal >= MAX_LINKS_PER_CERT;
+  const slotsLeft = Math.max(0, MAX_LINKS_PER_CERT - linkTotal);
+
+  /* A strength that can't be saved (empty, 0, over 100, a fraction) holds
+     Save back. The first one's Certification names where to fix it, since
+     the bad row may sit on a Certification that isn't focused right now. */
+  const invalidLink = links.find((l) => !validStrength(l.strength));
+  const invalidOn = invalidLink
+    ? nodeById(invalidLink.kind === "prerequisite" ? invalidLink.to : invalidLink.from)
+    : undefined;
 
   // "Referenced by" = relationships authored on *other* certifications that point
   // at this one. They're read-only here (edit them from the other cert's page):
@@ -229,15 +260,15 @@ export function ContentLinksPage({
     if (!focusId) return out;
     for (const e of links) {
       if (e.kind === "prerequisite" && e.from === focusId) {
-        const n = nodeById(e.to);
+        const n = nodeMap.get(e.to);
         if (n) out.push({ id: n.id, name: n.name, kind: "prerequisite" });
       } else if (e.kind === "recommended" && e.to === focusId) {
-        const n = nodeById(e.from);
+        const n = nodeMap.get(e.from);
         if (n) out.push({ id: n.id, name: n.name, kind: "recommended" });
       }
     }
     return out;
-  }, [focusId, links]);
+  }, [focusId, links, nodeMap]);
 
   // Reference identity: any add / remove / strength edit produces a new array.
   const dirty = links !== baseline;
@@ -259,6 +290,7 @@ export function ContentLinksPage({
   }
 
   function saveChanges() {
+    if (invalidLink) return;
     setBaseline(links);
     onSaveLinks?.(links);
     toast("Content Links Saved");
@@ -281,7 +313,8 @@ export function ContentLinksPage({
   function addLinks(kind: LinkKind, otherIds: string[]) {
     if (!focusId || otherIds.length === 0) return;
     const id = focusId;
-    const added: Link[] = otherIds.map((otherId) =>
+    // The picker already stops at the cap; this is the backstop.
+    const added: Link[] = otherIds.slice(0, slotsLeft).map((otherId) =>
       kind === "prerequisite"
         ? { from: otherId, to: id, kind, strength: 50 }
         : { from: id, to: otherId, kind, strength: 50 },
@@ -348,6 +381,7 @@ export function ContentLinksPage({
               onClose={() => setSearchOpen(false)}
               open={searchOpen && !focused}
               query={query}
+              nodes={searchNodes}
               onPick={pickFocus}
               inputRef={searchInput}
             />
@@ -356,31 +390,36 @@ export function ContentLinksPage({
           <div className="lc-scroll">
             {focused && groups ? (
               <>
+                {/* At the cap every Add row is disabled; this says why. */}
+                {atCap && (
+                  <NoteCard
+                    role="note"
+                    icon={<InfoCircleIcon />}
+                    className="lc-cap-note"
+                    title={`${linkTotal} of ${MAX_LINKS_PER_CERT} Content Links Used`}
+                    body={`A Certification can have at most ${MAX_LINKS_PER_CERT} Content Links. Remove one to add another.`}
+                  />
+                )}
                 <div className="lc-grid">
-                  <LinkSection
-                    kind="prerequisite"
-                    items={groups.prereqs}
-                    onRemove={removeEdge}
-                    onStrength={updateStrength}
-                    onAdd={() => setPicker({ kind: "prerequisite" })}
-                    onPickNode={pickFocus}
-                  />
-                  <LinkSection
-                    kind="recommended"
-                    items={groups.recommended}
-                    onRemove={removeEdge}
-                    onStrength={updateStrength}
-                    onAdd={() => setPicker({ kind: "recommended" })}
-                    onPickNode={pickFocus}
-                  />
-                  <LinkSection
-                    kind="related"
-                    items={groups.related}
-                    onRemove={removeEdge}
-                    onStrength={updateStrength}
-                    onAdd={() => setPicker({ kind: "related" })}
-                    onPickNode={pickFocus}
-                  />
+                  {(["prerequisite", "recommended", "related"] as const).map((kind) => (
+                    <LinkSection
+                      key={kind}
+                      kind={kind}
+                      items={
+                        kind === "prerequisite"
+                          ? groups.prereqs
+                          : kind === "recommended"
+                          ? groups.recommended
+                          : groups.related
+                      }
+                      nodeById={nodeById}
+                      addDisabled={atCap}
+                      onRemove={removeEdge}
+                      onStrength={updateStrength}
+                      onAdd={() => setPicker({ kind })}
+                      onPickNode={pickFocus}
+                    />
+                  ))}
                 </div>
               </>
             ) : (
@@ -398,17 +437,31 @@ export function ContentLinksPage({
           )}
 
           {/* Same in-flow save footer as the Spotlights reorder bar — spans the
-              content column only, stops at the left nav. Shown only while
-              the graph really differs from the saved one — an edit undone
-              leaves nothing to save, so the bar goes away again. */}
-          {focused && changed && (
+              content column only, stops at the left nav. Shown while the
+              graph really differs from the saved one — an edit undone leaves
+              nothing to save, so the bar goes away again. It stays up while
+              the search is being typed in (no Certification focused): the
+              edits are still there to save or discard. */}
+          {changed && (
             <footer className="sp-save-footer">
               <div className="sp-save-footer-text">Unsaved Changes</div>
               <div className="sp-save-footer-actions">
                 <button className="btn-save-draft" onClick={cancelChanges}>
                   Discard
                 </button>
-                <button className="btn-publish" onClick={saveChanges}>
+                {/* `.is-disabled` (not :disabled) so the tip still shows. */}
+                <button
+                  className={`btn-publish${invalidLink ? " is-disabled" : ""}`}
+                  aria-disabled={!!invalidLink}
+                  data-tip={
+                    invalidLink
+                      ? `Every Link Strength needs a whole number from 1 to 100${
+                          invalidOn && invalidOn.id !== focusId ? ` (check ${invalidOn.name})` : ""
+                        }`
+                      : undefined
+                  }
+                  onClick={saveChanges}
+                >
                   Save Changes
                 </button>
               </div>
@@ -419,36 +472,69 @@ export function ContentLinksPage({
 
       {/* The shared Certification picker (the Select Requirement modal,
           Certifications only) — the Certifications table's columns, pills and
-          search. Links are stored by graph node, and nodes are named after
-          catalog Certifications, so the picker lists the catalog rows the
-          graph can link and the names are mapped back to node ids on confirm. */}
-      {picker && focusId && (
-        <SelectRequirementModal
-          only="cert"
-          title={KIND_ADD_TITLE[picker.kind]}
-          description={KIND_ADD_DESC[picker.kind]}
-          confirmNoun="Link"
-          certPool={LINKABLE_CERTS}
-          existingNames={Array.from(alreadyLinkedIds(picker.kind))
-            .map((id) => nodeById(id)?.name)
-            .filter((n): n is string => !!n)}
-          lockedFlag={(name) => (name === nodeById(focusId)?.name ? "This Certification" : "Already linked")}
-          lockedTip={(name) =>
-            name === nodeById(focusId)?.name
-              ? "A Certification can't link to itself"
-              : `Already a ${KIND_LABEL[picker.kind]} of this Certification`
-          }
-          onCancel={() => setPicker(null)}
-          onConfirm={(picks) =>
-            addLinks(
-              picker.kind,
-              picks
-                .map((p) => (p.kind === "cert" ? NODE_ID_BY_NAME.get(p.cert.name) : undefined))
-                .filter((id): id is string => !!id),
-            )
-          }
-        />
-      )}
+          search. It lists SkillCat-created Certifications only (Hidden ones
+          included; company-created ones are never link targets), and a pick's
+          Certification id IS its graph node id. */}
+      {picker && focusId && (() => {
+        const linked = alreadyLinkedIds(picker.kind);
+        const focusName = nodeById(focusId)?.name;
+        /* A Related link also lists on the other Certification's page, so
+           one already at the cap can't take another. */
+        const fullIds =
+          picker.kind === "related"
+            ? linkable
+                .filter(
+                  (c) =>
+                    !linked.has(c.id) &&
+                    pageLinks(c.id, links).length >= MAX_LINKS_PER_CERT,
+                )
+                .map((c) => c.id)
+            : [];
+        const linkedNames = new Set(Array.from(linked, (id) => nodeById(id)?.name));
+        return (
+          <SelectRequirementModal
+            only="cert"
+            title={KIND_ADD_TITLE[picker.kind]}
+            description={KIND_ADD_DESC[picker.kind]}
+            confirmNoun="Link"
+            certPool={linkable}
+            maxPicks={slotsLeft}
+            header={
+              <NoteCard
+                role="note"
+                singleLine
+                icon={<InfoCircleIcon />}
+                title={`${slotsLeft} of ${MAX_LINKS_PER_CERT} Content Links Left`}
+                body={`A Certification can have at most ${MAX_LINKS_PER_CERT} Content Links, so you can add up to ${slotsLeft} more here.`}
+              />
+            }
+            existingNames={[...Array.from(linked), ...fullIds]
+              .map((id) => nodeById(id)?.name)
+              .filter((n): n is string => !!n)}
+            lockedFlag={(name) =>
+              name === focusName
+                ? "This Certification"
+                : linkedNames.has(name)
+                ? "Already linked"
+                : `${MAX_LINKS_PER_CERT} Links`
+            }
+            lockedTip={(name) =>
+              name === focusName
+                ? "A Certification can't link to itself"
+                : linkedNames.has(name)
+                ? `Already a ${KIND_LABEL[picker.kind]} of this Certification`
+                : `Already has ${MAX_LINKS_PER_CERT} Content Links, the most a Certification can have`
+            }
+            onCancel={() => setPicker(null)}
+            onConfirm={(picks) =>
+              addLinks(
+                picker.kind,
+                picks.flatMap((p) => (p.kind === "cert" ? [p.cert.id] : [])),
+              )
+            }
+          />
+        );
+      })()}
     </div>
   );
 }
@@ -467,6 +553,7 @@ function SearchField({
   onBlur,
   open,
   query,
+  nodes,
   onPick,
   onClose,
   inputRef,
@@ -478,6 +565,8 @@ function SearchField({
   onBlur: () => void;
   open: boolean;
   query: string;
+  /** The Certifications to pick from — the graph is Certifications only. */
+  nodes: ContentNode[];
   onPick: (id: string) => void;
   onClose: () => void;
   inputRef: React.RefObject<HTMLInputElement>;
@@ -500,14 +589,14 @@ function SearchField({
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     const list = q
-      ? allNodes.filter(
+      ? nodes.filter(
           (n) =>
             n.name.toLowerCase().includes(q) ||
             (n.industry ?? "").toLowerCase().includes(q)
         )
-      : allNodes;
+      : nodes;
     return list.slice(0, 8);
-  }, [query]);
+  }, [query, nodes]);
 
   // A fresh result set invalidates the highlight.
   useEffect(() => setActive(-1), [query]);
@@ -569,7 +658,7 @@ function SearchField({
 
       {open && (
         <div className="usearch-panel" onMouseDown={(e) => e.preventDefault()}>
-          <ResultsHead query={query} label="All content" />
+          <ResultsHead query={query} label="All Certifications" />
           {results.length === 0 ? (
             <SearchNoResults />
           ) : (
@@ -660,6 +749,8 @@ type GroupItem = { other: string; strength: number; edge: Link };
 function LinkSection({
   kind,
   items,
+  nodeById,
+  addDisabled,
   onRemove,
   onStrength,
   onAdd,
@@ -667,20 +758,28 @@ function LinkSection({
 }: {
   kind: LinkKind;
   items: GroupItem[];
+  nodeById: NodeLookup;
+  /** At the 10-link cap — the Add row is disabled (the page's note says why). */
+  addDisabled: boolean;
   onRemove: (edge: Link) => void;
   onStrength: (edge: Link, strength: number) => void;
   onAdd: () => void;
   onPickNode: (id: string) => void;
 }) {
+  const error = strengthError(items);
   return (
     <section className="lc-sec">
-      {/* Figma 1416:1370 — 16px SemiBold, no count. */}
-      <h2 className="lc-sec-title">{KIND_PLURAL[kind]}</h2>
+      {/* Figma 1416:1370 — 16px SemiBold, no count. A strength that can't be
+          saved flags here, in the label row (the card-table error 1570:3366). */}
+      <h2 className="lc-sec-title">
+        {KIND_PLURAL[kind]}
+        {error && <span className="form-label-error">{error}</span>}
+      </h2>
 
       {/* Figma 801:2099 — the DS wash panel: header row, one row per link, then
           the Add row. With nothing linked it is the card-table empty state
           (1570:3518): the header, one #404040 line, then the Add row. */}
-      <div className="lc-panel">
+      <div className={`lc-panel${error ? " has-error" : ""}`}>
         <div className="lc-row lc-row-head">
           <div className="lc-hcell">CERTIFICATION</div>
           <div className="lc-hcell lc-hcell-str">
@@ -708,7 +807,16 @@ function LinkSection({
         {/* Figma 1416:1362 — the Quiz Questions card's Add row (`.qz-addrow`),
             the panel's last row so it drops the hairline. */}
         <div className="qz-addrow qz-addrow--last">
-          <button className="qz-addrow-btn" onClick={onAdd}>
+          <button
+            className="qz-addrow-btn"
+            onClick={onAdd}
+            disabled={addDisabled}
+            title={
+              addDisabled
+                ? `This Certification has ${MAX_LINKS_PER_CERT} Content Links, the most it can have`
+                : undefined
+            }
+          >
             <TreeAddIcon />
             {KIND_ADD_ROW[kind]}
           </button>
@@ -743,17 +851,22 @@ function LinkRow({
         <span className="lc-row-meta">{rowMeta(node)}</span>
       </button>
       <div className="lc-row-imp">
+        {/* 1–100. What's typed is kept as typed — an empty field stays empty
+            (not 0) and 0 / 101 stay visible — and flags red until fixed;
+            Save is held back meanwhile. */}
         <input
-          className="lc-strength"
+          className={`lc-strength${validStrength(strength) ? "" : " has-error"}`}
           type="number"
-          min={0}
+          min={1}
           max={100}
-          value={strength}
+          step={1}
+          value={Number.isNaN(strength) ? "" : strength}
           onChange={(e) => {
-            const next = Math.max(0, Math.min(100, Number(e.target.value || 0)));
-            onStrength(next);
+            const raw = e.target.value.trim();
+            onStrength(raw === "" ? NaN : Number(raw));
           }}
           aria-label="Link Strength"
+          aria-invalid={!validStrength(strength)}
         />
         <button className="lc-row-remove" title="Remove Link" onClick={onRemove}>
           <RowCloseIcon />
