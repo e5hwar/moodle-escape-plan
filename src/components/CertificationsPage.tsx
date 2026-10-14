@@ -10,6 +10,7 @@ import {
   certReferences,
   type Certification,
   type CertReference,
+  type CertColumn,
 } from "../data/certifications";
 import { type Award } from "../data/awards";
 import { certIndustryText, industryTagLabels, useLiveIndustries } from "../data/industries";
@@ -20,9 +21,10 @@ import {
   type CertFilterState,
   type CertColumnState,
 } from "./CertFilters";
-import { EditColumnsButton } from "./Filters";
+import { EditColumnsButton, orderedColumns } from "./Filters";
 import { SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon, RowDeleteIcon, MenuAllTasksIcon, MenuAwardIcon, MenuBackupIcon, SetupIndustriesIcon, SetupAwardIcon, SetupCheckIcon, MenuPaidIcon, MenuLinkIcon, MenuProgressIcon, MenuResponsesIcon, MenuArchiveReplaceIcon, PagePrevIcon, PageNextIcon, NoteChevronIcon, RowCloseIcon } from "./icons";
-import { pickTag, pickTags, audienceOf, TRADE_TAGS, PARTNERSHIP_TAGS } from "../data/filters";
+import { pickTag, pickTags, audienceOf, AUDIENCE_ALL_USERS, TRADE_TAGS, PARTNERSHIP_TAGS } from "../data/filters";
+import { appToday } from "../data/companies";
 import { PrmModal } from "./PrmModal";
 import { PreviewPanel, formatCount, seededInt, type PreviewStat } from "./PreviewPanel";
 import { CertificationSummary, useCertPreview } from "./NewCertificationWizard";
@@ -31,6 +33,7 @@ import { CertImportModal } from "./CertImportModal";
 import { CertBulkUploadModal } from "./CertBulkUploadModal";
 import type { CertImportReport } from "../data/certImport";
 import { useCollapsingHeader } from "../hooks/useCollapsingHeader";
+import { useListState, useResetPageOnChange } from "../hooks/useListState";
 import { CertificationsSearch } from "./CertificationsSearch";
 import { CertIndustriesModal } from "./CertIndustriesModal";
 import { CopiedToast } from "./CopiedToast";
@@ -70,7 +73,21 @@ export type SetupSteps = Record<SetupStepKey, SetupStep>;
  *  banner says so (in its green tone) instead of vanishing. */
 export type SetupBannerState = { dismissed: boolean };
 
+/* Who gets Setup status at all (spec review 2026-10-09): a SkillCat-created,
+   All Users Certification, and only for its first 30 days (Date Created).
+   A B2B Companies Only or company-created one never has it, and an older one
+   simply stops showing it — no pill, banner, Setup filter match or card. */
+const SETUP_WINDOW_DAYS = 30;
+function hasSetupStatus(cert: Certification): boolean {
+  if (!isSkillCatCert(cert) || audienceOf(cert.tags) !== AUDIENCE_ALL_USERS) return false;
+  const created = Date.parse(cert.dateCreated ?? "");
+  if (!created) return false;
+  return appToday().getTime() - created < SETUP_WINDOW_DAYS * 86_400_000;
+}
+
 type SetupStatus = {
+  /** The Certification gets Setup status at all (`hasSetupStatus`). */
+  eligible: boolean;
   steps: SetupSteps;
   /** The steps that apply to this Certification, keycapped 1…n in order. */
   list: SetupStepDef[];
@@ -78,7 +95,8 @@ type SetupStatus = {
   left: number;
   /** "Mark as Done" was pressed — the remaining steps don't apply. */
   closed: boolean;
-  /** Steps left, not closed, not archived: counted, pilled, bannered. */
+  /** Eligible, steps left, not closed, not archived: counted, pilled,
+   *  bannered. */
   pending: boolean;
 };
 
@@ -241,7 +259,6 @@ export function CertificationsPage({
   onImportCert,
   onRestoreCert,
   onEditCert,
-  onOpenCompanyDashboard,
   onViewPayers,
   onViewAllTasks,
   onManageContentLinks,
@@ -278,7 +295,6 @@ export function CertificationsPage({
   /** Upload Backup — the wizard opens filled from the backup's record. */
   onRestoreCert: (cert: Certification) => void;
   onEditCert: (cert: Certification) => void;
-  onOpenCompanyDashboard: (companyName: string) => void;
   onViewPayers: (cert: Certification) => void;
   onViewAllTasks: (cert: Certification) => void;
   onManageContentLinks: (cert: Certification) => void;
@@ -310,20 +326,17 @@ export function CertificationsPage({
   const certList = certs;
   const setCertList = setCerts;
   const [menu, setMenu] = useState<{ cert: Certification; rect: DOMRect } | null>(null);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useListState("certs:query", "");
   // Set when someone tries to edit a Certification owned by a company — company
   // certifications are managed from the B2B Dashboard, not here.
-  const [blockedEdit, setBlockedEdit] = useState<Certification | null>(null);
   // The Certification awaiting the delete confirm, if any.
   const [deleting, setDeleting] = useState<Certification | null>(null);
-  /* A Delete that other Certifications block: they require it in a Condition
-     Set or imported its Courses (certReferences), so it can't go until those
-     references are removed. Shown instead of the delete confirm. */
-  const [deleteBlocked, setDeleteBlocked] = useState<{ cert: Certification; refs: CertReference[] } | null>(null);
+  /* A Certification other Certifications require in a Condition Set
+     (certReferences) can't be deleted: its Delete menu item is disabled with
+     the reason, and the confirm never opens. */
   function requestDelete(cert: Certification) {
-    const refs = certReferences(cert.id, certList);
-    if (refs.length > 0) setDeleteBlocked({ cert, refs });
-    else setDeleting(cert);
+    if (certReferences(cert.id, certList).length > 0) return;
+    setDeleting(cert);
   }
   // The Certification awaiting a Hide confirmation — the Tasks page's Hide
   // modal (Figma 667:884). Unhiding is instant; only hiding routes through it.
@@ -333,12 +346,13 @@ export function CertificationsPage({
   const [drawerId, setDrawerId] = useState<string | null>(null);
   const drawerCert = drawerId ? certList.find((c) => c.id === drawerId) : undefined;
   // Created by SkillCat is applied on launch.
-  const [filters, setFilters] = useState<CertFilterState>({
+  const [filters, setFilters] = useListState<CertFilterState>("certs:filters", {
     industries: [],
     careerStages: [],
     types: [],
     creators: ["SkillCat"],
     visibilities: [],
+    archived: [],
     tags: [],
     setup: [],
   });
@@ -395,13 +409,15 @@ export function CertificationsPage({
       // The seed's long-settled Certifications arrive closed (data); a new one
       // closes when this admin presses Mark as Done.
       const closed = !!cert.setupClosed || !!closedSetup[cert.id];
+      const eligible = hasSetupStatus(cert);
       return {
+        eligible,
         steps,
         list,
         done,
         left,
         closed,
-        pending: left > 0 && !closed && (cert.visibility ?? "Visible") !== "Archived",
+        pending: eligible && left > 0 && !closed && !cert.archived,
       };
     },
     [setupStepsFor, closedSetup],
@@ -486,7 +502,7 @@ export function CertificationsPage({
   }
   /* Default columns: Name, Industry, Career Stage, Date Modified — everything
      else is opt-in from Edit Columns. */
-  const [columns, setColumns] = useState<CertColumnState>({
+  const [columns, setColumns] = useListState<CertColumnState>("certs:columns", {
     id: false,
     industry: true,
     careerStage: true,
@@ -502,9 +518,17 @@ export function CertificationsPage({
     dateCreated: false,
     dateModified: true,
   });
+  /* Display order of the optional columns (spec review 2026-10-09: the
+     Edit Columns menu reorders by drag, and a column switched back on lands
+     LAST). */
+  const [order, setOrder] = useListState<CertColumn[]>("certs:order", () => CERT_OPTIONAL_COLUMNS.map((c) => c.key));
+  const visibleCols = useMemo(
+    () => orderedColumns(CERT_OPTIONAL_COLUMNS, order, columns).map((c) => c.key),
+    [order, columns],
+  );
   // Most recently edited Certification first.
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "dateModified", dir: "desc" });
-  const [page, setPage] = useState(1);
+  const [sort, setSort] = useListState<{ key: SortKey; dir: SortDir }>("certs:sort", { key: "dateModified", dir: "desc" });
+  const [page, setPage] = useListState("certs:page", 1);
 
   // From Scratch goes straight to the wizard; the two upload paths stop at
   // their modal first.
@@ -522,9 +546,7 @@ export function CertificationsPage({
     !!drawerId ||
     !!industriesFor ||
     !!deleting ||
-    !!deleteBlocked ||
     !!hideTarget ||
-    !!blockedEdit ||
     !!menu;
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -603,7 +625,7 @@ export function CertificationsPage({
 
   const filtered = useMemo(() => {
     return certList.filter(
-      (c) => certMatches(c, query, filters) && setupMatches(setupFor(c).pending, filters.setup),
+      (c) => certMatches(c, query, filters) && setupMatches(setupFor(c), filters.setup),
     );
   }, [query, filters, certList, setupFor]);
 
@@ -618,9 +640,7 @@ export function CertificationsPage({
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
 
-  useEffect(() => {
-    setPage(1);
-  }, [query, filters, sort]);
+  useResetPageOnChange(setPage, [query, filters, sort]);
 
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
@@ -654,22 +674,7 @@ export function CertificationsPage({
 
   // Natural table width so columns scroll horizontally instead of crushing.
   const tableMin =
-    240 /* name */ +
-    40 /* actions */ +
-    (columns.id ? 100 : 0) +
-    (columns.industry ? 190 : 0) +
-    (columns.careerStage ? 140 : 0) +
-    (columns.type ? 130 : 0) +
-    (columns.payment ? 150 : 0) +
-    (columns.tasks ? 90 : 0) +
-    (columns.ceus ? 90 : 0) +
-    (columns.createdBy ? 180 : 0) +
-    (columns.tradeTag ? 210 : 0) +
-    (columns.partnershipTag ? 160 : 0) +
-    (columns.audience ? 150 : 0) +
-    (columns.visibility ? 120 : 0) +
-    (columns.dateCreated ? 130 : 0) +
-    (columns.dateModified ? 130 : 0);
+    240 /* name */ + 40 /* actions */ + visibleCols.reduce((sum, k) => sum + CERT_COL_META[k].width, 0);
 
   function toggleSort(key: SortKey) {
     setSort((prev) =>
@@ -683,12 +688,10 @@ export function CertificationsPage({
     );
   }
 
-  /* Hide / Show flips Visible ⇄ Hidden and nothing else. Archive is its own
-     state, entered and left only on the Archive & Replace page, so an
-     archived Certification has no visibility toggle (row bar or menu) and
-     this never touches one. */
+  /* Hide / Show flips Visible ⇄ Hidden and nothing else. Archived is its own
+     flag (set and cleared only on the Archive & Replace page), so an archived
+     Certification still has the toggle and keeps its archived flag. */
   function toggleHidden(cert: Certification) {
-    if (cert.visibility === "Archived") return;
     // Making a Certification visible again is instant — only hiding needs
     // confirming, as it does for a Task.
     if ((cert.visibility ?? "Visible") !== "Visible") {
@@ -699,29 +702,29 @@ export function CertificationsPage({
     setHideTarget(cert);
   }
 
-  // A row menu opened from the preview panel's kebab: every item closes the
-  // panel first, so the modal or page it opens isn't left under the panel.
+  /* A row menu opened from the preview panel's kebab (spec review
+     2026-10-09): an item that NAVIGATES to another page closes the panel
+     first; an item that opens a MODAL (Hide, Delete, its blocked explainer,
+     Edit's company-owned explainer) leaves the panel open behind it, so the
+     panel shows the result when the modal closes. */
   function closePanelThen(run: () => void) {
     setDrawerId(null);
     run();
   }
 
   function editCert(cert: Certification) {
-    // Certifications created by a company are owned by that company's B2B account
-    // and can only be edited from the B2B Dashboard. Everything else is SkillCat-owned.
-    if (cert.createdBy !== "SkillCat") {
-      setBlockedEdit(cert);
-      return;
-    }
-    onEditCert(cert);
+    // A company-created Certification is edited only from that company's B2B
+    // Dashboard: its Edit menu item is disabled and says so (the Tasks
+    // pattern, Figma 735:1375), and its row has no Edit quick action.
+    if (!isSkillCatCert(cert)) return;
+    closePanelThen(() => onEditCert(cert));
   }
 
   function deleteCert(cert: Certification) {
-    // Referenced since the confirm opened: explain instead (App won't delete it).
-    const refs = certReferences(cert.id, certList);
-    if (refs.length > 0) {
+    // Referenced since the confirm opened: App won't delete it, and the
+    // menu item now says why.
+    if (certReferences(cert.id, certList).length > 0) {
       setDeleting(null);
-      setDeleteBlocked({ cert, refs });
       return;
     }
     // The record and everything tied to it go in App (links, Award, form
@@ -863,30 +866,29 @@ export function CertificationsPage({
                 </div>
 
                 <table ref={head.theadRef} className="table table-head">
-                  <CertColGroup columns={columns} />
+                  <CertColGroup cols={visibleCols} />
                   <thead>
                     <tr>
                       <SortableHeader col="name" label="Name" className="col-name" sort={sort} toggle={toggleSort} />
-                      {columns.id && <SortableHeader col="id" label="ID" className="col-id" sort={sort} toggle={toggleSort} />}
-                      {columns.industry && <SortableHeader col="industry" label="Industries" className="col-used" sort={sort} toggle={toggleSort} />}
-                      {columns.careerStage && <SortableHeader col="careerStage" label="Career Stage" className="col-type" sort={sort} toggle={toggleSort} />}
-                      {columns.type && <SortableHeader col="type" label="Type" className="col-type" sort={sort} toggle={toggleSort} />}
-                      {columns.payment && <SortableHeader col="payment" label="Payment" className="col-type" sort={sort} toggle={toggleSort} />}
-                      {columns.tasks && <SortableHeader col="tasks" label="Tasks" className="col-type" sort={sort} toggle={toggleSort} />}
-                      {columns.ceus && <SortableHeader col="ceus" label="CEUs" className="col-type" sort={sort} toggle={toggleSort} />}
-                      {columns.createdBy && <SortableHeader col="createdBy" label="Created By" className="col-creator" sort={sort} toggle={toggleSort} sortable={false} />}
-                      {columns.tradeTag && <SortableHeader col="tradeTag" label="Trade Tag" className="col-tags" sort={sort} toggle={toggleSort} sortable={false} />}
-                      {columns.partnershipTag && <SortableHeader col="partnershipTag" label="Partnership Tag" className="col-tags" sort={sort} toggle={toggleSort} sortable={false} />}
-                      {columns.audience && <SortableHeader col="audience" label="Audience" className="col-tags" sort={sort} toggle={toggleSort} sortable={false} />}
-                      {columns.visibility && <SortableHeader col="visibility" label="Visibility" className="col-type" sort={sort} toggle={toggleSort} />}
-                      {columns.dateCreated && <SortableHeader col="dateCreated" label="Date Created" className="col-date" sort={sort} toggle={toggleSort} />}
-                      {columns.dateModified && <SortableHeader col="dateModified" label="Date Modified" className="col-date" sort={sort} toggle={toggleSort} />}
+                      {visibleCols.map((k) => (
+                        <SortableHeader
+                          key={k}
+                          col={k}
+                          label={CERT_COL_META[k].label}
+                          className={CERT_COL_META[k].className}
+                          sort={sort}
+                          toggle={toggleSort}
+                          sortable={CERT_COL_META[k].sortable !== false}
+                        />
+                      ))}
                       <th className="col-actions">
                         <EditColumnsButton
                           columns={columns}
                           setColumns={setColumns}
                           optional={CERT_OPTIONAL_COLUMNS}
                           fixed={CERT_FIXED_COLUMNS}
+                          order={order}
+                          onOrderChange={setOrder}
                         />
                       </th>
                     </tr>
@@ -895,13 +897,13 @@ export function CertificationsPage({
 
                 <div className="tasks-scroll">
                   <table className="table table-body">
-                    <CertColGroup columns={columns} />
+                    <CertColGroup cols={visibleCols} />
                     <tbody>
                       {paged.map((cert) => (
                         <CertRow
                           key={cert.id}
                           cert={cert}
-                          columns={columns}
+                          cols={visibleCols}
                           setup={(() => {
                             const st = setupFor(cert);
                             return st.pending ? { done: st.done, left: st.left, total: st.list.length } : undefined;
@@ -938,9 +940,10 @@ export function CertificationsPage({
           cert={menu.cert}
           rect={menu.rect}
           onClose={() => setMenu(null)}
-          onEdit={() => closePanelThen(() => editCert(menu.cert))}
-          onToggleVisibility={() => closePanelThen(() => toggleHidden(menu.cert))}
-          onDelete={() => closePanelThen(() => requestDelete(menu.cert))}
+          onEdit={() => editCert(menu.cert)}
+          onToggleVisibility={() => toggleHidden(menu.cert)}
+          onDelete={() => requestDelete(menu.cert)}
+          deleteRefs={certReferences(menu.cert.id, certList)}
           onViewPayers={() => closePanelThen(() => onViewPayers(menu.cert))}
           onViewAllTasks={() => closePanelThen(() => onViewAllTasks(menu.cert))}
           hasAward={!!awardForCert(menu.cert)}
@@ -978,17 +981,6 @@ export function CertificationsPage({
         />
       )}
 
-      {blockedEdit && (
-        <CompanyEditBlockedModal
-          companyName={blockedEdit.createdBy}
-          onClose={() => setBlockedEdit(null)}
-          onOpenDashboard={() => {
-            onOpenCompanyDashboard(blockedEdit.createdBy);
-            setBlockedEdit(null);
-          }}
-        />
-      )}
-
       {deleting && (
         <PrmModal
           title="Delete Certification"
@@ -1011,14 +1003,6 @@ export function CertificationsPage({
             undone.
           </p>
         </PrmModal>
-      )}
-
-      {deleteBlocked && (
-        <DeleteBlockedModal
-          cert={deleteBlocked.cert}
-          refs={deleteBlocked.refs}
-          onClose={() => setDeleteBlocked(null)}
-        />
       )}
 
       {hideTarget && (
@@ -1295,11 +1279,12 @@ function CertDrawer({
 }) {
   const pv = useCertPreview(cert);
   const vis = cert.visibility ?? "Visible";
-  /* Live = Visible with at least one Task in its stored tree (a hidden one,
-     or one whose Courses hold no Tasks yet, reads "Not live yet"). Only the
+  /* Live = Visible, not archived, with at least one Task in its stored tree
+     (a hidden or archived one, or one whose Courses hold no Tasks yet, reads
+     "Not live yet"). Only the
      seed has enrolment history; a Certification created this session starts
      at zero. */
-  const live = vis === "Visible" && pv.taskCount > 0;
+  const live = vis === "Visible" && !cert.archived && pv.taskCount > 0;
   const enrolled = seededInt(cert.id, "enrolled", 140, 4200);
   const completed = Math.round((enrolled * seededInt(cert.id, "rate", 38, 84)) / 100);
   const stats: PreviewStat[] = live && !pv.hasHistory
@@ -1400,34 +1385,32 @@ function TagCell({ tags }: { tags: string[] }) {
   );
 }
 
-function CertColGroup({ columns }: { columns: CertColumnState }) {
-  return (
-    <TableCols
-      data={[
-        240,
-        columns.id && 100,
-        columns.industry && 190,
-        columns.careerStage && 140,
-        columns.type && 130,
-        columns.payment && 150,
-        columns.tasks && 90,
-        columns.ceus && 90,
-        columns.createdBy && 180,
-        columns.tradeTag && 210,
-        columns.partnershipTag && 160,
-        columns.audience && 150,
-        columns.visibility && 120,
-        columns.dateCreated && 130,
-        columns.dateModified && 130,
-      ]}
-      trail={[40]}
-    />
-  );
+/** Each optional column's header label, class and width — one table for
+ *  the header, the colgroup and the scroll width, in whatever order. */
+const CERT_COL_META: Record<CertColumn, { label: string; className: string; width: number; sortable?: false }> = {
+  id: { label: "ID", className: "col-id", width: 100 },
+  industry: { label: "Industries", className: "col-used", width: 190 },
+  careerStage: { label: "Career Stage", className: "col-type", width: 140 },
+  type: { label: "Type", className: "col-type", width: 130 },
+  payment: { label: "Payment", className: "col-type", width: 150 },
+  tasks: { label: "Tasks", className: "col-type", width: 90 },
+  ceus: { label: "CEUs", className: "col-type", width: 90 },
+  createdBy: { label: "Created By", className: "col-creator", width: 180, sortable: false },
+  tradeTag: { label: "Trade Tag", className: "col-tags", width: 210, sortable: false },
+  partnershipTag: { label: "Partnership Tag", className: "col-tags", width: 160, sortable: false },
+  audience: { label: "Audience", className: "col-tags", width: 150, sortable: false },
+  visibility: { label: "Visibility", className: "col-type", width: 120 },
+  dateCreated: { label: "Date Created", className: "col-date", width: 130 },
+  dateModified: { label: "Date Modified", className: "col-date", width: 130 },
+};
+
+function CertColGroup({ cols }: { cols: CertColumn[] }) {
+  return <TableCols data={[240, ...cols.map((k) => CERT_COL_META[k].width)]} trail={[40]} />;
 }
 
 function CertRow({
   cert,
-  columns,
+  cols,
   setup,
   onOpen,
   onEdit,
@@ -1436,7 +1419,8 @@ function CertRow({
   menuOpen,
 }: {
   cert: Certification;
-  columns: CertColumnState;
+  /** The visible optional columns, in the admin's order. */
+  cols: CertColumn[];
   /** Set while post-creation setup steps are left: the "Setup n/4" pill. */
   setup?: { done: number; left: number; total: number };
   /** A click anywhere on the row outside its action buttons. */
@@ -1449,18 +1433,20 @@ function CertRow({
 }) {
   const vis = cert.visibility ?? "Visible";
   const hidden = vis === "Hidden";
-  const archived = vis === "Archived";
+  const archived = !!cert.archived;
   return (
     <tr
-      className={`${vis !== "Visible" ? "task-dim" : ""} ${menuOpen ? "menu-open" : ""}`}
+      className={`${hidden || archived ? "task-dim" : ""} ${menuOpen ? "menu-open" : ""}`}
       onClick={onOpen}
     >
       <td className="col-name" data-tip={cert.name}>
         <span className="tsk-name">{cert.name}</span>
-        {/* Hidden (and Archived) read exactly as a hidden Task row does
+        {/* Hidden and Archived read exactly as a hidden Task row does
             (1126:1686): grey pill beside a muted name, every other cell
-            dimmed — see `.task-dim` in the CSS. */}
-        {vis !== "Visible" && <span className="pr-name-flag pr-name-flag--grey">{vis}</span>}
+            dimmed — see `.task-dim` in the CSS. They are independent, so an
+            archived Hidden Certification carries both. */}
+        {archived && <span className="pr-name-flag pr-name-flag--grey">Archived</span>}
+        {hidden && <span className="pr-name-flag pr-name-flag--grey">Hidden</span>}
         {/* The shared yellow name flag — the same pill as Exam Reviews' "New
             ID" (Figma 994:1081 "Table Pills - Yellow"), its hover tip in the
             shared tooltip. Clicking it is a row click: the panel opens on the
@@ -1471,30 +1457,35 @@ function CertRow({
           </span>
         )}
       </td>
-      {columns.id && <td className="col-id">{cert.id}</td>}
-      {columns.industry && <td className="col-used" data-tip={certIndustryText(cert.industries)}>{certIndustryText(cert.industries)}</td>}
-      {columns.careerStage && <td className="col-type">{cert.careerStage ?? ""}</td>}
-      {columns.type && <td className="col-type">{cert.type ?? ""}</td>}
-      {columns.payment && (
-        <td className="col-type">
-          {cert.payment ? (
-            <span className={`pay-badge pay-badge--${cert.payment === "Consumable" ? "consumable" : "nonconsumable"}`}>
-              {cert.payment}
-            </span>
-          ) : (
-            <span className="pay-badge pay-badge--free">Free</span>
-          )}
-        </td>
-      )}
-      {columns.tasks && <td className="col-type">{cert.tasks}</td>}
-      {columns.ceus && <td className="col-type">{cert.ceus}</td>}
-      {columns.createdBy && <td className="col-creator" data-tip={cert.createdBy}>{cert.createdBy}</td>}
-      {columns.tradeTag && <TagCell tags={pickTags(cert.tags, TRADE_TAGS)} />}
-      {columns.partnershipTag && <TagCell tags={pickTags(cert.tags, PARTNERSHIP_TAGS)} />}
-      {columns.audience && <td className="col-tags">{audienceOf(cert.tags)}</td>}
-      {columns.visibility && <td className="col-type">{vis}</td>}
-      {columns.dateCreated && <td className="col-date">{cert.dateCreated ?? ""}</td>}
-      {columns.dateModified && <td className="col-date">{cert.dateModified ?? ""}</td>}
+      {cols.map((k) => {
+        switch (k) {
+          case "id": return <td key={k} className="col-id">{cert.id}</td>;
+          case "industry": return <td key={k} className="col-used" data-tip={certIndustryText(cert.industries)}>{certIndustryText(cert.industries)}</td>;
+          case "careerStage": return <td key={k} className="col-type">{cert.careerStage ?? ""}</td>;
+          case "type": return <td key={k} className="col-type">{cert.type ?? ""}</td>;
+          case "payment":
+            return (
+              <td key={k} className="col-type">
+                {cert.payment ? (
+                  <span className={`pay-badge pay-badge--${cert.payment === "Consumable" ? "consumable" : "nonconsumable"}`}>
+                    {cert.payment}
+                  </span>
+                ) : (
+                  <span className="pay-badge pay-badge--free">Free</span>
+                )}
+              </td>
+            );
+          case "tasks": return <td key={k} className="col-type">{cert.tasks}</td>;
+          case "ceus": return <td key={k} className="col-type">{cert.ceus}</td>;
+          case "createdBy": return <td key={k} className="col-creator" data-tip={cert.createdBy}>{cert.createdBy}</td>;
+          case "tradeTag": return <TagCell key={k} tags={pickTags(cert.tags, TRADE_TAGS)} />;
+          case "partnershipTag": return <TagCell key={k} tags={pickTags(cert.tags, PARTNERSHIP_TAGS)} />;
+          case "audience": return <td key={k} className="col-tags">{audienceOf(cert.tags)}</td>;
+          case "visibility": return <td key={k} className="col-type">{vis}</td>;
+          case "dateCreated": return <td key={k} className="col-date">{cert.dateCreated ?? ""}</td>;
+          case "dateModified": return <td key={k} className="col-date">{cert.dateModified ?? ""}</td>;
+        }
+      })}
       <td className="col-actions">
         <button
           className="row-action-btn lone-dots"
@@ -1504,26 +1495,28 @@ function CertRow({
           <RowKebabIcon />
         </button>
         <div className="row-action-bar">
-          <button
-            className="row-action-btn"
-            aria-label="Edit"
-            title="Edit certification"
-            onClick={(e) => { e.stopPropagation(); onEdit(); }}
-          >
-            <RowEditIcon />
-          </button>
-          {/* Hide / Show only flips Visible ⇄ Hidden. Archive is separate
-              (its own page), so an archived row has no toggle. */}
-          {!archived && (
+          {/* No Edit quick action on a company-created Certification — its
+              menu item is disabled with the reason. */}
+          {isSkillCatCert(cert) && (
             <button
               className="row-action-btn"
-              aria-label={hidden ? "Make visible" : "Hide certification"}
-              title={hidden ? "Make visible" : "Hide certification"}
-              onClick={(e) => { e.stopPropagation(); onToggleVisibility(); }}
+              aria-label="Edit"
+              title="Edit certification"
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
             >
-              {hidden ? <RowEyeOffIcon /> : <RowEyeIcon />}
+              <RowEditIcon />
             </button>
           )}
+          {/* Hide / Show only flips Visible ⇄ Hidden — archived rows too,
+              since Archived is its own flag. */}
+          <button
+            className="row-action-btn"
+            aria-label={hidden ? "Make visible" : "Hide certification"}
+            title={hidden ? "Make visible" : "Hide certification"}
+            onClick={(e) => { e.stopPropagation(); onToggleVisibility(); }}
+          >
+            {hidden ? <RowEyeOffIcon /> : <RowEyeIcon />}
+          </button>
           <button
             className="row-action-btn"
             aria-label="More"
@@ -1549,6 +1542,7 @@ function CertActionsMenu({
   onEdit,
   onToggleVisibility,
   onDelete,
+  deleteRefs,
   onViewPayers,
   onViewAllTasks,
   hasAward,
@@ -1564,6 +1558,9 @@ function CertActionsMenu({
   onEdit: () => void;
   onToggleVisibility: () => void;
   onDelete: () => void;
+  /** The Certifications that require this one in a Condition Set — Delete is
+   *  disabled while there are any. */
+  deleteRefs: CertReference[];
   onViewPayers: () => void;
   onViewAllTasks: () => void;
   hasAward: boolean;
@@ -1605,28 +1602,42 @@ function CertActionsMenu({
     };
   }, [onClose]);
 
+  /* `reason` disables the row and says why on a second line — the Tasks
+     menu's disabled item (Figma 735:1375). `tip` adds the shared tooltip
+     on hover, for detail too long for that line. */
   const item = (
     icon: JSX.Element,
     label: string,
     onPick: () => void,
     danger = false,
+    reason?: string,
+    tip?: string,
   ) => (
     <button
       className={`u-menu-item ${danger ? "u-menu-item--danger" : ""}`}
+      disabled={!!reason}
+      data-tip={tip}
       onClick={(e) => {
         e.stopPropagation();
+        if (reason) return;
         onPick();
         onClose();
       }}
     >
       <span className="u-menu-item-icon">{icon}</span>
-      {label}
+      {reason ? (
+        <span className="u-menu-item-text">
+          <span>{label}</span>
+          <span className="u-menu-item-sub">{reason}</span>
+        </span>
+      ) : (
+        label
+      )}
     </button>
   );
 
-  const vis = cert.visibility ?? "Visible";
-  const hidden = vis !== "Visible";
-  const archived = vis === "Archived";
+  const hidden = (cert.visibility ?? "Visible") === "Hidden";
+  const archived = !!cert.archived;
 
   return (
     <div
@@ -1639,20 +1650,32 @@ function CertActionsMenu({
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      {item(<RowEditIcon />, "Edit Certification", onEdit)}
-      {/* Hide / Show only flips Visible ⇄ Hidden; an archived Cert has no
-          visibility entry (Unarchive lives on its Archive & Replace page). */}
-      {!archived &&
-        item(
-          hidden ? <RowEyeIcon /> : <RowEyeOffIcon />,
-          hidden ? "Make Visible" : "Make Hidden",
-          onToggleVisibility,
-        )}
+      {item(
+        <RowEditIcon />,
+        "Edit Certification",
+        onEdit,
+        false,
+        isSkillCatCert(cert) ? undefined : "Can only be edited from the B2B Dashboard",
+      )}
+      {/* Hide / Show only flips Visible ⇄ Hidden, archived or not —
+          Archived is its own flag (Unarchive lives on the Archive & Replace
+          page). */}
+      {item(
+        hidden ? <RowEyeIcon /> : <RowEyeOffIcon />,
+        hidden ? "Make Visible" : "Make Hidden",
+        onToggleVisibility,
+      )}
       {/* Only paid certifications have payers to view. */}
       {cert.payment && item(<MenuPaidIcon />, "View Who Paid", onViewPayers)}
-      {/* Content Links are SkillCat-catalog only: a company-created Cert has
-          none to manage (no Setup step either — App `setupStepsFor`). */}
-      {isSkillCatCert(cert) && item(<MenuLinkIcon />, "Manage Content Links", onManageContentLinks)}
+      {/* Content Links are SkillCat-catalog only: on a company-created Cert
+          the entry stays, disabled with the reason (the 668:942 pattern). */}
+      {item(
+        <MenuLinkIcon />,
+        "Manage Content Links",
+        onManageContentLinks,
+        false,
+        isSkillCatCert(cert) ? undefined : "Only SkillCat-created Certifications can have Content Links",
+      )}
       {item(<MenuProgressIcon />, "Manage User Progress", onManageProgress)}
       {/* Opens the Tasks page with this Certification already in the filter
           row — the Tasks a Cert is built from, without retyping the name. */}
@@ -1660,7 +1683,15 @@ function CertActionsMenu({
       {/* Figma 1226:1425 — "Add Award", between View All Tasks and Backup.
           A Certification can hold at most one Award, so the entry is the
           Award's whole life cycle: it reads "Manage Award" once there is one. */}
-      {item(<MenuAwardIcon />, hasAward ? "Manage Award" : "Add Award", onManageAward)}
+      {/* A company-created Certification can't have one: disabled, with
+          the reason. */}
+      {item(
+        <MenuAwardIcon />,
+        hasAward ? "Manage Award" : "Add Award",
+        onManageAward,
+        false,
+        isSkillCatCert(cert) ? undefined : "Only SkillCat-created Certifications can have an Award",
+      )}
       {item(<MenuBackupIcon />, "Backup Certification", onBackup)}
       {/* Archiving used to be an edit-only step inside the Cert wizard; it's
           now this entry, opening its own full-page Archive & Replace view.
@@ -1671,7 +1702,20 @@ function CertActionsMenu({
         archived ? "Manage Archive & Replace Settings" : "Archive & Replace",
         onArchive,
       )}
-      {item(<RowDeleteIcon />, "Delete Certification", onDelete, true)}
+      {/* Required in another Certification's Condition Set: disabled (the
+          668:942 pattern), each referencing Certification named on hover. */}
+      {item(
+        <RowDeleteIcon />,
+        "Delete Certification",
+        onDelete,
+        true,
+        deleteRefs.length
+          ? `Currently required by ${deleteRefs.length} Certification${deleteRefs.length === 1 ? "" : "s"}. Remove it from ${deleteRefs.length === 1 ? "that Certification's" : "their"} Completion Criteria to proceed.`
+          : undefined,
+        deleteRefs.length
+          ? `Required in the Completion Criteria of:\n${deleteRefs.map((r) => `• ${r.cert.name}`).join("\n")}`
+          : undefined,
+      )}
     </div>
   );
 }
@@ -1704,76 +1748,3 @@ function SortableHeader({
   );
 }
 
-/** Delete, blocked: other Certifications build on this one (a Condition Set
- *  requires it, or they imported its Courses). Acknowledgment only, no
- *  destructive CTA — the same shape as the Tasks page's blocked Hide/Delete.
- *  Each referencing Certification is named with where it holds the reference. */
-function DeleteBlockedModal({
-  cert,
-  refs,
-  onClose,
-}: {
-  cert: Certification;
-  refs: CertReference[];
-  onClose: () => void;
-}) {
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  return (
-    <PrmModal
-      title="Can't Delete Certification"
-      confirmLabel="Okay"
-      hideCancel
-      onCancel={onClose}
-      onConfirm={onClose}
-    >
-      <div className="prm-content">
-        <p>
-          <strong>{cert.name}</strong> is used by{" "}
-          {refs.length === 1 ? "another Certification" : `${refs.length} other Certifications`}:
-        </p>
-        <ul>
-          {refs.map((r) => (
-            <li key={r.cert.id}>
-              <strong>{r.cert.name}</strong>
-              {r.where.map((w) => (
-                <div key={w}>{w}</div>
-              ))}
-            </li>
-          ))}
-        </ul>
-        <p>Remove it from {refs.length === 1 ? "that Certification" : "those Certifications"} first, then delete it.</p>
-      </div>
-    </PrmModal>
-  );
-}
-
-function CompanyEditBlockedModal({
-  companyName,
-  onClose,
-  onOpenDashboard,
-}: {
-  companyName: string;
-  onClose: () => void;
-  onOpenDashboard: () => void;
-}) {
-  return (
-    <PrmModal
-      title="Can't edit this certification here"
-      confirmLabel="Open Company Dashboard"
-      onCancel={onClose}
-      onConfirm={onOpenDashboard}
-    >
-      <p className="prm-content">
-        Certifications created by a company can only be edited from the B2B
-        Dashboard. Login as <strong>{companyName}</strong> to make changes.
-      </p>
-    </PrmModal>
-  );
-}

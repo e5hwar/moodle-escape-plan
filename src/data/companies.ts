@@ -30,7 +30,7 @@ export type SubscriptionStatus =
   | "Trial Expired"
   | "Free Access"
   | "Free Access Ended"
-  | "Canceled";
+  | "Cancelled";
 // Mirrors the B2B roles used across the app (Manage Users): Admins and
 // Managers carry a role tag in pickers; plain Employees show none.
 export type CompanyRole = "Account Holder" | "Admin" | "Manager" | "Employee";
@@ -97,7 +97,7 @@ export type Company = {
   /** Date a scheduled cancellation takes effect, as "Mon D, YYYY" (e.g.
    *  "Aug 27, 2026"). Set when a subscription is cancelled through the UI. The
    *  date is the source of truth for which pill shows: before it the status
-   *  reads "Cancels Aug 27, 2026", on or after it just "Canceled". */
+   *  reads "Cancels Aug 27, 2026", on or after it just "Cancelled". */
   cancelsOn?: string;
   /** "YYYY-MM-DD" — the day a Free Trial ends, stamped by the wizard when the
    *  trial starts (today + Product Config's B2B trial length). The preview
@@ -115,6 +115,10 @@ export type Company = {
    *  opposed to a trial / grant / cancelled account that moved there. Only
    *  these can be deleted — see canDeleteCompany. */
   createdPending?: boolean;
+  /** Has been on a paid Subscription at some point, so it has Stripe invoices,
+   *  whatever its status now — set when a subscribed account moves onto Free
+   *  Access, a reactivation or the like. See hasSubscriptionHistory. */
+  subscribedBefore?: boolean;
   /** The company's employee roster once someone has changed it here (Change
    *  Account Holder). Absent, the roster is derived — see getCompanyUsers. */
   roster?: CompanyUser[];
@@ -193,7 +197,7 @@ export const SUBSCRIPTION_STATUSES: SubscriptionStatus[] = [
   "Trial Expired",
   "Free Access",
   "Free Access Ended",
-  "Canceled",
+  "Cancelled",
 ];
 
 /* Statuses that actually collect money. Everything else — a running trial, an
@@ -206,7 +210,7 @@ export function isBilledStatus(status: SubscriptionStatus): boolean {
     status === "Active" ||
     status === "Pending Payment Setup" ||
     status === "Past Due" ||
-    status === "Canceled"
+    status === "Cancelled"
   );
 }
 
@@ -219,8 +223,9 @@ export const SIGN_UP_CHANNELS: SignUpChannel[] = ["Self Sign-Up", "Internal Sign
 // Alphabetical, the way the pickers list them.
 export const CSM_OPTIONS = ["Corinne Hayes", "Leanna Olbinsky", "Simran Phulwani"];
 export const SALES_REP_OPTIONS = ["Brendan Arsenault", "Elliot Ling", "Ruchir Shah"];
-/** The filters' option for an account nobody has been assigned to. */
-export const UNASSIGNED = "Unassigned";
+/** The filters' option for an account nobody has been assigned to — "None",
+ *  the same word every Companies pill uses for "no value". */
+export const NO_ASSIGNEE = "None";
 
 export const PAYMENT_COLLECTIONS: PaymentCollection[] = ["Automatic", "Invoice"];
 
@@ -262,10 +267,10 @@ export const COMPANY_OPTIONAL_COLUMNS: { key: CompanyColumn; label: string }[] =
   { key: "signUp", label: "Sign-Up Method" },
   { key: "billingCycle", label: "Billing Cycle" },
   { key: "payment", label: "Payment Method" },
-  { key: "industry", label: "Industries" },
+  { key: "industry", label: "Trade" },
   { key: "partnership", label: "Partnership" },
   { key: "createdOn", label: "Created On" },
-  { key: "canceledOn", label: "Canceled On" },
+  { key: "canceledOn", label: "Cancelled On" },
   { key: "trialEndDate", label: "Trial End Date" },
   { key: "price", label: "Price" },
   { key: "salesRep", label: "Assigned Sales Rep" },
@@ -662,6 +667,8 @@ export const companies: Company[] = [
     },
     status: "Free Access",
     freeAccessEndDate: "2027-02-28",
+    // Paid before the grant, so its old invoices stand (View Invoices).
+    subscribedBefore: true,
   },
   {
     id: "CO-020",
@@ -767,7 +774,7 @@ export const companies: Company[] = [
   },
   {
     // Subscription scheduled to cancel at the end of the cycle — demonstrates
-    // the grey "Cancels on …" status pill (vs. an already-ended "Canceled").
+    // the grey "Cancels on …" status pill (vs. an already-ended "Cancelled").
     id: "CO-026",
     name: "Apex Mechanical Group",
     email: "billing@apexmech.com",
@@ -785,11 +792,11 @@ export const companies: Company[] = [
     },
     // No stored date: a seed's scheduled cancellation lands on its next
     // cycle boundary, worked out from today (getCompanyBilling).
-    status: "Canceled",
+    status: "Cancelled",
   },
   {
     // Cancellation that has already taken effect — demonstrates the plain
-    // "Canceled" pill (same grey tone as the scheduled "Cancels …" one above).
+    // "Cancelled" pill (same grey tone as the scheduled "Cancels …" one above).
     id: "CO-029",
     name: "Bluecrest Plumbing Co.",
     email: "accounts@bluecrestplumbing.com",
@@ -805,7 +812,7 @@ export const companies: Company[] = [
       pin: "63101",
       state: "Missouri",
     },
-    status: "Canceled",
+    status: "Cancelled",
     // A billing boundary — everyone bills on the 1st (Section 21.5).
     cancelsOn: "Mar 1, 2026",
   },
@@ -828,6 +835,7 @@ export const companies: Company[] = [
     },
     status: "Free Access",
     freeAccessEndDate: "2026-03-01",
+    subscribedBefore: true,
   },
   {
     id: "CO-028",
@@ -876,7 +884,7 @@ export function useLiveCompanies(): Company[] {
   );
 }
 
-/* Filter options for Industries / Partnership come from Product Config's
+/* Filter options for Trade / Partnership come from Product Config's
  * Trade and Partnership lists (productConfig.ts), not from whatever the seed
  * companies happen to carry. "None" leads both — the only way to ask for
  * companies with no value set (the same sentinel as Question Bank's NO_QUIZ). */
@@ -979,7 +987,7 @@ export type CompanyBilling = {
   /** Effective date of a cancellation, e.g. "Aug 27, 2026". */
   cancelsOn: string;
   /** True while `cancelsOn` is still in the future ("Cancels Aug 27, 2026");
-   *  false once that date has passed ("Canceled"). */
+   *  false once that date has passed ("Cancelled"). */
   cancelScheduled: boolean;
   /** Why the subscription was cancelled — shown on the status pill's hover.
    *  "" when no reason was given. */
@@ -1032,7 +1040,7 @@ export function getCompanyBilling(c: Company): CompanyBilling {
   // a complimentary grant is a status the record carries explicitly, and seed
   // companies without one fall to the paying spread.
   const declared: SubscriptionStatus =
-    c.status ?? (h % 17 === 0 ? "Canceled" : h % 7 === 0 ? "Past Due" : "Active");
+    c.status ?? (h % 17 === 0 ? "Cancelled" : h % 7 === 0 ? "Past Due" : "Active");
 
   // A Free Access grant past its end date reads "Free Access Ended" even if the
   // record still says "Free Access" — the date is the source of truth once set.
@@ -1078,8 +1086,8 @@ export function getCompanyBilling(c: Company): CompanyBilling {
       ? "Free Access — no invoice"
       : status === "Free Access Ended"
       ? "Free Access ended — no access"
-      : status === "Canceled"
-      ? "Canceled"
+      : status === "Cancelled"
+      ? "Cancelled"
       : status === "Pending Payment Setup"
       ? "Awaiting payment method"
       : fmtDate(nextCycleBoundary(c, billingCycle));
@@ -1128,15 +1136,15 @@ export function getCompanyBilling(c: Company): CompanyBilling {
   // alternates between the two cases, and both sit on a cycle boundary: a
   // scheduled one on the company's NEXT boundary, an ended one on a past 1st.
   // Either way the DATE decides which pill shows, so a stored cancelsOn that
-  // has since passed reads "Canceled".
+  // has since passed reads "Cancelled".
   const hx = hash(c.id + "cancel");
   const cancelsOn =
     c.cancelsOn ??
     // `>>>`, not `>>`: hash is unsigned, and a signed shift past 2^31 would
     // flip the offset's sign.
     fmtDate(
-      // A seed that declares "Canceled" without a date is the scheduled case.
-      c.status === "Canceled" || hx % 2 === 0
+      // A seed that declares "Cancelled" without a date is the scheduled case.
+      c.status === "Cancelled" || hx % 2 === 0
         ? nextCycleBoundary(c, billingCycle)
         : new Date(today.getFullYear(), today.getMonth() - (1 + ((hx >>> 3) % 13)), 1),
     );
@@ -1200,10 +1208,10 @@ export function getStatusPill(billing: CompanyBilling): { tone: StatusPillTone; 
       return { tone: "secondary", label: "Free Access" };
     case "Free Access Ended":
       return { tone: "grey", label: "Free Access Ended" };
-    case "Canceled":
+    case "Cancelled":
       return billing.cancelScheduled
         ? { tone: "grey", label: `Cancels ${billing.cancelsOn}` }
-        : { tone: "grey", label: "Canceled" };
+        : { tone: "grey", label: "Cancelled" };
     default:
       return { tone: "grey", label: billing.status };
   }
@@ -1267,19 +1275,19 @@ export function getStatusTip(billing: CompanyBilling): string | null {
     case "Past Due":
       return `${billing.daysPastDue} ${billing.daysPastDue === 1 ? "day" : "days"} past due. Company loses access on ${billing.accessEndsOn}`;
     // No reason given, no hover.
-    case "Canceled":
+    case "Cancelled":
       return billing.cancellationReason ? `Reason: ${billing.cancellationReason}` : null;
     default:
       return null;
   }
 }
 
-/* "Canceled On" column (Manage Companies) — the date a subscription actually
+/* "Cancelled On" column (Manage Companies) — the date a subscription actually
  * ended. Only set once cancellation has taken effect; a subscription that's
  * merely scheduled to cancel ("Cancels …") hasn't ended yet, so it reads
  * "—" here until that date passes. */
 export function getCanceledOn(billing: CompanyBilling): string {
-  if (billing.status === "Canceled" && !billing.cancelScheduled) return billing.cancelsOn;
+  if (billing.status === "Cancelled" && !billing.cancelScheduled) return billing.cancelsOn;
   return "—";
 }
 
@@ -1338,6 +1346,17 @@ function daysSince(d: Date): number {
   return Math.round((appToday().getTime() - d.getTime()) / 86400000);
 }
 
+/* Whether the company has ever been on a paid Subscription — and so has
+ * Stripe invoices to look at (View Invoices), whatever its status now. A
+ * running or cancelled subscription says so itself; a Free Access grant, a
+ * Pending reactivation or the like carries the stored flag. A trial or grant
+ * from the start, or a Pending company that never converted, has none. */
+export function hasSubscriptionHistory(company: Company): boolean {
+  if (company.subscribedBefore) return true;
+  const status = getCompanyBilling(company).status;
+  return status === "Active" || status === "Past Due" || status === "Cancelled";
+}
+
 /* Delete Company is for a mistake caught before anything happened: a company
  * CREATED as Pending Payment Setup, still pending, with no employees but its
  * (invited) account holder. A trial, grant or cancelled account that moved
@@ -1345,6 +1364,7 @@ function daysSince(d: Date): number {
 export function canDeleteCompany(company: Company): boolean {
   return (
     !!company.createdPending &&
+    !hasSubscriptionHistory(company) &&
     getCompanyBilling(company).status === "Pending Payment Setup" &&
     getCompanyUsers(company).every((u) => u.role === "Account Holder")
   );

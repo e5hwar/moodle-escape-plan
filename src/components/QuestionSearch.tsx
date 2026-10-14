@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   QUESTION_TYPE_OPTIONS,
-  longQuestionType,
   type Question,
 } from "../data/questionBank";
 
@@ -79,7 +78,6 @@ const SUGGESTION_TOKEN: Record<string, Token["kind"]> = {
 export function QuestionSearch({
   categoryOptions,
   questions,
-  countIn,
   selection,
   onSelectionChange,
   types,
@@ -95,10 +93,6 @@ export function QuestionSearch({
 }: {
   categoryOptions: string[];
   questions: Question[];
-  /** What the "N questions" counts beside Type: / Quizzes: / Feedback Form:
-   *  values run over — the caller's scope and Status filter. Defaults to
-   *  `questions`; the lists of names always come from `questions`. */
-  countIn?: Question[];
   /** Empty-bar prompt — the landing asks for "a Question or Category". */
   placeholder?: string;
   /** Filters currently applied to the table — all four are shared with the Filters row. */
@@ -139,33 +133,15 @@ export function QuestionSearch({
 
   useEffect(() => setText(query), [query]);
 
-  const counted = countIn ?? questions;
-
-  const typeCounts = useMemo(() => {
-    const m = new Map<string, number>();
-    counted.forEach((q) => {
-      const t = longQuestionType(q.type);
-      m.set(t, (m.get(t) ?? 0) + 1);
-    });
-    return m;
-  }, [counted]);
-
-  /* Every name on any question is offered (keys), counted only over `counted`
-     — a Quiz whose questions are all out of scope still reads "0 questions"
-     rather than vanishing. */
-  const quizCounts = useMemo(() => {
-    const m = new Map<string, number>();
-    questions.forEach((q) => q.quizzes.forEach((name) => m.set(name, 0)));
-    counted.forEach((q) => q.quizzes.forEach((name) => m.set(name, (m.get(name) ?? 0) + 1)));
-    return m;
-  }, [questions, counted]);
-
-  const formCounts = useMemo(() => {
-    const m = new Map<string, number>();
-    questions.forEach((q) => q.forms.forEach((name) => m.set(name, 0)));
-    counted.forEach((q) => q.forms.forEach((name) => m.set(name, (m.get(name) ?? 0) + 1)));
-    return m;
-  }, [questions, counted]);
+  /* Every Quiz / Feedback Form named on any question, A–Z. */
+  const quizNames = useMemo(
+    () => [...new Set(questions.flatMap((q) => q.quizzes))].sort((a, b) => a.localeCompare(b)),
+    [questions],
+  );
+  const formNames = useMemo(
+    () => [...new Set(questions.flatMap((q) => q.forms))].sort((a, b) => a.localeCompare(b)),
+    [questions],
+  );
 
   const drafted = (kind: Token["kind"]) => draft.find((t) => t.kind === kind)?.name ?? null;
   const scoped = draft.length > 0;
@@ -214,22 +190,20 @@ export function QuestionSearch({
   const quizResults = useMemo(() => {
     const q = quizQuery.trim().toLowerCase();
     const taken = drafted("quiz");
-    return [...quizCounts.keys()]
+    return quizNames
       .filter((name) => name !== taken && !quizList.includes(name) && name.toLowerCase().includes(q))
-      .sort((a, b) => a.localeCompare(b))
       .slice(0, MAX_RESULTS);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quizQuery, quizCounts, draft, quizzes]);
+  }, [quizQuery, quizNames, draft, quizzes]);
 
   const formResults = useMemo(() => {
     const q = formQuery.trim().toLowerCase();
     const taken = drafted("form");
-    return [...formCounts.keys()]
+    return formNames
       .filter((name) => name !== taken && !formList.includes(name) && name.toLowerCase().includes(q))
-      .sort((a, b) => a.localeCompare(b))
       .slice(0, MAX_RESULTS);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formQuery, formCounts, draft, forms]);
+  }, [formQuery, formNames, draft, forms]);
 
   /* Free text: every filter value it matches — Categories, Types, then
      Quizzes / Feedback Forms where wired (1542:2130). None → no panel; Enter
@@ -244,16 +218,16 @@ export function QuestionSearch({
         { kind: "Category", chip: CATEGORY_PREFIX, values: categoryOptions, exclude: not("category", selection) },
         { kind: "Question Type", chip: TYPE_PREFIX, values: typeOptions ?? QUESTION_TYPE_OPTIONS, exclude: not("type", types) },
         ...(onQuizzesChange
-          ? [{ kind: "Quiz", chip: QUIZ_PREFIX, values: [...quizCounts.keys()].sort((a, b) => a.localeCompare(b)), exclude: not("quiz", quizList) }]
+          ? [{ kind: "Quiz", chip: QUIZ_PREFIX, values: quizNames, exclude: not("quiz", quizList) }]
           : []),
         ...(onFormsChange
-          ? [{ kind: "Feedback Form", chip: FORM_PREFIX, values: [...formCounts.keys()].sort((a, b) => a.localeCompare(b)), exclude: not("form", formList) }]
+          ? [{ kind: "Feedback Form", chip: FORM_PREFIX, values: formNames, exclude: not("form", formList) }]
           : []),
       ],
       MAX_RESULTS,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasQuery, freeQuery, categoryOptions, typeOptions, quizCounts, formCounts, selection, types, quizzes, forms, draft]);
+  }, [hasQuery, freeQuery, categoryOptions, typeOptions, quizNames, formNames, selection, types, quizzes, forms, draft]);
   const showPanel = open && !(!inMode && hasQuery && suggestions.length === 0);
 
   // Options available to keyboard navigation, in render order.
@@ -535,7 +509,6 @@ export function QuestionSearch({
                   >
                     <span className="usearch-chip">Type:</span>
                     <span className="usearch-row-ex">{name}</span>
-                    <span className="usearch-row-desc">{typeCounts.get(name) ?? 0} questions</span>
                   </OptionRow>
                 ))
               )}
@@ -557,7 +530,6 @@ export function QuestionSearch({
                   >
                     <span className="usearch-chip">Quizzes:</span>
                     <span className="usearch-row-ex">{name}</span>
-                    <span className="usearch-row-desc">{quizCounts.get(name) ?? 0} questions</span>
                   </OptionRow>
                 ))
               )}
@@ -579,7 +551,6 @@ export function QuestionSearch({
                   >
                     <span className="usearch-chip">Feedback Form:</span>
                     <span className="usearch-row-ex">{name}</span>
-                    <span className="usearch-row-desc">{formCounts.get(name) ?? 0} questions</span>
                   </OptionRow>
                 ))
               )}

@@ -1,5 +1,6 @@
 import { Fragment, useMemo, useRef, useState } from "react";
 import { useRowDrag } from "../hooks/useRowDrag";
+import { NO_CHANGES_TIP } from "./PrmModal";
 import {
   FILE_UPLOAD_DEFAULTS,
   flattenCategories,
@@ -570,7 +571,10 @@ export function NewQuestionWizard({
      next attempt. An edit runs the same check — a saved question can still have
      its question text emptied. */
   const gaps = useMemo(() => collectMissing(data), [data]);
-  const canSave = gaps.length === 0;
+  const fieldsValid = gaps.length === 0;
+  // Editing with nothing changed has nothing to save (the Save Changes gate).
+  const unchanged = isEditing && !dirty;
+  const canSave = fieldsValid && !unchanged;
 
   /* Set on a blocked click: the gaps that attempt found, so the fields
      themselves turn red rather than only the tooltip naming them. Filtered
@@ -588,6 +592,8 @@ export function NewQuestionWizard({
      author what is left (the Task wizard's `blockedTip`). */
   const blockedTip = canSave
     ? undefined
+    : fieldsValid
+    ? NO_CHANGES_TIP
     : [
         `Finish these to ${isEditing ? "save" : "create"} this question:`,
         ...gaps.map((k) => `• ${REQUIRED_FIELD_LABELS[k] ?? k}`),
@@ -598,6 +604,8 @@ export function NewQuestionWizard({
      stays clickable (aria-disabled, not disabled) so a blocked attempt has
      somewhere to go: flag every gap in place. */
   const save = () => {
+    // Unchanged: nothing to save, and nothing to flag either.
+    if (fieldsValid && unchanged) return;
     if (!canSave) {
       setMissingKeys(new Set(gaps));
       return;
@@ -677,8 +685,10 @@ export function NewQuestionWizard({
             {data.type === "mcq" && (
               <McqSection data={data} update={update} grading={grading} missing={missing} touch={touch} />
             )}
-            {data.type === "true-false" && (
-              <TrueFalseSection data={data} update={update} grading={grading} />
+            {/* Ungraded True/False has no correct value, so no field (Section 7
+                review, 2026-10-12) — `draftToQuestion` saves it without one. */}
+            {data.type === "true-false" && grading && (
+              <TrueFalseSection data={data} update={update} />
             )}
             {data.type === "match" && (
               <MatchSection data={data} update={update} missing={missing} touch={touch} />
@@ -1054,14 +1064,13 @@ function McqSection({
   );
 }
 
+/* Graded True/False only — the editor drops the section when grading is off. */
 function TrueFalseSection({
   data,
   update,
-  grading,
 }: {
   data: QuestionDraft;
   update: (p: Partial<QuestionDraft>) => void;
-  grading: boolean;
 }) {
   return (
     <div className="wizard-fields">
@@ -1077,18 +1086,13 @@ function TrueFalseSection({
           {[true, false].map((val) => (
             <RadioCard
               key={String(val)}
-              selected={grading && data.tfAnswer === val}
-              disabled={!grading}
-              onSelect={() => grading && update({ tfAnswer: val })}
+              selected={data.tfAnswer === val}
+              onSelect={() => update({ tfAnswer: val })}
               title={val ? "True" : "False"}
             />
           ))}
         </div>
-        <p className="form-help">
-          {grading
-            ? "The correct value is graded +100%, the other 0%."
-            : "Ungraded — responses are collected, not scored."}
-        </p>
+        <p className="form-help">The correct value is graded +100%, the other 0%.</p>
       </div>
     </div>
   );

@@ -42,7 +42,7 @@ export const FILTER_TIPS = {
   companies: {
     tier: "Show only companies on the chosen plan tiers.",
     status: "Show only companies whose subscription is in the chosen state.",
-    industry: "Show only companies working in the chosen Industries.",
+    industry: "Show only companies working in the chosen Trades.",
     partnership: "Show only companies that came in through the chosen partnerships.",
     // The range never hides a row — it only sets the window Seat Changes sums.
     dateRange: "Sets the period the Seat Changes column counts. Doesn't filter companies.",
@@ -116,13 +116,13 @@ export const FILTER_TIPS = {
 
   /** Scholarships. */
   scholarships: {
-    status: "Show only Active or only Expired scholarships.",
+    status: "Show only Active or only Ended scholarships.",
     assignedBy: "Show only scholarships the chosen admins assigned.",
   },
 
   /** Feedback Forms and one form's responses. */
   feedbackForms: {
-    status: "Show only Active or only Inactive forms.",
+    status: "Show only Active or only Archived forms.",
     dateRange: "Count each form’s responses over the chosen dates only.",
     responsesDateRange: "Show only responses submitted inside the chosen dates.",
     createdBy: "Show only forms the chosen creators made.",

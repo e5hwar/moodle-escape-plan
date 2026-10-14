@@ -52,6 +52,7 @@ export function PreviewPanel({
   onClose: () => void;
 }) {
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const overlayRef = useRef<HTMLDivElement | null>(null);
   const [closing, setClosing] = useState(false);
   const closingRef = useRef(false);
 
@@ -77,6 +78,21 @@ export function PreviewPanel({
       if (e.key !== "Escape") return;
       // Escape closes an open row menu first, not the panel under it.
       if (document.querySelector(".u-menu")) return;
+      /* …and a modal opened over the panel (a row-menu confirm) owns it too.
+         Only one stacked ABOVE it — a higher z-index, or the same one later
+         in the DOM: a picker the panel itself opened over (the Certification
+         builder's Add Existing Tasks) is below it, and Esc closes the panel
+         first. */
+      const self = overlayRef.current;
+      if (self) {
+        const z = (el: Element) => Number(getComputedStyle(el).zIndex) || 0;
+        const above = Array.from(document.querySelectorAll(".pr-confirm-overlay")).some(
+          (m) =>
+            z(m) > z(self) ||
+            (z(m) === z(self) && !!(self.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING)),
+        );
+        if (above) return;
+      }
       requestClose();
     }
     document.addEventListener("keydown", onKey);
@@ -85,6 +101,7 @@ export function PreviewPanel({
 
   return (
     <div
+      ref={overlayRef}
       className={`pp-overlay${closing ? " pp-overlay--closing" : ""}`}
       onClick={requestClose}
     >

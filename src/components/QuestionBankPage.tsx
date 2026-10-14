@@ -27,12 +27,14 @@ import { AddCardIcon, MenuArchiveOffIcon, MenuHistoryIcon, RowEditIcon, RowKebab
 import { Dropdown } from "./Dropdown";
 import { FILTER_TIPS } from "../data/filterTips";
 import { CascadingMultiSelect, EditColumnsButton, PillTrigger, SectionedMultiSelect, summarize, orderedColumns } from "./Filters";
-import { PrmModal } from "./PrmModal";
+import { NO_CHANGES_TIP, PrmModal } from "./PrmModal";
 import { TableCols } from "./TableCols";
 import { LimitError } from "./CharCount";
 import { LimitedInput } from "./LimitedInput";
 import { NAME_MAX, isOver } from "../data/fieldLimits";
 import { BulkUploadModal } from "./BulkUploadModal";
+import { useLiveTasks } from "../data/tasks";
+import { useResetPageOnChange } from "../hooks/useListState";
 import { useToast } from "./useToast";
 import { questionsFromImport, type ImportReport } from "../data/questionImport";
 import { ReviewRunsStrip, ReviewRunCard } from "./ReviewRuns";
@@ -396,6 +398,8 @@ export function QuestionBankPage({
   initialHistoryId,
   initialPath,
   restore,
+  onSaveState,
+  allFormNames,
   flash,
   onFlashDone,
 }: {
@@ -413,8 +417,13 @@ export function QuestionBankPage({
   /** Open straight on the table, scoped to this category path — [category] or
    *  [category, sub-category]. Set when the editor hands back a new question. */
   initialPath?: string[];
-  /** Reopen exactly as it was — Cancel out of an editor this page opened. */
+  /** Reopen exactly as it was — Cancel out of an editor this page opened, or
+   *  any other way back (spec review 2026-10-09: list state always restores). */
   restore?: QbViewState;
+  /** Handed the view as the page unmounts, for App to give back next time. */
+  onSaveState?: (state: QbViewState) => void;
+  /** Every Feedback Form's name — the Feedback Forms filter's full list. */
+  allFormNames?: string[];
   /** A success handed back by the editor ("Question Created"), toasted on arrival. */
   flash?: string | null;
   onFlashDone?: () => void;
@@ -426,8 +435,10 @@ export function QuestionBankPage({
   // The question whose row was clicked, read back in the row preview panel —
   // held by id so the panel follows the question through an archive.
   const [panelId, setPanelId] = useState<string | null>(null);
-  // A row menu opened from the panel's kebab: every item closes the panel
-  // first, so the editor, page or confirm it opens isn't left under it.
+  /* A row menu opened from the panel's kebab (spec review 2026-10-09): an item
+     that navigates (Edit, Version History) closes the panel first; one that
+     opens a MODAL (Archive, Delete) leaves it open behind the modal, so the
+     panel shows the result when the modal closes. */
   function closePanelThen(run: () => void) {
     setPanelId(null);
     run();
@@ -479,9 +490,9 @@ export function QuestionBankPage({
      one flow were two different controls, and the one in the card lost what you
      had typed to a stray click anywhere in the rail. */
   const [subModal, setSubModal] = useState<string | null>(null);
-  /* The New Category modal. Both triggers — the landing index head's plus and
-     the "A" shortcut — just open it; it is the shared centred shell, so
-     neither needs a ref to anchor to. */
+  /* The New Category modal. Its trigger — the landing index head's plus —
+     just opens it; it is the shared centred shell, so it needs no ref to
+     anchor to. */
   const [catModalOpen, setCatModalOpen] = useState(false);
 
   // Landing morph — the page opens as the category browser (the hero search
@@ -539,14 +550,26 @@ export function QuestionBankPage({
     [categories],
   );
 
-  // Every quiz / feedback form name that appears on at least one question.
+  /* Complete sources (spec review 2026-10-09): every Quiz in the Task
+     library and every Feedback Form on record — plus any name a question
+     still carries — not only the ones some question links to. */
+  const liveTasks = useLiveTasks();
   const quizNames = useMemo(
-    () => [...new Set(questions.flatMap((q) => q.quizzes))].sort((a, b) => a.localeCompare(b)),
-    [questions],
+    () =>
+      [
+        ...new Set([
+          ...liveTasks.filter((t) => t.type === "Quiz").map((t) => t.name),
+          ...questions.flatMap((q) => q.quizzes),
+        ]),
+      ].sort((a, b) => a.localeCompare(b)),
+    [liveTasks, questions],
   );
   const formNames = useMemo(
-    () => [...new Set(questions.flatMap((q) => q.forms))].sort((a, b) => a.localeCompare(b)),
-    [questions],
+    () =>
+      [...new Set([...(allFormNames ?? []), ...questions.flatMap((q) => q.forms)])]
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b)),
+    [allFormNames, questions],
   );
 
   // The open category is navigation, not a filter — it has no pill, so it is
@@ -614,18 +637,6 @@ export function QuestionBankPage({
     [preSub, subFilter, selection],
   );
 
-  /* What the search's "N questions" counts run over: the open scope (category
-     and sub-category picks) under the Status filter — so a suggestion counts
-     the rows its pick would bring back, Archived left out by default. */
-  const searchCountPool = useMemo(
-    () =>
-      narrowToSubs(
-        inCategory.filter((row) => !statusFilter.length || statusFilter.includes(row.status)),
-        subFilter,
-        selection,
-      ),
-    [inCategory, statusFilter, subFilter, selection],
-  );
 
   // Created / modified times, worked out once per question rather than per
   // comparison (the seed's come from its mocked version history).
@@ -647,9 +658,8 @@ export function QuestionBankPage({
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
 
-  useEffect(() => {
-    setPage(1);
-  }, [selection, subFilter, query, typeFilter, statusFilter, gradingFilter, quizFilter, formFilter, sort]);
+  // Not on mount: a restored view keeps the page it was left on.
+  useResetPageOnChange(setPage, [selection, subFilter, query, typeFilter, statusFilter, gradingFilter, quizFilter, formFilter, sort]);
 
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
@@ -679,6 +689,11 @@ export function QuestionBankPage({
     }
     onNewQuestion?.(path, type, currentView());
   }
+
+  // Hand the view back to App as the page unmounts, whatever route leaves.
+  const viewRef = useRef<() => QbViewState>(() => currentView());
+  viewRef.current = () => currentView();
+  useEffect(() => () => onSaveState?.(viewRef.current()), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The view the editor's Cancel brings back — see `QbViewState`.
   function currentView(): QbViewState {
@@ -746,7 +761,7 @@ export function QuestionBankPage({
     setRecent((prev) => [label, ...prev.filter((l) => l !== label)].slice(0, RECENT_MAX));
   }
 
-  // The New Category modal — from the landing index head's plus or "A".
+  // The New Category modal — from the landing index head's plus.
   function openNewCategory() {
     setCatModalOpen(true);
   }
@@ -1018,8 +1033,7 @@ export function QuestionBankPage({
   const draggingFiles = (e: React.DragEvent) => e.dataTransfer.types.includes("Files");
 
   /* Nothing else is mid-flight: no menu, popover, modal or panel — and not on
-     Version History (its own page, where neither key means anything; "A" used
-     to open New Category behind it). */
+     Version History (its own page, where "C" means nothing). */
   const idle =
     catModal.kind === "none" &&
     !catMenu &&
@@ -1033,11 +1047,9 @@ export function QuestionBankPage({
     versionPanel == null &&
     subModal == null;
 
-  // "C" opens the editor (Multiple Choice) on the landing and the table; "A"
-  // opens the New Category modal from both — the landing's index head plus is
-  // its only on-screen trigger since the rail went, so the table keeps the key.
+  // "C" opens the editor (Multiple Choice) on the landing and the table. New
+  // Category has no key (Section 7 review, 2026-10-12) — only the index head's plus.
   useCreateShortcut(() => startCreate("Multiple choice"), idle);
-  useCreateShortcut(openNewCategory, idle, "a");
 
   /* Confirmed import: create whatever categories the file names, add the
      questions, then land on the index. The file's spelling only decides a
@@ -1271,7 +1283,6 @@ export function QuestionBankPage({
             <div className="toolbar">
               <QuestionSearch
                 questions={questions}
-                countIn={searchCountPool}
                 categoryOptions={categoryLabels}
                 selection={scopeLabels}
                 onSelectionChange={applyScope}
@@ -1559,10 +1570,10 @@ export function QuestionBankPage({
             if (rowMenu.q.status === "Archived") {
               toggleArchive(rowMenu.q.id);
               setToast("Question Unarchived");
-            } else closePanelThen(() => setArchiveQ(rowMenu.q));
+            } else setArchiveQ(rowMenu.q);
           }}
           onVersionHistory={() => closePanelThen(() => setHistoryId(rowMenu.q.id))}
-          onDelete={() => closePanelThen(() => setDeleteQ(rowMenu.q))}
+          onDelete={() => setDeleteQ(rowMenu.q)}
         />
       )}
 
@@ -1823,8 +1834,8 @@ export function QuestionBankPage({
    over the shell's own Cancel / Create footer (the optional Trade Group select
    the popover carried was dropped 2026-09-10, along with `Category.tradeGroup`
    and the `TRADE_GROUPS` list behind it). It replaced the popover on
-   2026-09-10, which is why no trigger needs a ref — the landing index head's
-   plus and the "A" shortcut just open it.
+   2026-09-10, which is why its trigger needs no ref — the landing index head's
+   plus just opens it.
    ONE component for both halves of the flow (2026-09-16): `parent` is the
    category a Sub-Category is being added to, and it only moves the copy —
    title, footer verb, the duplicate message and the line under the title, which
@@ -1938,8 +1949,10 @@ function CatNameModal({
   const [value, setValue] = useState(defaultValue);
   const trimmed = value.trim();
   const isDuplicate = !!trimmed && existingNames.includes(trimmed.toLowerCase());
+  // Renaming to the same name has nothing to save (the Save Changes gate).
+  const unchanged = trimmed === defaultValue.trim();
   // Soft limit (data/fieldLimits.ts): typing runs on, renaming waits.
-  const isValid = !!trimmed && !isDuplicate && !isOver(NAME_MAX, value);
+  const isValid = !!trimmed && !isDuplicate && !isOver(NAME_MAX, value) && !unchanged;
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -1959,6 +1972,7 @@ function CatNameModal({
       description={description}
       confirmLabel={submitLabel}
       confirmDisabled={!isValid}
+      confirmTip={unchanged && trimmed ? NO_CHANGES_TIP : undefined}
       onCancel={onCancel}
       onConfirm={submit}
     >
@@ -1996,9 +2010,8 @@ function CatNameModal({
    **One sentence, no body** (the user, 2026-09-16: "just a simple confirmation
    message, none of these bullet points"). It briefly carried a three-item
    consequence list and the question's full text, which made a reversible action
-   look heavier than the irreversible one below it. Delete keeps its list because
-   it has something to enumerate — the Forms a deletion would break — and keeps
-   the quoted text because nothing undoes it. Here the ID is enough: the row you
+   look heavier than the irreversible one below it. Delete keeps the quoted text
+   because nothing undoes it. Here the ID is enough: the row you
    opened the menu on is still on screen behind the card. */
 function QuestionArchiveConfirm({
   question: q,
@@ -2031,8 +2044,8 @@ function QuestionArchiveConfirm({
 }
 
 /* Delete Question — the row menu's destructive action. It is only reachable for
-   a question with no Quiz history at all (see `blockDelete`), so the list here
-   names Feedback Form links only; a question in a Quiz is archived, not deleted. */
+   a question nobody has ever answered and that sits in no Quiz or Feedback Form
+   (see `QuestionActionsMenu`), so there are no links to list. */
 function QuestionDeleteConfirm({
   question: q,
   onConfirm,
@@ -2042,7 +2055,6 @@ function QuestionDeleteConfirm({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  const links = q.forms.map((n) => ({ kind: "Feedback Form", name: n }));
   return (
     <PrmModal
       title="Delete Question?"
@@ -2061,17 +2073,6 @@ function QuestionDeleteConfirm({
         Delete <strong>{q.id}</strong> — “{q.text}”? This can't be undone, and its
         version history goes with it.
       </p>
-      <ul className="ind-modal-list">
-        {links.length === 0 ? (
-          <li>Not used in any Feedback Form — nothing else points at it.</li>
-        ) : (
-          links.map((l) => (
-            <li key={`${l.kind}-${l.name}`}>
-              Removed from {l.kind} <strong>{l.name}</strong>.
-            </li>
-          ))
-        )}
-      </ul>
     </PrmModal>
   );
 }
@@ -2464,35 +2465,20 @@ function QuestionActionsMenu({
   );
 
   const isArchived = q.status === "Archived";
-  /* Archive and Delete are ONE SLOT again (per the user 2026-09-16): "If Delete
-     is shown, don't show Archive." The two had sat side by side since the
-     2026-09-15 re-sync of Figma 1085:1082, but they are not peers — Archive
-     exists precisely BECAUSE a question can't be deleted ("archive it instead"
-     was the blocked row's own copy), so a menu offering both was offering the
-     consolation prize next to the real thing.
-       · Delete is gated on QUIZ history (per the user 2026-09-15): a question
-         linked to a Quiz, or that anyone has ever answered, can never be
-         deleted — the attempts have to keep resolving to it. When that gate is
-         closed the row is NOT DRAWN AT ALL (2026-09-16), rather than disabled
-         with a reason: Archive's gate is a to-do list ("unlink it and come
-         back"), Delete's is permanent for the life of the question, so a
-         dead control would never become live. 1085:1082 draws no disabled
-         Delete either.
-       · Archive takes the slot whenever Delete has vacated it, and keeps its
-         own disabled-with-a-reason state for a question still sitting in a Quiz
-         or Form (the node's reason line).
-     **`isArchived` is the exception, and it is not a loophole.** An archived
-     question's row reads "Unarchive" — the way BACK, not an alternative to
-     deleting — so it is always drawn, even beside Delete. Dropping it would
-     strand a deletable archived question in Archived with deletion as its only
-     exit.
-     A question with only Feedback Form links and no responses is still
-     deletable; the confirm names those links. */
-  const links = q.quizzes.length + q.forms.length;
-  const attempts = attemptCount(q);
-  const blockDelete = q.quizzes.length > 0 || attempts > 0;
-  const blockArchive = !isArchived && links > 0;
-  const showArchive = isArchived || blockDelete;
+  /* Archive and Delete are ONE SLOT, never both (Section 7 review, 2026-10-12).
+     Which one is drawn depends only on whether the question has ever been
+     ANSWERED — any Quiz attempt or Feedback Form response, across all its
+     versions (`attemptCount`). Answered → Archive (Unarchive when archived),
+     because the answers have to keep resolving to it; never answered → Delete.
+     Whichever is drawn is disabled while the question is linked to any Quiz or
+     Feedback Form (Inactive form links count — App derives `q.forms` from every
+     link). An archived question is never linked — archiving needs it unlinked
+     and the pickers only offer Active questions — so Unarchive is always live. */
+  const linked = q.quizzes.length + q.forms.length > 0;
+  const answered = attemptCount(q) > 0;
+  const linkedNote = linked
+    ? { disabled: true, note: "Must be removed from all Quizzes and Feedback Forms" }
+    : undefined;
 
   return (
     <div
@@ -2512,19 +2498,9 @@ function QuestionActionsMenu({
       {item(<RowEditIcon />, "Edit", onEdit)}
       {/* Nothing to show at v1 — there is no earlier version to compare to. */}
       {q.version > 1 && item(<MenuHistoryIcon />, "Version History", onVersionHistory)}
-      {showArchive &&
-        item(
-          <MenuArchiveOffIcon />,
-          isArchived ? "Unarchive" : "Archive",
-          onArchive,
-          blockArchive
-            ? {
-                disabled: true,
-                note: "Must be removed from all Quizzes and Feedback Forms",
-              }
-            : undefined,
-        )}
-      {!blockDelete && item(<RowDeleteIcon />, "Delete", onDelete, { danger: true })}
+      {answered
+        ? item(<MenuArchiveOffIcon />, isArchived ? "Unarchive" : "Archive", onArchive, linkedNote)
+        : item(<RowDeleteIcon />, "Delete", onDelete, { danger: true, ...linkedNote })}
     </div>
   );
 }

@@ -34,7 +34,8 @@ export function UnarchiveCertModal({
     return () => document.removeEventListener("keydown", onKey);
   }, [onCancel]);
 
-  const restored = cert.visibilityBeforeArchive ?? "Visible";
+  // Archived is its own flag: unarchiving leaves Visible / Hidden as it is.
+  const vis = cert.visibility ?? "Visible";
   const replacements = cert.replacementIds?.length ?? 0;
   const alert = hasAlert(cert);
   return (
@@ -43,16 +44,16 @@ export function UnarchiveCertModal({
       confirmLabel="Unarchive Certification"
       doubleConfirm={
         <>
-          <strong>{cert.name}</strong> will be unarchived and return to {restored}.
+          <strong>{cert.name}</strong> will be unarchived. It stays {vis}.
         </>
       }
       onCancel={onCancel}
       onConfirm={onConfirm}
     >
       <p className="prm-content">
-        {restored === "Visible"
-          ? "The Certification returns to Visible, the visibility it had before it was archived, and reappears in the catalog, its Industries and search."
-          : "The Certification returns to Hidden, the visibility it had before it was archived, so it stays out of the catalog, its Industries and search until it is made visible."}
+        {vis === "Visible"
+          ? "The Certification is Visible, so it reappears in the catalog, its Industries and search."
+          : "The Certification is Hidden, so it stays out of the catalog, its Industries and search until it is made visible."}
       </p>
       <p className="prm-content">
         {[

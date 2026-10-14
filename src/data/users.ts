@@ -129,6 +129,21 @@ export function subscriptionFilterStatus(u: Pick<User, "subscriptionStatus" | "c
   return u.subscriptionStatus === "Subscriber" && u.cancelsOn ? "Cancelled" : u.subscriptionStatus;
 }
 
+/** How soon a scholarship's end shows on its pill, in days. */
+export const SCHOLARSHIP_ENDING_DAYS = 7;
+function daysUntil(iso: string): number {
+  return Math.round((new Date(`${iso}T00:00:00`).getTime() - new Date(`${todayIso()}T00:00:00`).getTime()) / 86400000);
+}
+
+/** The Subscription filter's vocabulary — the statuses, except that a user
+ *  with no subscription at all (Starter) files under "None": the column shows
+ *  them a dash, not a pill (the user, 2026-10-13). */
+export const SUBSCRIPTION_FILTER_OPTIONS = ["Subscriber", "Company Plan", "Scholarship", "Free Trial", "Cancelled", "None"];
+export function subscriptionFilterLabel(u: Pick<User, "subscriptionStatus" | "cancelsOn">): string {
+  const s = subscriptionFilterStatus(u);
+  return s === "Starter" ? "None" : s;
+}
+
 /** What the Subscription column says for a user — the Users table's pill
  *  label and the plain text every Users-table modal (Select Users, Grant Free
  *  Attempts) shows, so the wording can't drift: "Monthly · Apple" for a
@@ -149,7 +164,12 @@ export function subscriptionText(
     case "Free Trial":
       return u.trialEndsOn ? `Free Trial Ends ${date(u.trialEndsOn)}` : "Free Trial";
     case "Scholarship":
-      return u.scholarshipEndsOn ? `Scholarship Ends ${date(u.scholarshipEndsOn)}` : "Scholarship";
+      /* The end date only shows once it is near — inside the next 7 days
+         (the user, 2026-10-13); a scholarship with months to run reads
+         "Scholarship" alone. Trials and cancellations always carry theirs. */
+      return u.scholarshipEndsOn && daysUntil(u.scholarshipEndsOn) <= SCHOLARSHIP_ENDING_DAYS
+        ? `Scholarship Ends ${date(u.scholarshipEndsOn)}`
+        : "Scholarship";
     default:
       return u.subscriptionStatus;
   }
@@ -287,16 +307,22 @@ export function hasPersonalPlan(u: Pick<User, "subscriptionStatus">): boolean {
   return u.subscriptionStatus === "Subscriber";
 }
 
-/** Cancelling is only offered where we can do it: a personal plan billed by
- *  Stripe or Google (Apple subscriptions are managed by Apple), not already
- *  cancelling, on a B2C account (company seats are billed to the company). */
+/** Cancel Subscription is offered to anyone holding a B2C Subscription that
+ *  isn't already cancelling — a company employee who pays for one included
+ *  (Figma 673:1437; the user, 2026-10-13). Free Trial, Scholarship, Starter
+ *  and Company-Plan-only users never see it. */
+export function offersCancelSubscription(u: Pick<User, "subscriptionStatus" | "cancelsOn">): boolean {
+  return u.subscriptionStatus === "Subscriber" && !u.cancelsOn;
+}
+/** Why the offered item is disabled: an Apple subscription is Apple's to
+ *  cancel, so the item stays in the menu greyed with this reason. */
+export const APPLE_CANCEL_NOTE = "Apple Subscriptions must be cancelled by the user via the App Store";
+export function cancelSubscriptionBlock(u: Pick<User, "platform">): string | undefined {
+  return u.platform === "Apple" ? APPLE_CANCEL_NOTE : undefined;
+}
+/** Cancelling actually runs only where we bill: Stripe or Google. */
 export function canCancelSubscription(u: User): boolean {
-  return (
-    u.userType === "B2C" &&
-    u.subscriptionStatus === "Subscriber" &&
-    !u.cancelsOn &&
-    (u.platform === "Stripe" || u.platform === "Google")
-  );
+  return offersCancelSubscription(u) && !cancelSubscriptionBlock(u);
 }
 
 /** Free-text match on what the Users-style tables show: name, email and phone.
@@ -469,13 +495,22 @@ function revokeActiveScholarship(userId: string) {
   );
 }
 
+/** A transfer is blocked while BOTH accounts hold a personal plan that is
+ *  still renewing — the same rule as a merge (`mergePlanOutcome`): a plan
+ *  already cancelling runs out on its own, so it never blocks. One of them
+ *  has to be cancelled first; nothing is cancelled or refunded here. */
+export function transferBlocked(src: User, dst: User): boolean {
+  return hasPersonalPlan(src) && hasPersonalPlan(dst) && !src.cancelsOn && !dst.cancelsOn;
+}
+
 /** Transfer Subscription: the source's plan — a paid plan with its billing and
- *  renewal, or a scholarship — moves onto the destination, whose own plan is
- *  replaced; the source drops to Starter. */
+ *  renewal, or a scholarship — moves onto the destination, which replaces a
+ *  scholarship or a plan already cancelling there; the source drops to
+ *  Starter. Two renewing plans never meet (`transferBlocked`). */
 export function transferSubscription(srcId: string, dstId: string): void {
   const src = findUser(srcId);
   const dst = findUser(dstId);
-  if (!src || !dst) return;
+  if (!src || !dst || transferBlocked(src, dst)) return;
   if (src.subscriptionStatus === "Scholarship") {
     const sch = activeScholarshipOf(srcId);
     if (!sch) return;

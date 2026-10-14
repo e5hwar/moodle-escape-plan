@@ -16,16 +16,19 @@ export const ModalCloseIcon = () => (
  *  close glyph, and a footer with a plain-text Cancel on the left and the
  *  orange Primary CTA on the right. Used by the proctoring console's confirms
  *  and the Companies page's manage-company pop-ups. */
+/** The app-wide Save Changes gate's tip: an edit with nothing changed. */
+export const NO_CHANGES_TIP = "No changes to save";
+
 export function PrmModal({
   title,
   ariaLabel,
   description,
   confirmLabel,
   confirmDisabled,
+  confirmTip,
   confirmHref,
   cancelLabel = "Cancel",
   hideCancel,
-  danger,
   go,
   footerExtra,
   wide,
@@ -51,14 +54,22 @@ export function PrmModal({
    *  popup once its ID is approved: Replace ID and nothing to confirm). */
   confirmLabel?: ReactNode;
   confirmDisabled?: boolean;
+  /** Why the disabled CTA is off, on hover — "No changes to save" for an edit
+   *  nobody has changed yet (the app-wide Save Changes gate). With it the CTA
+   *  is `aria-disabled` rather than `disabled`, since a disabled button fires
+   *  no mouse events and could never show the tip. */
+  confirmTip?: string;
   /** Renders the CTA as an external link (new tab) instead of a button. */
   confirmHref?: string;
   cancelLabel?: string;
   /** Acknowledgment-only modal — drops the footer's text button so the CTA is
    *  the single way out (besides the close glyph). */
   hideCancel?: boolean;
-  /** Destructive confirm — the CTA takes the red variant of the button's own
-   *  gradient recipe (Figma 495:2247). */
+  /** Destructive confirm. Marks intent only: since the 2026-10-09 spec review
+   *  NO confirm CTA is red — every step of a delete / archive / revoke /
+   *  cancel flow, the stacked "Are you sure?" included, uses the orange
+   *  primary. (`.prm-cta--danger` survives only for a footer's own decision
+   *  button, e.g. Name Change Requests' Reject.) */
   danger?: boolean;
   /** Affirmative confirm — the green variant of the same recipe (Figma
    *  1004:1298, the review footer's Approve). */
@@ -154,7 +165,7 @@ export function PrmModal({
                 {footerExtra}
                 {confirmLabel === undefined ? null : confirmHref ? (
                   <a
-                    className={`prm-cta${danger ? " prm-cta--danger" : ""}${go ? " prm-cta--go" : ""}`}
+                    className={`prm-cta${go ? " prm-cta--go" : ""}`}
                     href={confirmHref}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -164,9 +175,13 @@ export function PrmModal({
                   </a>
                 ) : (
                   <button
-                    className={`prm-cta${danger ? " prm-cta--danger" : ""}${go ? " prm-cta--go" : ""}`}
-                    onClick={confirm}
-                    disabled={confirmDisabled}
+                    className={`prm-cta${go ? " prm-cta--go" : ""}${
+                      confirmDisabled && confirmTip ? " is-disabled" : ""
+                    }`}
+                    onClick={() => !confirmDisabled && confirm?.()}
+                    disabled={confirmDisabled && !confirmTip}
+                    aria-disabled={(confirmDisabled && !!confirmTip) || undefined}
+                    data-tip={confirmDisabled ? confirmTip : undefined}
                   >
                     {confirmLabel}
                   </button>
@@ -184,7 +199,6 @@ export function PrmModal({
             (typeof confirmLabel === "string" ? `Yes, ${confirmLabel}` : confirmLabel)
           }
           cancelLabel="Go Back"
-          danger
           className="prm--sure"
           onCancel={() => {
             setSure(false);

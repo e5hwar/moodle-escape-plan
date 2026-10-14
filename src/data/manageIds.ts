@@ -1,6 +1,7 @@
 import { originalName, type User } from "./users";
 import { sharedStore, todayDate } from "./sharedStore";
 import { proofReceived } from "./nameChangeRequests";
+import { MONTHS_3 } from "../formatDate";
 
 /** "not-started": the user has never uploaded an ID — there is nothing to
  *  view, so View ID is not offered. */
@@ -130,24 +131,24 @@ type IdDoc = {
 };
 
 const SEED: Record<string, IdDoc> = {
-  "U-10248": { idType: "US Driver's License", status: "in-review", uploadedAt: "Nov 5th, 2025, 2:30 PM" },
-  "U-10089": { idType: "US Passport", status: "approved", uploadedAt: "Nov 5th, 2025, 2:30 PM", approvedAt: "Nov 7th, 2025, 9:12 AM" },
-  "U-10203": { idType: "US Driver's License", status: "in-review", uploadedAt: "Oct 22nd, 2025, 11:15 AM" },
-  "U-10412": { idType: "US Driver's License", status: "approved", uploadedAt: "Sep 15th, 2025, 12:40 PM", approvedAt: "Sep 16th, 2025, 3:55 PM" },
+  "U-10248": { idType: "US Driver's License", status: "in-review", uploadedAt: "Nov 5, 2025, 2:30 PM" },
+  "U-10089": { idType: "US Passport", status: "approved", uploadedAt: "Nov 5, 2025, 2:30 PM", approvedAt: "Nov 7, 2025, 9:12 AM" },
+  "U-10203": { idType: "US Driver's License", status: "in-review", uploadedAt: "Oct 22, 2025, 11:15 AM" },
+  "U-10412": { idType: "US Driver's License", status: "approved", uploadedAt: "Sep 15, 2025, 12:40 PM", approvedAt: "Sep 16, 2025, 3:55 PM" },
   /* Already asked to reupload once, and now back in review on the new
      document — the "sometimes" case for a pending ID. */
-  "U-10731": { idType: "US Passport", status: "in-review", uploadedAt: "Nov 10th, 2025, 2:30 PM", reuploadRequestedAt: "Nov 8th, 2025, 10:05 AM" },
-  "U-10692": { idType: "US Driver's License", status: "approved", uploadedAt: "Aug 2nd, 2025, 9:05 AM", approvedAt: "Aug 4th, 2025, 1:20 PM" },
+  "U-10731": { idType: "US Passport", status: "in-review", uploadedAt: "Nov 10, 2025, 2:30 PM", reuploadRequestedAt: "Nov 8, 2025, 10:05 AM" },
+  "U-10692": { idType: "US Driver's License", status: "approved", uploadedAt: "Aug 2, 2025, 9:05 AM", approvedAt: "Aug 4, 2025, 1:20 PM" },
   /* The rejected upload is gone — a re-upload request leaves nothing to view
      until the new document arrives. */
-  "U-10948": { idType: "US Driver's License", status: "reupload-requested", uploadedAt: "Oct 30th, 2025, 4:20 PM", reuploadRequestedAt: "Nov 1st, 2025, 8:45 AM" },
+  "U-10948": { idType: "US Driver's License", status: "reupload-requested", uploadedAt: "Oct 30, 2025, 4:20 PM", reuploadRequestedAt: "Nov 1, 2025, 8:45 AM" },
   /* Everyone with a Name Change Request has an approved ID — only a reviewed
      ID can stand behind a request (nameChangeRequests.ts). */
-  "U-10291": { idType: "US Driver's License", status: "approved", uploadedAt: "Jul 14th, 2025, 10:20 AM", approvedAt: "Jul 15th, 2025, 2:05 PM" },
-  "U-10491": { idType: "US Passport", status: "approved", uploadedAt: "Jun 3rd, 2025, 4:40 PM", approvedAt: "Jun 5th, 2025, 11:30 AM" },
-  "U-10618": { idType: "US Driver's License", status: "approved", uploadedAt: "Mar 21st, 2025, 9:15 AM", approvedAt: "Mar 22nd, 2025, 1:45 PM" },
-  "U-10903": { idType: "US Driver's License", status: "approved", uploadedAt: "Feb 9th, 2025, 3:10 PM", approvedAt: "Feb 11th, 2025, 10:00 AM" },
-  "U-10655": { idType: "US Driver's License", status: "approved", uploadedAt: "Jan 27th, 2025, 12:25 PM", approvedAt: "Jan 28th, 2025, 4:50 PM" },
+  "U-10291": { idType: "US Driver's License", status: "approved", uploadedAt: "Jul 14, 2025, 10:20 AM", approvedAt: "Jul 15, 2025, 2:05 PM" },
+  "U-10491": { idType: "US Passport", status: "approved", uploadedAt: "Jun 3, 2025, 4:40 PM", approvedAt: "Jun 5, 2025, 11:30 AM" },
+  "U-10618": { idType: "US Driver's License", status: "approved", uploadedAt: "Mar 21, 2025, 9:15 AM", approvedAt: "Mar 22, 2025, 1:45 PM" },
+  "U-10903": { idType: "US Driver's License", status: "approved", uploadedAt: "Feb 9, 2025, 3:10 PM", approvedAt: "Feb 11, 2025, 10:00 AM" },
+  "U-10655": { idType: "US Driver's License", status: "approved", uploadedAt: "Jan 27, 2025, 12:25 PM", approvedAt: "Jan 28, 2025, 4:50 PM" },
 };
 
 /** The ids of the seeded review queue — the Manage IDs table's rows. */
@@ -159,20 +160,12 @@ export const SEEDED_ID_USERS = Object.keys(SEED).filter((id) =>
 const idStore = sharedStore<Record<string, IdDoc>>("ids", {});
 export const useIdDecisions = idStore.use;
 
-/** The display format every ID stamp uses — "Nov 5th, 2025, 2:30 PM". */
+/** The display format every ID stamp uses — "Nov 5, 2025, 2:30 PM": the
+ *  app's one date shape ("Oct 29, 2026") with the time after it. */
 export function formatIdStamp(d: Date): string {
-  const day = d.getDate();
-  const suffix =
-    day % 10 === 1 && day !== 11
-      ? "st"
-      : day % 10 === 2 && day !== 12
-      ? "nd"
-      : day % 10 === 3 && day !== 13
-      ? "rd"
-      : "th";
-  const month = d.toLocaleDateString("en-US", { month: "short" });
+  const month = MONTHS_3[d.getMonth()];
   const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  return `${month} ${day}${suffix}, ${d.getFullYear()}, ${time}`;
+  return `${month} ${d.getDate()}, ${d.getFullYear()}, ${time}`;
 }
 
 /** Stamp for an action taken right now — a reviewer's approval or replacement. */
@@ -242,10 +235,11 @@ export function idRecordForUser(user: User, decisions = idStore.get()): IdRecord
   };
 }
 
-/** Whether there is a document to look at — nothing before the first upload,
- *  and nothing while a re-upload is awaited (the rejected one is gone). */
+/** Whether there is a document to look at — nothing before the first upload.
+ *  A re-upload request keeps the document it was raised against on screen
+ *  (the user, 2026-10-13), so it can still be approved or replaced. */
 export function hasIdDocument(r: Pick<IdRecord, "status">): boolean {
-  return r.status === "approved" || r.status === "in-review";
+  return r.status !== "not-started";
 }
 
 function save(r: IdRecord, patch: Partial<IdDoc>) {

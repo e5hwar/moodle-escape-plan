@@ -261,21 +261,3 @@ export function completedUsersCount(certId: string): number {
 export function fmtHolders(n: number): string {
   return n.toLocaleString();
 }
-
-// ─── Award Template table column config ──────────────────────────────────────────────────────
-export type TemplateColKey =
-  | "background"
-  | "id"
-  | "usage"
-  | "createdBy"
-  | "dateCreated"
-  | "dateModified";
-
-export const TEMPLATE_COLS: { key: TemplateColKey; label: string }[] = [
-  { key: "background", label: "Background Image" },
-  { key: "id", label: "ID" },
-  { key: "usage", label: "Used By" },
-  { key: "createdBy", label: "Created By" },
-  { key: "dateCreated", label: "Date Created" },
-  { key: "dateModified", label: "Date Modified" },
-];

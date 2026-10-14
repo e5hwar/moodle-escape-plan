@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { LockedField } from "./CriteriaLock";
+import { useListState, useResetPageOnChange } from "../hooks/useListState";
 import {
   isOpen,
   setNameChangeStatus,
@@ -7,11 +7,10 @@ import {
   type NameChangeRequest,
 } from "../data/nameChangeRequests";
 import { matchesUserQuery, renameUser, useUsers, type User } from "../data/users";
-import { hasIdDocument, idRecordForUser, idTimelineOf, useIdDecisions } from "../data/manageIds";
+import { hasIdDocument, idRecordForUser, useIdDecisions } from "../data/manageIds";
 import { ZoomableIdCard } from "./IdCard";
 import { idCardOf } from "./IdModal";
-import { STATUS_LABEL as ID_STATUS_LABEL } from "./ManageIdsSearch";
-import { IdDetailsHover } from "./UserDetailsHover";
+import { UserDetailsHover } from "./UserDetailsHover";
 import { NoteCard } from "./NoteCard";
 import { leave, useTouchedKeys } from "./fieldFlags";
 import { PrmModal } from "./PrmModal";
@@ -57,6 +56,10 @@ const REVIEWER = "You";
  *  never copied onto the request. */
 type Row = { r: NameChangeRequest; u: User | undefined };
 const nameOf = (row: Row) => row.u?.name ?? "";
+/** Standalone pages open in their own tab, matching the Users table's `?profile=` pattern. */
+function openInNewTab(query: string) {
+  window.open(`${window.location.origin}${window.location.pathname}?${query}`, "_blank", "noopener");
+}
 
 function formatDate(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
@@ -89,14 +92,15 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
     () => all.filter(isOpen).map((r) => ({ r, u: roster.find((u) => u.id === r.userId) })),
     [all, roster],
   );
-  const [query, setQuery] = useState("");
+  // Kept for the session (spec review 2026-10-09: every list restores).
+  const [query, setQuery] = useListState("name-changes:query", "");
   /* Opens on the requests waiting on a reviewer — the queue's work. Clearing
      the pill shows the ones waiting on the user's ID proof too. */
-  const [statusFilter, setStatusFilter] = useState<string[]>(["Pending Review"]);
+  const [statusFilter, setStatusFilter] = useListState<string[]>("name-changes:status", ["Pending Review"]);
   /* Oldest first: the queue is worked in the order it was submitted, so the
      longest-waiting request is the one on top (and the one that opens). */
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "submittedOn", dir: "asc" });
-  const [page, setPage] = useState(1);
+  const [sort, setSort] = useListState<{ key: SortKey; dir: SortDir }>("name-changes:sort", { key: "submittedOn", dir: "asc" });
+  const [page, setPage] = useListState("name-changes:page", 1);
 
   /* The page is reached by clicking the pending-count banner / header note, so
      the reader has already said "review these" — the oldest request waiting on
@@ -128,7 +132,7 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
   }, [filtered, sort]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  useEffect(() => setPage(1), [query, statusFilter, sort]);
+  useResetPageOnChange(setPage, [query, statusFilter, sort]);
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
@@ -469,17 +473,26 @@ function ReviewModal({
         wide
         className="ncr-modal"
         title="Review Name Change"
-        /* Whether the ID being compared against has itself been approved —
-           hover for when it was uploaded and decided (Figma 679:2039). */
+        /* The name on the account today, as the subtitle. The ID it is
+           checked against is always Approved by the time a request reaches
+           review, so its status no longer earns the line. Hovering the name
+           peeks at the user's details (Figma 436:572) — the same card the Exam
+           Reviews console puts on the candidate's name. */
         description={
-          idRecord ? (
-            <>
-              ID Status:{" "}
-              <IdDetailsHover timeline={idTimelineOf(idRecord)}>
-                <span className="mid-head-status">{ID_STATUS_LABEL[idRecord.status]}</span>
-              </IdDetailsHover>
-            </>
-          ) : undefined
+          <>
+            Current Name:{" "}
+            {row.u ? (
+              <UserDetailsHover
+                popup
+                user={{ userId: row.u.id, userName: currentName, email: row.u.email, phone: row.u.phone }}
+                onOpenProfile={(id) => openInNewTab(`profile=${id}`)}
+              >
+                <span className="mid-head-status">{currentName}</span>
+              </UserDetailsHover>
+            ) : (
+              <span className="mid-head-status">{currentName}</span>
+            )}
+          </>
         }
         cancelLabel="Skip"
         onCancelButton={() => onSkip(request.id)}
@@ -525,15 +538,6 @@ function ReviewModal({
           </div>
 
           <div className="ncr-fields">
-            <div className="form-group" style={{ marginBottom: 0, maxWidth: "none" }}>
-              <label className="form-label">Current Name</label>
-              {/* The shared Locked Field (Figma 1360:1883): the banner says
-                  why, the control under it is disabled. */}
-              <LockedField locked sub="The name currently on the account. This can't be edited.">
-                <input className="form-input" value={currentName} readOnly aria-label="Current Name" />
-              </LockedField>
-            </div>
-
             <div className="form-group" onBlur={leave(() => touch("name"))} style={{ marginBottom: 0, maxWidth: "none" }}>
               <label className="form-label">
                 Requested Name<span className="req">*</span>
@@ -548,7 +552,24 @@ function ReviewModal({
                 value={requestedName}
                 onChange={(e) => setRequestedName(e.target.value)}
               />
-              <p className="form-help">Edit if the ID spelling differs from the request before approving.</p>
+              {/* What the ID on file says, with the adopt link inside the
+                  sentence — the same line the Exam Reviews name-mismatch card
+                  puts under its field (Figma 1014:1447). Use This only fills
+                  the field; the change still waits for Approve. */}
+              {idRecord && hasIdDocument(idRecord) ? (
+                <p className="prc-mismatch-detected form-help">
+                  <span>ID reads {idRecord.docName} ·</span>
+                  <button
+                    type="button"
+                    className="prc-mismatch-use"
+                    onClick={() => setRequestedName(idRecord.docName)}
+                  >
+                    Use This
+                  </button>
+                </p>
+              ) : (
+                <p className="form-help">Edit if the ID spelling differs from the request before approving.</p>
+              )}
             </div>
           </div>
         </div>

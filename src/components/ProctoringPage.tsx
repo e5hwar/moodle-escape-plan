@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { renameUser } from "../data/users";
 import {
   useReviewedQuizNames,
@@ -27,6 +27,7 @@ import { SortIcon, RowChevronIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { TableCols } from "./TableCols";
 import { TableEmpty } from "./TableEmpty";
 import { useToast } from "./useToast";
+import { useListState, useResetPageOnChange } from "../hooks/useListState";
 
 const PAGE_SIZE = 50;
 
@@ -192,15 +193,17 @@ export function ProctoringPage({
      the console → table switch keeps it mounted mid-timer. */
   const [toast, toastNode] = useToast();
   // The Review Type pill's applied kinds, as labels — empty means every kind.
-  const [reviewTypeFilter, setReviewTypeFilter] = useState<string[]>([]);
-  const [query, setQuery] = useState("");
+  /* The list's search, filters, date range, sort and page are kept for the
+     session (spec review 2026-10-09: every list restores, any route back). */
+  const [reviewTypeFilter, setReviewTypeFilter] = useListState<string[]>("exam-reviews:types", []);
+  const [query, setQuery] = useListState("exam-reviews:query", "");
   // Quiz has a pill on the filters row; the search bar can also scope to it.
-  const [examFilter, setExamFilter] = useState<string[]>([]);
+  const [examFilter, setExamFilter] = useListState<string[]>("exam-reviews:quiz", []);
   /* All Time, not the shared Last 30 Days default: this is a backlog queue, and
      a rolling window would open the page with the longest-waiting submissions —
      the ones it exists to surface — already hidden. */
-  const [dateRange, setDateRange] = useState<DateRangeState>(() => allTimeDateRange());
-  const [page, setPage] = useState(1);
+  const [dateRange, setDateRange] = useListState<DateRangeState>("exam-reviews:date", () => allTimeDateRange());
+  const [page, setPage] = useListState("exam-reviews:page", 1);
   const [activeId, setActiveId] = useState<string | null>(initialSubmissionId ?? null);
   /* True while the console is working the queue another page handed over
      (Pending ID Re-Uploads): Skip and ←/→ walk that page's list, and closing
@@ -209,7 +212,7 @@ export function ProctoringPage({
   const [returnToOrigin, setReturnToOrigin] = useState(!!initialSubmissionId);
   // Longest waiting first — the default review-run order, so the table reads
   // in the same order as the console's queue.
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "submittedAt", dir: "asc" });
+  const [sort, setSort] = useListState<{ key: SortKey; dir: SortDir }>("exam-reviews:sort", { key: "submittedAt", dir: "asc" });
   // Recent runs, newest first — seeded from, and mirrored to, the module store.
   const [recents, setRecents] = useState<RunKey[]>(() => recentRunsStore);
 
@@ -337,10 +340,7 @@ export function ProctoringPage({
      rarely fills a page, but the "Showing x–y of n" line is the table's standard
      footer, so it's here whatever the count is. */
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  useEffect(
-    () => setPage(1),
-    [query, reviewTypeFilter, examFilter, dateRange, sort],
-  );
+  useResetPageOnChange(setPage, [query, reviewTypeFilter, examFilter, dateRange, sort]);
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
@@ -393,13 +393,15 @@ export function ProctoringPage({
   /* After a decision: back to the sending page when working its queue (the
      toast goes with it), else on to the next submission in line — or, on the
      queue's last row, back to the table, as the Hands-On console does. */
-  function afterDecision(id: string, msg: string) {
+  function afterDecision(id: string, msg: string, alsoLeft: ReadonlySet<string> = new Set()) {
     if (returnToOrigin && onExitToOrigin) {
       onExitToOrigin(msg);
       return;
     }
     const idx = sorted.findIndex((s) => s.id === id);
-    const next = idx >= 0 ? sorted[idx + 1] ?? null : null;
+    // Rows the same decision took out of the queue (an approval's ID-only
+    // rows for this learner) are skipped over, not landed on.
+    const next = idx >= 0 ? sorted.slice(idx + 1).find((s) => !alsoLeft.has(s.id)) ?? null : null;
     setActiveId(next ? next.id : null);
     toast(msg);
   }
@@ -417,24 +419,56 @@ export function ProctoringPage({
   // Decide a submission (accept/reject): it leaves the review queue entirely
   // (see `afterDecision` for where the console goes). Rejection reasons are
   // kept on the record so this candidate's later submissions can list them.
+  /* Approving verifies the learner's ID everywhere it is still waiting (spec
+     review 2026-10-09): each of their OTHER pending rows takes the verified
+     mark. An ID-only row (ID Review / returned Re-Upload) has nothing left to
+     check, so it leaves the queue as approved; a proctored row drops its ID
+     check and keeps only the footage review. Reject verifies nothing. */
   function decide(id: string, status: ProctoringStatus, msg: string, reasons?: string[]) {
-    setList((prev) =>
-      prev.map((s) =>
-        s.id === id
-          ? { ...s, status, ...(reasons?.length ? { rejectionReasons: reasons } : null) }
-          : s,
-      ),
+    const decided = list.find((s) => s.id === id);
+    const verifyFor = status === "accepted" ? decided?.userId : undefined;
+    const verified = { at: displayDateTime(new Date()), by: "You" };
+    const alsoLeft = new Set(
+      verifyFor
+        ? list
+            .filter(
+              (s) =>
+                s.id !== id &&
+                s.userId === verifyFor &&
+                s.status === "pending" &&
+                !hasProctoringFootage(s),
+            )
+            .map((s) => s.id)
+        : [],
     );
-    afterDecision(id, msg);
+    setList((prev) =>
+      prev.map((s) => {
+        if (s.id === id) {
+          return { ...s, status, ...(reasons?.length ? { rejectionReasons: reasons } : null) };
+        }
+        if (!verifyFor || s.userId !== verifyFor || s.status !== "pending") return s;
+        if (alsoLeft.has(s.id)) return { ...s, status: "accepted" as const };
+        return { ...s, idPreviouslyVerified: verified };
+      }),
+    );
+    afterDecision(id, msg, alsoLeft);
   }
 
   // Requesting a reupload takes the submission off the review queue: as
   // `id-requested` it is filtered out of this table and the run counts, and is
   // listed on Pending ID Re-Uploads until the candidate sends a new ID.
   function requestReupload(id: string) {
+    const learner = list.find((s) => s.id === id)?.userId;
     setList((prev) =>
       prev.map((s) => {
-        if (s.id !== id) return s;
+        /* The ID is in doubt again, so the verified mark an approval left on
+           this learner's other pending proctored rows is cleared too — their
+           ID check comes back. */
+        if (s.id !== id) {
+          if (s.userId !== learner || s.status !== "pending" || !s.idPreviouslyVerified) return s;
+          const { idPreviouslyVerified: _cleared, ...other } = s;
+          return other;
+        }
         /* The prior verification is dropped with the request: it vouched for the
            document being replaced, not for whatever arrives next. This is what
            keeps "Re-Uploaded ID" and "Verified" mutually exclusive — a row can
@@ -459,7 +493,9 @@ export function ProctoringPage({
          otherwise the old name is back the moment you leave the page;
        · every submission this candidate has, not just the open one.
      The name read off the ID is NOT touched: a plain rename says nothing about
-     what the document reads, so the Name Mismatch card stays up. */
+     what the document reads. The Name Mismatch card re-checks the new name
+     against it at once — a rename to the ID's name clears the card without
+     waiting for Approve; any other name leaves it up (spec review 2026-10-13). */
   function renameCandidate(userId: string, name: string) {
     renameUser(userId, name);
     setList((prev) =>

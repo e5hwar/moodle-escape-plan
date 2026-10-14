@@ -16,6 +16,7 @@ import {
 import { TasksSearch } from "./TasksSearch";
 import { TableEmpty } from "./TableEmpty";
 import { certIndustryText } from "../data/industries";
+import { AUDIENCE_ALL_USERS, audienceOf } from "../data/filters";
 
 /* Select Tasks — Figma 682:2321. A compact version of the Tasks page table
  * inside the shared PrmModal shell: search bar, filter pills, a table carrying
@@ -85,11 +86,19 @@ function compare(a: Task, b: Task, key: SortKey): number {
 
 export function SelectTasksModal({
   value,
+  allUsersOnly = false,
+  description = "Only Tasks that have been created by SkillCat are shown and can be selected here",
   onCancel,
   onConfirm,
 }: {
   /** Task ids already chosen on the field — the modal opens pre-ticked. */
   value: string[];
+  /** Also drop B2B-only Tasks — any whose audience resolves to B2B Companies
+   *  Only (the explicit tag, or a Trade / Partnership). The Skills picker's
+   *  rule; other callers keep the SkillCat-only pool. */
+  allUsersOnly?: boolean;
+  /** The subtitle states the caller's eligibility rule. */
+  description?: string;
   onCancel: () => void;
   onConfirm: (ids: string[]) => void;
 }) {
@@ -123,7 +132,13 @@ export function SelectTasksModal({
     return () => document.removeEventListener("keydown", onKey);
   }, [onCancel]);
 
-  const pool = useMemo(() => taskLibrary.filter(eligible), []);
+  const pool = useMemo(
+    () =>
+      taskLibrary.filter(
+        (t) => eligible(t) && (!allUsersOnly || audienceOf(t.tags) === AUDIENCE_ALL_USERS),
+      ),
+    [allUsersOnly],
+  );
 
   const allCerts = useMemo(
     () => Array.from(new Set(pool.flatMap((t) => t.usedIn))).sort(),
@@ -153,8 +168,8 @@ export function SelectTasksModal({
   }, [pool, query, types, vis, certs, inds]);
 
   /* The Tasks already on the field when the picker opened are pinned to the
-     top, ticked, whatever the search, the filters or the SkillCat-only rule
-     say — a Skill can already link a Task from elsewhere, and hiding it here
+     top, ticked, whatever the search, the filters or the eligibility rules
+     (SkillCat-only, All-Users-only) say — a Skill can already link a Task from elsewhere, and hiding it here
      would leave no way to see or untick it. Pinned by the OPENING value, so
      unticking one doesn't make it jump away mid-edit. */
   const [pinnedIds] = useState(value);
@@ -218,7 +233,7 @@ export function SelectTasksModal({
   return (
     <PrmModal
       title="Select Tasks"
-      description="Only Tasks that have been created by SkillCat are shown and can be selected here"
+      description={description}
       confirmLabel="Continue"
       pickFull
       confirmDisabled={!canContinue}
@@ -232,7 +247,6 @@ export function SelectTasksModal({
               suggestion lands on the pill below. */}
           <div className="toolbar">
             <TasksSearch
-              tasks={pool}
               certifications={certs}
               onCertificationsChange={resetPage(setCerts)}
               types={types}

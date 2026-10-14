@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import {
   users as allUsers,
   subscriptionFilterStatus,
+  subscriptionFilterLabel,
   type User,
   type UserRole,
   type SubscriptionStatus,
@@ -21,7 +22,7 @@ import {
   MultiPill,
   type UserFilterState,
 } from "./UsersFilters";
-import { useColumnOrder, orderedColumns } from "./Filters";
+import { orderedColumns } from "./Filters";
 import { FILTER_TIPS } from "../data/filterTips";
 import { EntitySearch, type SearchScope } from "./UsersSearch";
 import { SortIcon, AddIcon, RowKebabIcon, MenuLockIcon, PagePrevIcon, PageNextIcon } from "./icons";
@@ -30,6 +31,7 @@ import { PrmModal } from "./PrmModal";
 import { TableCols } from "./TableCols";
 import { SubscriptionPill } from "./SubscriptionPill";
 import { useToast } from "./useToast";
+import { useListState, useResetPageOnChange } from "../hooks/useListState";
 import { TableEmpty } from "./TableEmpty";
 
 const PAGE_SIZE = 50;
@@ -216,17 +218,20 @@ export function QuizPurchasersPage({
      there, and a deleted attempt comes back here unused. */
   const store = useAttemptStore();
   const purchases = useMemo(() => buildAllQuizPurchases(paidQuizzes, store), [paidQuizzes, store]);
-  const [columns, setColumns] = useState<QuizColumnState>(DEFAULT_COLUMNS);
+  /* Kept for the session, per Quiz (spec review 2026-10-09: every list
+     restores) — coming back to this Quiz's Who Paid puts the list back. */
+  const ls = `who-paid-quiz:${task.id}`;
+  const [columns, setColumns] = useListState<QuizColumnState>(`${ls}:columns`, DEFAULT_COLUMNS);
   // Column display order — reordered by dragging in the Edit Columns menu.
-  const [order, setOrder] = useColumnOrder(COLS);
-  const [filters, setFilters] = useState<UserFilterState>(EMPTY_FILTERS);
-  const [quizzes, setQuizzes] = useState<string[]>([self.name]);
-  const [accessTypes, setAccessTypes] = useState<string[]>([]);
-  const [platforms, setPlatforms] = useState<string[]>([]);
-  const [refunds, setRefunds] = useState<string[]>([]);
-  const [committedQuery, setCommittedQuery] = useState("");
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "purchaseDate", dir: "desc" });
-  const [page, setPage] = useState(1);
+  const [order, setOrder] = useListState<QuizColumnKey[]>(`${ls}:order`, () => COLS.map((c) => c.key));
+  const [filters, setFilters] = useListState<UserFilterState>(`${ls}:filters`, EMPTY_FILTERS);
+  const [quizzes, setQuizzes] = useListState<string[]>(`${ls}:quizzes`, [self.name]);
+  const [accessTypes, setAccessTypes] = useListState<string[]>(`${ls}:access`, []);
+  const [platforms, setPlatforms] = useListState<string[]>(`${ls}:platforms`, []);
+  const [refunds, setRefunds] = useListState<string[]>(`${ls}:refunds`, []);
+  const [committedQuery, setCommittedQuery] = useListState(`${ls}:query`, "");
+  const [sort, setSort] = useListState<{ key: SortKey; dir: SortDir }>(`${ls}:sort`, { key: "purchaseDate", dir: "desc" });
+  const [page, setPage] = useListState(`${ls}:page`, 1);
   const [granting, setGranting] = useState(false);
   // The row awaiting the Revoke Access confirm, if any.
   const [revoking, setRevoking] = useState<Row | null>(null);
@@ -279,7 +284,6 @@ export function QuizPurchasersPage({
       optionsLabel: "Companies",
       example: "Company: Acme Inc.",
       hint: "Filter by Company",
-      describe: (name) => `${companyOptions.counts.get(name)} users`,
     },
   ];
 
@@ -292,7 +296,7 @@ export function QuizPurchasersPage({
       if (refunds.length && !refunds.includes(p.refundedDate ? "Refunded" : "Not Refunded")) return false;
       if (filters.companies.length && !(u.companyName && filters.companies.includes(u.companyName))) return false;
       if (filters.types.length && !filters.types.includes(u.userType)) return false;
-      if (filters.subscriptions.length && !filters.subscriptions.includes(subscriptionFilterStatus(u))) return false;
+      if (filters.subscriptions.length && !filters.subscriptions.includes(subscriptionFilterLabel(u))) return false;
       if (filters.roles.length && !filters.roles.includes(u.role)) return false;
       if (!q) return true;
       return (
@@ -311,9 +315,7 @@ export function QuizPurchasersPage({
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
 
-  useEffect(() => {
-    setPage(1);
-  }, [committedQuery, filters, quizzes, accessTypes, platforms, refunds, sort]);
+  useResetPageOnChange(setPage, [committedQuery, filters, quizzes, accessTypes, platforms, refunds, sort]);
 
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;

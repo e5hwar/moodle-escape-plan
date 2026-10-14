@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { findUser, type MergeUser } from "../data/transferSubscription";
+import { findUser } from "../data/transferSubscription";
 import { loginId, renewalLabel, subLabel } from "../data/mergeAccounts";
-import { transferSubscription, useUsers } from "../data/users";
+import { findUser as findLiveUser, transferBlocked, transferSubscription, useUsers } from "../data/users";
 import {
   AccountPicker,
   CompareTable,
@@ -10,7 +10,6 @@ import {
   useEscape,
 } from "./MergeAccountsPage";
 import {
-  InfoCircleIcon,
   InfoTipIcon,
   SwapRolesIcon,
   WarnTriangleIcon,
@@ -29,7 +28,8 @@ import { useLeaveGuard } from "./LeaveGuard";
  * from one learner account to another. It picks the Source (the account that
  * currently holds the subscription) and the Destination (the account that
  * receives it); the Source must have an active subscription, and a destination
- * that already has its own active plan is flagged because it gets replaced.
+ * still paying for a renewing plan of its own BLOCKS the transfer until one
+ * of the two is cancelled (a plan already cancelling doesn't, as on Merge).
  * The comparison table shows what moves, so there is no separate review step:
  * the footer CTA goes straight to a confirmation modal, then back to Manage
  * Users with a toast.
@@ -61,14 +61,8 @@ import { useLeaveGuard } from "./LeaveGuard";
 const PAGE = {
   title: "Transfer Subscription",
   desc: "Choose two accounts. The subscription moves from one to the other and nothing else changes hands.",
-  tip: "A transfer moves an active plan off one account and onto another. Billing, the renewal date and the remaining term move with it unchanged, and the card on file is re-pointed at the destination. Both accounts survive: the source keeps its completions, certifications, skills, awards and one-time purchases and simply drops to Free. If the destination is already paying for a plan of its own, that one is cancelled and refunded pro-rata before this one applies. Company-billed B2B accounts have no personal plan to move, so they can be neither side.",
+  tip: "A transfer moves an active plan off one account and onto another. Billing, the renewal date and the remaining term move with it unchanged, and the card on file is re-pointed at the destination. Both accounts survive: the source keeps its completions, certifications, skills, awards and one-time purchases and simply drops to Free. Two renewing plans can't meet: if the destination is still paying for a plan of its own, one of the two has to be cancelled first. Company-billed B2B accounts have no personal plan to move, so they can be neither side.",
 };
-
-/** Why a row in the picker can't be chosen here. Company-affiliated accounts
- *  are billed through their company, so there is no personal plan to move. */
-function ineligible(u: MergeUser) {
-  return u.company ? "B2B accounts aren't eligible for subscription transfer" : undefined;
-}
 
 export function TransferSubscriptionPage({
   onClose,
@@ -123,8 +117,12 @@ export function TransferSubscriptionPage({
   // other side, so that case gets no Swap button and no shortcut.
   const neitherHasSub = both && !src!.sub.active && !dst!.sub.active;
   const swappable = noSubToMove && !neitherHasSub;
-  // The Destination already paying for its own plan — it will be replaced.
-  const dstHasActive = !!(dst && dst.sub.active);
+  /* Two renewing personal plans block the transfer (users.transferBlocked) —
+     a plan already cancelling doesn't, as on Merge. Nothing is cancelled or
+     refunded by a transfer. */
+  const srcLive = findLiveUser(srcId);
+  const dstLive = findLiveUser(dstId);
+  const planBlocked = !!(srcLive && dstLive && !noSubToMove && transferBlocked(srcLive, dstLive));
 
   /* S swaps the direction, the shortcut the blocking banner's button
      advertises — so it is live on exactly the terms that button is, and never
@@ -143,7 +141,7 @@ export function TransferSubscriptionPage({
     : !dst
     ? {
         title: "Now pick the account to move the plan to",
-        sub: "It receives the subscription with its billing, renewal date and remaining term unchanged. Any plan it is already paying for is cancelled and refunded pro-rata first.",
+        sub: "It receives the subscription with its billing, renewal date and remaining term unchanged. It can't still be paying for a renewing plan of its own.",
         cta: "Search Accounts",
       }
     : {
@@ -152,8 +150,9 @@ export function TransferSubscriptionPage({
         cta: "Search Accounts",
       };
 
-  /* Ready once both accounts are set and the source has a plan to move. */
-  const accountsReady = both && !noSubToMove;
+  /* Ready once both accounts are set, the source has a plan to move and the
+     destination isn't still renewing one of its own. */
+  const accountsReady = both && !noSubToMove && !planBlocked;
   /* The greyed-out CTA names the first unmet requirement on hover. */
   const blockedTip = accountsReady
     ? undefined
@@ -161,7 +160,9 @@ export function TransferSubscriptionPage({
       ? "Select both accounts"
       : neitherHasSub
         ? "Neither account is on a paid plan — replace one of them"
-        : "The source account has no active subscription — swap the direction";
+        : noSubToMove
+          ? "The source account has no active subscription — swap the direction"
+          : "Both accounts have an active subscription — cancel one first";
 
   /* The CTA (and ⌘+Enter) is the transfer itself: it opens the confirmation. */
   function advance() {
@@ -302,13 +303,16 @@ export function TransferSubscriptionPage({
                 />
               )}
 
-              {accountsReady && dstHasActive && dst && (
+              {/* Two renewing plans can't both survive a transfer — one has to
+                  be cancelled first. One already cancelling doesn't count: it
+                  runs out on its own. Same banner as Merge. */}
+              {planBlocked && src && dst && (
                 <NoteCard
-                  tone="accent"
-                  icon={<InfoCircleIcon />}
+                  tone="danger"
+                  icon={<WarnTriangleIcon />}
                   className="mgf-note"
-                  title={`${dst.name} already has an active plan (${dst.sub.plan})`}
-                  body="It will be cancelled and refunded pro-rata when the transferred subscription is applied."
+                  title="Both accounts have an active subscription"
+                  body={`${dst.name} (${subLabel(dst.sub)}) and ${src.name} (${subLabel(src.sub)}) are both still renewing. Cancel one of the subscriptions first — a plan that is already cancelling doesn't block the transfer.`}
                 />
               )}
 
@@ -429,8 +433,8 @@ export function TransferSubscriptionPage({
       {showPicker && (
         <SelectUsersModal
           value={[srcId, dstId].filter((id): id is string => !!id)}
-          description="You can select both accounts here. The first is the source and the second the destination — the direction can be swapped later."
-          ineligible={ineligible}
+          description="You can select both accounts here. The first is the source and the second the destination — the direction can be swapped later. Only B2C accounts can be picked."
+          b2cOnly
           onCancel={() => setShowPicker(false)}
           onConfirm={applyPicked}
         />
@@ -451,8 +455,8 @@ export function TransferSubscriptionPage({
             <strong>{src.sub.plan}</strong> moves off <strong>{loginId(src)}</strong> — with its
             billing, renewal date and remaining term — and onto{" "}
             <strong>{loginId(dst)}</strong>.{" "}
-            {dstHasActive
-              ? `${dst.name}'s ${dst.sub.plan} is cancelled and refunded pro-rata first, and `
+            {dst.sub.active
+              ? `${dst.name}'s ${dst.sub.plan} is replaced by it, and `
               : ""}
             {src.name} drops to Free, keeping every record and purchase on the account.
           </p>

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { taskCertifications, type Task } from "../data/tasks";
 import { TASK_TYPES, useCertificationOptions } from "../data/filters";
 import { KeyCommandIcon, SearchIcon, SearchClearIcon } from "./icons";
 import { SearchHints, SearchScopeChip, stepActive, SearchNoResults, suggestFilters, SuggestionRow } from "./SearchPanelParts";
@@ -15,7 +14,6 @@ type Opt =
   | { kind: "type"; name: string };
 
 export function TasksSearch({
-  tasks,
   certifications: applied,
   onCertificationsChange,
   types: appliedTypes,
@@ -23,7 +21,6 @@ export function TasksSearch({
   query,
   onCommit,
 }: {
-  tasks: Task[];
   /** Certification filter currently applied to the table (shared with the Filters row). */
   certifications: string[];
   onCertificationsChange: (next: string[]) => void;
@@ -46,22 +43,6 @@ export function TasksSearch({
   // Keep the bar showing the applied query when it changes from outside
   // (Clear Filters, a preset, the ✕ on another control).
   useEffect(() => setText(query), [query]);
-
-  const certCounts = useMemo(() => {
-    const m = new Map<string, number>();
-    // By canonical name, the way the filter matches — "NATE RTW" counts
-    // toward NATE Ready-to-Work.
-    tasks.forEach((t) =>
-      taskCertifications(t).forEach((c) => m.set(c.name, (m.get(c.name) ?? 0) + 1)),
-    );
-    return m;
-  }, [tasks]);
-
-  const typeCounts = useMemo(() => {
-    const m = new Map<string, number>();
-    tasks.forEach((t) => m.set(t.type, (m.get(t.type) ?? 0) + 1));
-    return m;
-  }, [tasks]);
 
   const scoped = draft.length > 0;
   const scopeName = draft.length === 1 ? draft[0] : `${draft.length} Selected`;
@@ -309,7 +290,6 @@ export function TasksSearch({
                   <OptionRow key={name} active={active === i} onHover={() => setActive(i)} onClick={() => activate({ kind: "cert", name })}>
                     <span className="usearch-chip">Certification:</span>
                     <span className="usearch-row-ex">{name}</span>
-                    <span className="usearch-row-desc">{certCounts.get(name) ?? 0} tasks</span>
                   </OptionRow>
                 ))
               )}
@@ -326,7 +306,6 @@ export function TasksSearch({
                   <OptionRow key={name} active={active === i} onHover={() => setActive(i)} onClick={() => activate({ kind: "type", name })}>
                     <span className="usearch-chip">Type:</span>
                     <span className="usearch-row-ex">{name}</span>
-                    <span className="usearch-row-desc">{typeCounts.get(name) ?? 0} tasks</span>
                   </OptionRow>
                 ))
               )}

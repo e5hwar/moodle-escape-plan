@@ -20,6 +20,7 @@ import { leave, useMovedPast, useTouchedKeys } from "./fieldFlags";
 import { DateField, type DateShortcut } from "./DateField";
 import { DeepLinkModal } from "./DeepLinkModal";
 import { draftKey, useLeaveGuard } from "./LeaveGuard";
+import { NO_CHANGES_TIP } from "./PrmModal";
 
 export type SpotlightDraft = {
   headingEn: string;
@@ -231,7 +232,7 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
   const ctaTooltip = canSave
     ? ""
     : valid
-    ? "No changes to save"
+    ? NO_CHANGES_TIP
     : [
         `Fill in every required field to ${saveVerb}:`,
         ...checks.filter((c) => !c.valid).map((c) => `• ${c.label} — ${STEPS[0].label}`),
@@ -538,16 +539,18 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
                                 aria-invalid={ctaUrlMissing || undefined}
                                 onChange={(e) => setCtaUrl(e.target.value)}
                               />
-                              <button
-                                type="button"
-                                className="deeplink-copy"
-                                disabled={!ctaUrl.trim()}
-                                onClick={() =>
-                                  window.open(ctaUrl.trim(), "_blank", "noopener,noreferrer")
-                                }
-                              >
-                                Test It Out
-                              </button>
+                              {/* Empty (Figma 1675:1438): no link to follow. */}
+                              {ctaUrl.trim() && (
+                                <button
+                                  type="button"
+                                  className="deeplink-copy"
+                                  onClick={() =>
+                                    window.open(ctaUrl.trim(), "_blank", "noopener,noreferrer")
+                                  }
+                                >
+                                  Test It Out
+                                </button>
+                              )}
                             </div>
                           </div>
                           <p className="form-help">

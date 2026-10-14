@@ -488,6 +488,14 @@ export function versionHistory(q: Question): QuestionVersion[] {
   return out;
 }
 
+/* Ids the bank SHIPS as Archived — read lazily, since `questions` is built
+   further down this module. */
+let seedArchivedIds: Set<string> | null = null;
+function seededArchived(id: string): boolean {
+  seedArchivedIds ??= new Set(questions.filter((q) => q.status === "Archived").map((q) => q.id));
+  return seedArchivedIds.has(id);
+}
+
 function seedHistory(q: Question, top: number): QuestionVersion[] {
   const h = hashId(q.id);
   /* Whether a question has EVER been answered is its own fact, not a
@@ -504,7 +512,12 @@ function seedHistory(q: Question, top: number): QuestionVersion[] {
      question offered Delete. Per the user (2026-09-16) **about half of the
      questions that are in no Quiz and no Feedback Form now do**. */
   const attached = q.quizzes.length > 0 || q.forms.length > 0;
-  const everAnswered = attached ? h % 6 !== 0 : h % 2 === 1;
+  /* A question SEEDED as Archived has always been answered: Archive is only
+     offered on an answered question (Delete takes the slot otherwise), so an
+     archived-but-never-answered one is a state the app can't reach. Keyed off
+     the seed, not today's status, so unarchiving doesn't reroll its attempts. */
+  const everAnswered =
+    seededArchived(q.id) || (attached ? h % 6 !== 0 : h % 2 === 1);
   /* How a version's pinned usage splits between quiz attempts and form
      responses — a per-QUESTION trait, not a per-version one, so it is settled
      once and applied to every row. Where the question's own links answer it

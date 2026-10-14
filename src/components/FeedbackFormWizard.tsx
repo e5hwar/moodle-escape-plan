@@ -16,6 +16,7 @@ import { LimitError } from "./CharCount";
 import { LimitedInput } from "./LimitedInput";
 import { NAME_MAX, isOver } from "../data/fieldLimits";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
+import { NO_CHANGES_TIP } from "./PrmModal";
 
 type Props = {
   /** The STAGED copy being edited — App holds it, so it survives the detour
@@ -173,7 +174,7 @@ export function FeedbackFormWizard({
   const blockedTip = canFinish
     ? undefined
     : ready
-    ? "No changes to save"
+    ? NO_CHANGES_TIP
     : `To finish, ${missing.length > 1 ? `${missing.slice(0, -1).join(", ")} and ${missing[missing.length - 1]}` : missing[0]}.${mapped ? "" : " A form with no trigger is never shown to anyone."}`;
 
   function done() {
@@ -370,7 +371,7 @@ export function FeedbackFormWizard({
         </div>
         <div className="wizard-actions">
           {/* One primary button, named for what it does — the Task wizards'
-              last-step shape ([[wizard-footer-shortcuts]]). Disable / Enable
+              last-step shape ([[wizard-footer-shortcuts]]). Archive / Unarchive
               form left this page: status is the list row's menu's job, and a
               form being edited is not the place to switch it off. */}
           <button

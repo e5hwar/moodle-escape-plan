@@ -9,7 +9,7 @@ import {
   type Skill,
   type MasterySkill,
 } from "../data/skills";
-import { skillTaskNames, skillCertifications, skillIndustryPaths, skillIndustries, useIndustryOptions, matchesIndustry } from "../data/skillGraph";
+import { skillTaskNames, skillCertifications, skillIndustries, useIndustryOptions, matchesIndustry } from "../data/skillGraph";
 import { Dropdown } from "./Dropdown";
 import { FILTER_TIPS } from "../data/filterTips";
 import {
@@ -18,7 +18,6 @@ import {
   SectionedMultiSelect,
   CascadingMultiSelect,
   EditColumnsButton,
-  useColumnOrder,
   orderedColumns,
   type ColumnDef,
 } from "./Filters";
@@ -33,6 +32,9 @@ import { ConfirmCard, ListCard } from "./ConfirmCard";
 import { TableCols } from "./TableCols";
 import { TableEmpty } from "./TableEmpty";
 import { useToast } from "./useToast";
+import { useListState, useResetPageOnChange } from "../hooks/useListState";
+import { useCertificationOptions } from "../data/filters";
+import { useLiveTasks } from "../data/tasks";
 
 const PAGE_SIZE = 50;
 
@@ -181,12 +183,6 @@ function masterySkillsOf(m: MasterySkill, all: Skill[]): Skill[] {
   });
 }
 
-function countBy(skills: Skill[], values: (s: Skill) => string[]): Map<string, number> {
-  const m = new Map<string, number>();
-  skills.forEach((s) => new Set(values(s)).forEach((v) => m.set(v, (m.get(v) ?? 0) + 1)));
-  return m;
-}
-
 export function SkillsPage({
   skills,
   setSkills,
@@ -210,8 +206,10 @@ export function SkillsPage({
   // The record whose row was clicked, read back in the row preview panel. Held
   // by kind + id so the panel follows the record through an edit or archive.
   const [panel, setPanel] = useState<{ kind: "skill" | "mastery"; id: string } | null>(null);
-  // A row menu opened from the panel's kebab: every item closes the panel
-  // first, so the wizard or confirm it opens isn't left under the panel.
+  /* A row menu opened from the panel's kebab (spec review 2026-10-09): Edit
+     (the wizard, a page) closes the panel first; Archive and Delete open a
+     MODAL and leave the panel open behind it, so the panel shows the result
+     when the modal closes. */
   function closePanelThen(run: () => void) {
     setPanel(null);
     run();
@@ -223,30 +221,30 @@ export function SkillsPage({
     mode.kind === "list" && !panel && !menu && modal.kind === "none",
   );
 
-  const [query, setQuery] = useState("");
-  const [certFilter, setCertFilter] = useState<string[]>([]);
-  const [taskFilter, setTaskFilter] = useState<string[]>([]);
-  const [typeFilter, setTypeFilter] = useState<string[]>([]);
-  const [linkedMasteryFilter, setLinkedMasteryFilter] = useState<string[]>([]);
-  const [linkedSkillFilter, setLinkedSkillFilter] = useState<string[]>([]);
-  const [industryFilter, setIndustryFilter] = useState<string[]>([]);
-  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [query, setQuery] = useListState("skills:query", "");
+  const [certFilter, setCertFilter] = useListState<string[]>("skills:certs", []);
+  const [taskFilter, setTaskFilter] = useListState<string[]>("skills:tasks", []);
+  const [typeFilter, setTypeFilter] = useListState<string[]>("skills:types", []);
+  const [linkedMasteryFilter, setLinkedMasteryFilter] = useListState<string[]>("skills:mastery", []);
+  const [linkedSkillFilter, setLinkedSkillFilter] = useListState<string[]>("skills:skill", []);
+  const [industryFilter, setIndustryFilter] = useListState<string[]>("skills:industries", []);
+  const [statusFilter, setStatusFilter] = useListState<string[]>("skills:status", []);
   /* Opens most-recently-modified first even though Date Modified is now an
      optional column (archived records still pin last). */
-  const [sort, setSort] = useState<{ key: string; dir: SortDir }>({ key: "dateModified", dir: "desc" });
-  const [page, setPage] = useState(1);
+  const [sort, setSort] = useListState<{ key: string; dir: SortDir }>("skills:sort", { key: "dateModified", dir: "desc" });
+  const [page, setPage] = useListState("skills:page", 1);
 
   /* Defaults (user, 2026-10-01): Name · Type · Industries · Linked Tasks ·
      Linked Certifications. Everything else is one click away in Edit Columns;
      there is no ID column. */
-  const [cols, setCols] = useState<Record<ColKey, boolean>>({
+  const [cols, setCols] = useListState<Record<ColKey, boolean>>("skills:columns", {
     type: true, industry: true, tasks: true, certifications: true,
     linkedSkills: false, linkedMastery: false, dateModified: false, status: false, dateCreated: false,
   });
-  const [order, setOrder] = useColumnOrder(COLS);
+  const [order, setOrder] = useListState<ColKey[]>("skills:order", () => COLS.map((c) => c.key));
 
   // Reset paging when the visible set changes.
-  useEffect(() => setPage(1), [query, typeFilter, linkedMasteryFilter, linkedSkillFilter, certFilter, taskFilter, industryFilter, statusFilter, sort]);
+  useResetPageOnChange(setPage, [query, typeFilter, linkedMasteryFilter, linkedSkillFilter, certFilter, taskFilter, industryFilter, statusFilter, sort]);
 
   /* ─── Mutations ─── */
   function upsertSkill(s: Skill) {
@@ -293,37 +291,20 @@ export function SkillsPage({
     setModal({ kind: "archive-mastery", mastery: m });
   }
   /* ─── Certification / Task filters ─── */
-  const certOptions = useMemo(
-    () => [...new Set(skills.flatMap(skillCertifications))].sort(),
-    [skills],
-  );
+  /* Complete sources (spec review 2026-10-09): every Certification and every
+     Task on record, not just the ones some Skill links to — a value with no
+     matching rows shows the no-matches state. */
+  const certOptions = useCertificationOptions();
+  const liveTaskList = useLiveTasks();
   const taskOptions = useMemo(
-    () => [...new Set(skills.flatMap(skillTaskNames))].sort(),
-    [skills],
+    () => [...new Set(liveTaskList.map((t) => t.name))].sort((a, b) => a.localeCompare(b)),
+    [liveTaskList],
   );
-  const certCounts = useMemo(() => countBy(skills, skillCertifications), [skills]);
-  /* Exact tags, as the filter matches: a Sub-Industry's Skills don't count
-     toward its Industry. */
   const INDUSTRY_OPTIONS = useIndustryOptions();
-  const industryCounts = useMemo(
-    () => countBy(skills, skillIndustryPaths),
-    [skills],
-  );
-  const taskCounts = useMemo(() => countBy(skills, skillTaskNames), [skills]);
   /* The Linked filters mirror the Linked columns: options are the other
-     record type's names, each counted by the rows it would show. */
+     record type's names. */
   const masteryOptions = useMemo(() => [...new Set(mastery.map((m) => m.name))].sort(), [mastery]);
   const skillOptions = useMemo(() => [...new Set(skills.map((s) => s.name))].sort(), [skills]);
-  const linkedMasteryCounts = useMemo(
-    () => new Map(mastery.map((m) => [m.name, m.skillIds.length])),
-    [mastery],
-  );
-  const linkedSkillCounts = useMemo(
-    () => new Map(skills.map((s) => [s.name, masteryUsing(s.id, mastery).length])),
-    [skills, mastery],
-  );
-  const nMastery = (n: number | undefined) => `${n ?? 0} mastery ${n === 1 ? "skill" : "skills"}`;
-  const nSkills = (n: number | undefined) => `${n ?? 0} ${n === 1 ? "skill" : "skills"}`;
 
   /* The two suggested filters inside the search bar. Picking values there is a
      pending draft; Enter moves them into the matching Filters-row pill, which is
@@ -337,10 +318,6 @@ export function SkillsPage({
       optionsLabel: "Types",
       example: "Type: Mastery Skill",
       hint: "Filter by Type",
-      describe: (name) =>
-        name === "Skill"
-          ? nSkills(skills.length)
-          : `${mastery.length} mastery skill${mastery.length === 1 ? "" : "s"}`,
     },
     {
       token: "Linked Mastery Skill",
@@ -350,7 +327,6 @@ export function SkillsPage({
       optionsLabel: "Mastery Skills",
       example: "Linked Mastery Skill: HVAC Field Readiness",
       hint: "Filter by Linked Mastery Skill",
-      describe: (name) => nSkills(linkedMasteryCounts.get(name)),
     },
     {
       token: "Linked Skill",
@@ -360,7 +336,6 @@ export function SkillsPage({
       optionsLabel: "Skills",
       example: "Linked Skill: Brazing & Soldering",
       hint: "Filter by Linked Skill",
-      describe: (name) => nMastery(linkedSkillCounts.get(name)),
     },
     {
       token: "Certification",
@@ -370,7 +345,6 @@ export function SkillsPage({
       optionsLabel: "Certifications",
       example: "Certification: EPA 608 Universal",
       hint: "Filter by Certification",
-      describe: (name) => nSkills(certCounts.get(name)),
     },
     {
       token: "Task",
@@ -380,7 +354,6 @@ export function SkillsPage({
       optionsLabel: "Tasks",
       example: "Task: Manifold Gauge Use",
       hint: "Filter by Task",
-      describe: (name) => nSkills(taskCounts.get(name)),
     },
     {
       token: "Industries",
@@ -391,7 +364,6 @@ export function SkillsPage({
       optionsLabel: "Industries",
       example: "Industries: HVAC",
       hint: "Filter by Industries",
-      describe: (name) => nSkills(industryCounts.get(name)),
     },
   ];
 
@@ -691,8 +663,8 @@ export function SkillsPage({
               noun="Skill"
               onClose={() => setMenu(null)}
               onEdit={() => closePanelThen(() => setMode({ kind: "edit-skill", skill: s }))}
-              onArchive={() => closePanelThen(() => archiveSkill(s))}
-              onDelete={() => closePanelThen(() => setModal({ kind: "delete-skill", skill: s }))}
+              onArchive={() => archiveSkill(s)}
+              onDelete={() => setModal({ kind: "delete-skill", skill: s })}
             />
           );
         }
@@ -705,8 +677,8 @@ export function SkillsPage({
             noun="Mastery Skill"
             onClose={() => setMenu(null)}
             onEdit={() => closePanelThen(() => setMode({ kind: "edit-mastery", mastery: m }))}
-            onArchive={() => closePanelThen(() => archiveMastery(m))}
-            onDelete={() => closePanelThen(() => setModal({ kind: "delete-mastery", mastery: m }))}
+            onArchive={() => archiveMastery(m)}
+            onDelete={() => setModal({ kind: "delete-mastery", mastery: m })}
           />
         );
       })()}

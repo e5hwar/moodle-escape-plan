@@ -12,7 +12,7 @@ import type { StatusPillTone } from "../data/companies";
 
    Full-page tables only (Users, Who Paid); the cell needs `.col-status`,
    which re-enables the pill chrome past the plain-text column rule. */
-function subscriptionPill(user: User): { tone: StatusPillTone; label: string } {
+function subscriptionPill(user: User): { tone: StatusPillTone; label: string } | null {
   const label = subscriptionText(user);
   switch (user.subscriptionStatus) {
     case "Subscriber":
@@ -24,12 +24,15 @@ function subscriptionPill(user: User): { tone: StatusPillTone; label: string } {
     case "Company Plan":
       return { tone: "purple", label };
     case "Cancelled":
-    case "Starter":
       return { tone: "grey", label };
+    case "Starter":
+      // No subscription, no pill: the cell reads a dash (the user, 2026-10-13).
+      return null;
   }
 }
 
 export function SubscriptionPill({ user }: { user: User }) {
-  const { tone, label } = subscriptionPill(user);
-  return <span className={`co-status-pill co-status-pill--${tone}`}>{label}</span>;
+  const pill = subscriptionPill(user);
+  if (!pill) return <>—</>;
+  return <span className={`co-status-pill co-status-pill--${pill.tone}`}>{pill.label}</span>;
 }

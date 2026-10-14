@@ -61,7 +61,6 @@ export function CertificationsSearch({
       optionsLabel: "Industries",
       example: "Industries: HVAC",
       hint: "Filter by Industries",
-      describe: (name) => plural(industryOpts.counts.get(name) ?? 0),
     },
     {
       token: "Career Stage",
@@ -71,7 +70,6 @@ export function CertificationsSearch({
       optionsLabel: "Career Stages",
       example: "Career Stage: Apprentice",
       hint: "Filter by Career Stage",
-      describe: (name) => plural(stageOpts.counts.get(name) ?? 0),
     },
     {
       token: "Type",
@@ -81,7 +79,6 @@ export function CertificationsSearch({
       optionsLabel: "Types",
       example: "Type: Credential",
       hint: "Filter by Certification Type",
-      describe: (name) => plural(typeOpts.counts.get(name) ?? 0),
     },
   ];
 
@@ -94,8 +91,6 @@ export function CertificationsSearch({
     />
   );
 }
-
-const plural = (n: number) => `${n} certification${n === 1 ? "" : "s"}`;
 
 function countBy(certs: Certification[], key: (c: Certification) => string) {
   const counts = new Map<string, number>();

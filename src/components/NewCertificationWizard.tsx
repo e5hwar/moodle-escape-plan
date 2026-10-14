@@ -19,10 +19,11 @@ import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { WizardKeyHint, useWizardEnterShortcut } from "./wizardKeys";
 import { SelectField } from "./SelectField";
 import { type TaskTypeKey, TASK_TYPE_OPTIONS } from "./Footer";
-import { PrmModal } from "./PrmModal";
+import { NO_CHANGES_TIP, PrmModal } from "./PrmModal";
 import { UnarchiveCertModal } from "./UnarchiveCertModal";
 import { CompletionCriteriaGate, sampleCompletionCount } from "./CriteriaLock";
 import { SelectRequirementModal, type RequirementPick } from "./SelectRequirementModal";
+import { TaskPreviewPanel } from "./TasksPage";
 import { MultiSelect } from "./NewCompanyWizard";
 import { CertIndustriesModal } from "./CertIndustriesModal";
 import { ConfirmCard, type ConfirmField } from "./ConfirmCard";
@@ -196,7 +197,7 @@ type CertCourse = {
   // Set when this Course was copied in from an imported Certification (the
   // "Create as Learning Plan" flow). New Course/Lesson entities are created, but
   // the Tasks inside are reused — see buildImportedCourses. By id only: the
-  // name is read off the live record (certReferences).
+  // name is read off the live record (certNameById).
   sourceCertId?: string;
 };
 
@@ -332,8 +333,8 @@ const DURATION_BY_KIND: Record<TaskKind, string> = {
 // exam goes last — after the Lesson, where a learner would meet it — rather
 // than wherever the library happens to list it.
 function associatedTasks(cert: Certification): Task[] {
-  // The ID Upload Task is a library gate only (Add Access Restriction), never
-  // a tree Task, so it is left out of the sample structure.
+  // The ID Upload Task is left out of the sample structure; an admin adds it
+  // to a tree by hand (it can then gate other Tasks there).
   const matched = taskLibrary.filter(
     (t) => !isIdUpload(t) && t.usedIn.some((u) => CERT_BY_USEDIN.get(u)?.id === cert.id),
   );
@@ -899,8 +900,8 @@ function buildInitialData(editing?: Certification, restored = false): WizardData
     // first free variant.
     slug: restored ? uniqueSlug(certSlug(editing)) : certSlug(editing),
     slugCustom: true,
-    // An archived Cert isn't publicly visible, so it maps to "hidden" on the
-    // Visibility step. Retiring one is its own full-page flow off the row menu
+    // Archived is a separate flag, so Visibility is the record's own.
+    // Retiring one is its own full-page flow off the row menu
     // (ArchiveCertificationPage), not a step in here.
     visibility: vis === "Visible" ? "visible" : "hidden",
     // The paywall and the audience tags the record carries — without these a
@@ -1001,6 +1002,11 @@ export function NewCertificationWizard({ onClose, onCreate, onSave, editingCert,
   // Where the "Add Existing Task" library picker will drop its Tasks, or null
   // while the picker is closed.
   const [existingPicker, setExistingPicker] = useState<{ courseId: string; lessonId?: string } | null>(null);
+  const [previewTask, setPreviewTask] = useState<Task | null>(null);
+  // Closing the picker drops its preview with it.
+  useEffect(() => {
+    if (!existingPicker) setPreviewTask(null);
+  }, [existingPicker]);
   // Completion criteria start locked when editing an existing Certification —
   // unlocking requires acknowledging that completion data will be reset.
   const [completionUnlocked, setCompletionUnlocked] = useState(false);
@@ -1050,7 +1056,7 @@ export function NewCertificationWizard({ onClose, onCreate, onSave, editingCert,
      first one. */
   const collectMissing = useCallback(
     (d: WizardData) => {
-      const gaps: { step: number; key: string }[] = [];
+      const gaps: { step: number; key: string; label?: string }[] = [];
       if (!d.nameEn.trim()) gaps.push({ step: stepIndex("details"), key: "name" });
       /* Soft character limits (data/fieldLimits.ts): a field past its limit
          blocks creating like an empty mandatory one, on the step that owns it. */
@@ -1074,8 +1080,12 @@ export function NewCertificationWizard({ onClose, onCreate, onSave, editingCert,
       // A Condition Set with no items completes nothing, so an empty-handed
       // Completion step counts as missing either way.
       // The builder tolerates an empty Certification — you can delete your way
-      // down to no Courses at all — but creating one needs at least a Course.
+      // down to no Courses at all — but creating one needs at least a Course,
+      // and nothing blank in it: no empty Course, no empty Lesson.
       if (d.courses.length === 0) gaps.push({ step: stepIndex("tasks"), key: "courses" });
+      for (const n of emptyNodes(d.courses)) {
+        gaps.push({ step: stepIndex("tasks"), key: n.key, label: n.label });
+      }
       // At least one Condition Set with a requirement, and no more than the
       // cap (the Add Condition Set button stops there too).
       if (
@@ -1116,11 +1126,11 @@ export function NewCertificationWizard({ onClose, onCreate, onSave, editingCert,
   const blockedTip = canSave
     ? undefined
     : canPublish
-    ? "No changes to save"
+    ? NO_CHANGES_TIP
     : [
         "Fill in every required field to create this Certification:",
         ...gaps.map(
-          (g) => `• ${REQUIRED_FIELD_LABELS[g.key] ?? g.key} — ${steps[g.step].label}`,
+          (g) => `• ${g.label ?? REQUIRED_FIELD_LABELS[g.key] ?? g.key} — ${steps[g.step].label}`,
         ),
       ].join("\n");
 
@@ -1171,13 +1181,19 @@ export function NewCertificationWizard({ onClose, onCreate, onSave, editingCert,
           id: editingCert.id,
           createdBy: editingCert.createdBy,
           dateCreated: editingCert.dateCreated,
-          // The form only knows Visible / Hidden — an Archived record stays so.
-          visibility:
-            editingCert.visibility === "Visible" || editingCert.visibility === "Hidden"
-              ? record.visibility
-              : editingCert.visibility,
+          // Archived is its own flag, untouched by the form's Visibility.
+          archived: editingCert.archived,
         });
       }
+      onClose();
+      return;
+    }
+    /* A B2B Companies Only Certification skips the Industries modal (it gets
+       no Setup status either); it can still be tagged later from the
+       Industries page or its Edit. */
+    if (audienceOf(recordTags(data.contentTags)) === AUDIENCE_B2B_ONLY) {
+      onTasksCreated?.(newLibraryTasks(data));
+      onCreate?.(toCertRecord(data));
       onClose();
       return;
     }
@@ -1321,6 +1337,7 @@ export function NewCertificationWizard({ onClose, onCreate, onSave, editingCert,
                 <TasksStep
                   data={data}
                   update={update}
+                  flagged={missing}
                   selfId={editingCert?.id}
                   criteriaLocked={isEditing && !completionUnlocked}
                   onCreateTask={(courseId, lessonId, taskType) => setSplitTask({ courseId, lessonId, taskType })}
@@ -1443,7 +1460,7 @@ export function NewCertificationWizard({ onClose, onCreate, onSave, editingCert,
                 ? `Already in this Certification, under ${at} — a Task can appear only once.`
                 : "Already in this Certification";
             }}
-            onPreviewTask={previewTaskInNewTab}
+            onPreviewTask={setPreviewTask}
             onCancel={() => setExistingPicker(null)}
             onConfirm={(picks) => {
               const added = picks.filter((p) => p.kind === "task");
@@ -1460,22 +1477,21 @@ export function NewCertificationWizard({ onClose, onCreate, onSave, editingCert,
           />,
           document.body,
         )}
+      {/* The picker's row-end Preview: the Tasks page's preview panel, over
+          the picker and read-only (no ⋮ menu). Esc closes it before the
+          picker under it. */}
+      {existingPicker &&
+        previewTask &&
+        createPortal(
+          <TaskPreviewPanel key={previewTask.id} task={previewTask} onClose={() => setPreviewTask(null)} />,
+          document.body,
+        )}
     </div>
     </CertToast.Provider>
   );
 }
 
 /** Human-readable "Course › Lesson" label for the Task-library picker header. */
-/** The picker's row-end Preview: its own tab, so the builder behind the picker
- *  keeps its place — for now the `?taskPreview=` placeholder page (App.tsx). */
-function previewTaskInNewTab(task: Task) {
-  window.open(
-    `${window.location.origin}${window.location.pathname}?taskPreview=${encodeURIComponent(task.id)}`,
-    "_blank",
-    "noopener",
-  );
-}
-
 /** Task name → where it sits in the tree ("Course › Lesson", or just the
  *  Course for a loose Task) — the Add Existing Tasks picker names it on each
  *  locked row so a ticked-and-locked Task never reads as "preselected". */
@@ -1848,14 +1864,17 @@ function DeepLinkField({
             aria-invalid={!!error || undefined}
             onChange={(e) => update({ slug: e.target.value, slugCustom: true })}
           />
-          <button
-            type="button"
-            className="deeplink-copy"
-            disabled={!effectiveSlug || !!error}
-            onClick={copy}
-          >
-            {copied ? "Copied" : "Copy"}
-          </button>
+          {/* Empty (Figma 1675:1438): nothing to copy, so no link. */}
+          {effectiveSlug && (
+            <button
+              type="button"
+              className="deeplink-copy"
+              disabled={!!error}
+              onClick={copy}
+            >
+              {copied ? "Copied" : "Copy"}
+            </button>
+          )}
         </div>
       </div>
     </>
@@ -1949,6 +1968,7 @@ function NodeMenuItems({
 function TasksStep({
   data,
   update,
+  flagged = EMPTY_KEYS,
   selfId,
   criteriaLocked = false,
   onCreateTask,
@@ -1956,6 +1976,9 @@ function TasksStep({
 }: {
   data: WizardData;
   update: (p: Partial<WizardData>) => void;
+  /** The gaps showing right now (the wizard's `missing`): an empty Course or
+   *  Lesson in it is flagged red where it sits (`emptyNodes`). */
+  flagged?: ReadonlySet<string>;
   /** The Certification being edited — it can't import its own Courses. */
   selfId?: string;
   /** The Completion step's criteria lock (Edit): while it holds, Import
@@ -2362,15 +2385,28 @@ function TasksStep({
           <ul className={`ctb-list${data.courses.length === 1 ? " is-single" : ""}`}>
             {data.courses.map((c) => {
               const d = dnd("courses", c.id);
+              // Flagged when it, or a Lesson in it, is empty (publish gap).
+              const empty = flagged.has(`emptyCourse:${c.id}`);
+              const emptyLessons = c.children.filter(
+                (ch) => ch.kind === "lesson" && flagged.has(`emptyLesson:${ch.lesson.id}`),
+              ).length;
+              const error = empty
+                ? "No Lessons or Tasks"
+                : emptyLessons > 0
+                  ? `${emptyLessons} empty ${emptyLessons === 1 ? "Lesson" : "Lessons"}`
+                  : null;
               return (
                 <li
                   key={c.id}
-                  className={`ctb-item ${c.id === course?.id ? "selected" : ""} ${c.hidden ? "hidden" : ""}`}
+                  className={`ctb-item ${c.id === course?.id ? "selected" : ""} ${c.hidden ? "hidden" : ""}${error ? " has-error" : ""}`}
                   onClick={() => setSelectedId(c.id)}
                   {...d.target}
                 >
                   <DragDots className="ctb-item-grip" {...d.handle} />
-                  <span className="ctb-item-name">{c.nameEn || "Untitled Course"}</span>
+                  <span className="ctb-item-text">
+                    <span className="ctb-item-name">{c.nameEn || "Untitled Course"}</span>
+                    {error && <span className="ctb-item-error">{error}</span>}
+                  </span>
                   {c.hidden && (
                     <span className="ctb-item-flag" title="Hidden from learners"><EyeOffIcon /></span>
                   )}
@@ -2403,6 +2439,7 @@ function TasksStep({
               key={course.id}
               course={course}
               index={courseIdx + 1}
+              flagged={flagged}
               allTasks={allTasks}
               dnd={dnd}
               onUpdateTask={updateTaskById}
@@ -2621,7 +2658,15 @@ function NodeModal({
   const overLimit =
     isOver(NAME_MAX, draft.nameEn, draft.nameEs) ||
     isOver(DESCRIPTION_MAX, draft.descEn, draft.descEs);
-  const canSave = draft.nameEn.trim().length > 0 && !overLimit;
+  // Editing with nothing changed has nothing to save (the Save Changes gate).
+  const unchanged =
+    !!node &&
+    draft.nameEn.trim() === node.nameEn.trim() &&
+    draft.nameEs.trim() === (node.nameEs ?? "").trim() &&
+    draft.descEn === (node.descEn ?? "") &&
+    draft.descEs === (node.descEs ?? "");
+  const fieldsValid = draft.nameEn.trim().length > 0 && !overLimit;
+  const canSave = fieldsValid && !unchanged;
 
   function submit() {
     if (!canSave) return;
@@ -2648,6 +2693,7 @@ function NodeModal({
       description={NODE_MODAL_COPY[kind]}
       confirmLabel={node ? `Save ${kind}` : `Add ${kind}`}
       confirmDisabled={!canSave}
+      confirmTip={fieldsValid && unchanged ? NO_CHANGES_TIP : undefined}
       onCancel={onCancel}
       onConfirm={submit}
     >
@@ -2709,6 +2755,30 @@ function groupChildren(children: CourseChild[]): CourseGroup[] {
   );
 }
 
+/* Publishing leaves nothing blank (spec review 2026-10-09): every Course
+   holds at least one Lesson or Task, and every Lesson at least one Task — so
+   the Certification has a Task somewhere. Each empty node is one gap, named
+   the way the builder labels it, so the blocked Create tooltip says which. */
+type EmptyNode = { key: string; label: string };
+function emptyNodes(courses: CertCourse[]): EmptyNode[] {
+  return courses.flatMap((co, i) => {
+    const course = `Course ${i + 1} “${co.nameEn || "Untitled Course"}”`;
+    if (co.children.length === 0) {
+      return [{ key: `emptyCourse:${co.id}`, label: `${course} has no Lessons or Tasks` }];
+    }
+    return groupChildren(co.children).flatMap((g) =>
+      g.kind === "lesson" && g.lesson.tasks.length === 0
+        ? [
+            {
+              key: `emptyLesson:${g.lesson.id}`,
+              label: `Lesson ${g.num} “${g.lesson.nameEn || "Untitled Lesson"}” in ${course} has no Tasks`,
+            },
+          ]
+        : [],
+    );
+  });
+}
+
 // The right pane: the selected Course's header (eyebrow · name · description ·
 // kebab), then one block per child — a Lesson with its Tasks, closed by an
 // "Add Tasks" row, or a loose Task as a block of its own — and the Add Lesson /
@@ -2716,6 +2786,7 @@ function groupChildren(children: CourseChild[]): CourseGroup[] {
 function CoursePane({
   course,
   index,
+  flagged,
   allTasks,
   dnd,
   onUpdateTask,
@@ -2734,6 +2805,8 @@ function CoursePane({
 }: {
   course: CertCourse;
   index: number;
+  /** Publish gaps showing now — see TasksStep `flagged`. */
+  flagged: ReadonlySet<string>;
   allTasks: CertTask[];
   dnd: (scope: string, id: string) => DndProps;
   onUpdateTask: (taskId: string, patch: Partial<CertTask>) => void;
@@ -2790,7 +2863,11 @@ function CoursePane({
       {/* `is-single`: one child means nothing to drag against — see .ctb-list. */}
       <div className={`ctb-groups${course.children.length === 1 ? " is-single" : ""}`}>
         {course.children.length === 0 && (
-          <div className="ctb-empty">No Tasks yet — add a Task or a Lesson to get started.</div>
+          <div className={`ctb-empty${flagged.has(`emptyCourse:${course.id}`) ? " has-error" : ""}`}>
+            {flagged.has(`emptyCourse:${course.id}`)
+              ? "This Course is empty. Add a Lesson or a Task before publishing."
+              : "No Tasks yet — add a Task or a Lesson to get started."}
+          </div>
         )}
 
         {groups.map((g) =>
@@ -2811,6 +2888,7 @@ function CoursePane({
               key={g.key}
               lesson={g.lesson}
               num={g.num}
+              empty={flagged.has(`emptyLesson:${g.lesson.id}`)}
               allTasks={allTasks}
               dnd={dnd}
               dndRow={dnd(childScope, g.lesson.id)}
@@ -2851,6 +2929,7 @@ function CoursePane({
 function LessonCard({
   lesson,
   num,
+  empty = false,
   allTasks,
   dnd,
   dndRow,
@@ -2864,6 +2943,8 @@ function LessonCard({
 }: {
   lesson: CertLesson;
   num: number;
+  /** Flagged publish gap: the Lesson holds no Task. */
+  empty?: boolean;
   allTasks: CertTask[];
   dnd: (scope: string, id: string) => DndProps;
   dndRow: DndProps;
@@ -2880,13 +2961,16 @@ function LessonCard({
     // The whole block takes a drop (not just its header), so a Lesson with a
     // long Task list is an easy target for a sibling being dragged.
     <div
-      className={`ctb-lesson${lesson.hidden ? " hidden" : ""}`}
+      className={`ctb-lesson${lesson.hidden ? " hidden" : ""}${empty ? " has-error" : ""}`}
       {...dndRow.target}
     >
       <div className="ctb-lesson-head">
         <DragDots className="ctb-grip" {...dndRow.handle} />
         <div className="ctb-lesson-titles">
-          <div className="ctb-lesson-eyebrow">Lesson {num}</div>
+          <div className="ctb-lesson-eyebrow">
+            Lesson {num}
+            {empty && <span className="form-label-error">Add at least one Task</span>}
+          </div>
           <div className="ctb-lesson-name-row">
             <span className="ctb-lesson-name">{lesson.nameEn || "Untitled Lesson"}</span>
             {lesson.hidden && <span className="co-status-pill co-status-pill--accent cert-hidden-pill">Hidden</span>}
@@ -3298,12 +3382,12 @@ function AccessRestrictionModal({
   onSave: (restriction: AccessRestriction | undefined) => void;
 }) {
   const existing = task.restriction?.enabled ? task.restriction : undefined;
-  /* The Certification's own Tasks, plus the library's ID Upload Task — it is
-     never added to a tree, but any Task can be gated behind it. */
-  const options: { id: string; name: string }[] = [
-    ...allTasks.filter((t) => t.id !== task.id),
-    ...getTasks().filter((t) => isIdUpload(t) && !t.hidden && !allTasks.some((a) => a.id === t.id)),
-  ];
+  /* The Certification's own Tasks. The library's ID Upload Task is one of
+     them only once it has been added to this Certification's tree; until then
+     it is listed greyed out with a pill saying so, and can't be picked. */
+  const options: { id: string; name: string }[] = allTasks.filter((t) => t.id !== task.id);
+  const idUpload = getTasks().find((t) => isIdUpload(t) && !t.hidden);
+  const idUploadMissing = !!idUpload && !allTasks.some((t) => t.name === idUpload.name);
   const [ids, setIds] = useState<string[]>(
     (existing?.taskIds ?? []).filter((id) => options.some((o) => o.id === id)),
   );
@@ -3320,8 +3404,19 @@ function AccessRestrictionModal({
 
   // The shared MultiSelect speaks labels, so Tasks travel by name and are
   // mapped back to ids (the first Task of that name, in tree order).
-  const names = options.map((o) => o.name);
+  // The ID Upload Task always leads the list — picked or locked.
+  const otherNames = options.map((o) => o.name).filter((n) => n !== idUpload?.name);
+  const names = idUpload && (idUploadMissing || options.some((o) => o.name === idUpload.name))
+    ? [idUpload.name, ...otherNames]
+    : otherNames;
   const picked = ids.map((id) => options.find((o) => o.id === id)?.name).filter((n): n is string => !!n);
+  // Editing with nothing changed has nothing to save (the Save Changes gate).
+  const initialIds = (existing?.taskIds ?? []).filter((id) => options.some((o) => o.id === id));
+  const unchanged =
+    !!existing &&
+    mode === existing.mode &&
+    ids.length === initialIds.length &&
+    ids.every((id) => initialIds.includes(id));
   const setPicked = (next: string[]) =>
     setIds(
       next
@@ -3334,7 +3429,8 @@ function AccessRestrictionModal({
       title={existing ? "Edit Access Restriction" : "Add Access Restriction"}
       description={`Learners can't start "${task.name}" until the Tasks below are completed.`}
       confirmLabel={existing ? "Save Restriction" : "Add Restriction"}
-      confirmDisabled={ids.length === 0}
+      confirmDisabled={ids.length === 0 || unchanged}
+      confirmTip={ids.length > 0 && unchanged ? NO_CHANGES_TIP : undefined}
       footerExtra={
         existing ? (
           <button className="prm-quiet" onClick={() => onSave(undefined)}>
@@ -3352,6 +3448,16 @@ function AccessRestrictionModal({
             options={names}
             value={picked}
             onChange={setPicked}
+            locked={
+              idUploadMissing
+                ? {
+                    [idUpload!.name]: {
+                      detail: "Add to this Certification first",
+                      tip: "Add the ID Upload Task to this Certification's Courses first, then it can gate other Tasks.",
+                    },
+                  }
+                : undefined
+            }
             placeholder="Select Tasks"
             searchPlaceholder="Search Tasks..."
             popupMenu
@@ -4023,8 +4129,8 @@ export function CertificationSummary({
             data.timeValue &&
               formatTimeToComplete({ value: Number(data.timeValue), unit: data.timeUnit }),
           ],
-          // The record's own state — the wizard folds Archived into Hidden.
-          ["Visibility", cert.visibility ?? "Visible"],
+          // The record's own state; Archived shows beside it when set.
+          ["Visibility", `${cert.visibility ?? "Visible"}${cert.archived ? " · Archived" : ""}`],
           // One Industry per line (Figma 1517:3805).
           ["Industries", data.industries.length > 0 && industryTagLabels(data.industries).map((i) => <div key={i}>{i}</div>)],
           ["Career Stage", CAREER_STAGES.find((s) => s.value === data.careerStage)?.label],
@@ -4250,7 +4356,7 @@ function TaskSummaryRow({
 
 /* The Archive & Replace page's long explanation — the ⓘ on its description. */
 const ARCHIVE_CERT_TIP =
-  "Archiving removes this Certification from the catalog, so no one new can enroll in it. You can unarchive it later from this page (its row menu's Manage Archive & Replace Settings); it then returns to the visibility it had before.\n\n" +
+  "Archiving removes this Certification from the catalog, so no one new can enroll in it. You can unarchive it later from this page (its row menu's Manage Archive & Replace Settings). Archiving doesn't change whether it is Visible or Hidden.\n\n" +
   "Learners already enrolled keep their completion record. The Replacement Certifications you pick appear in their Path, and the Replacement Alert tells them why.";
 
 /* Archiving used to be the Cert wizard's 7th step, shown only while editing.
@@ -4267,19 +4373,18 @@ export function ArchiveCertificationPage({
   cert: Certification;
   onClose: () => void;
   /** Archived mode's footer Unarchive, once its explanation and confirm are
-   *  through: the caller restores the visibility the Cert had before it was
-   *  archived, clears the replacement settings, and returns to the list. */
+   *  through: the caller clears the archived flag (visibility untouched) and
+   *  the replacement settings, and returns to the list. */
   onUnarchive: () => void;
-  /** Commits the archive with what was picked — the caller flips the Cert's
-   *  visibility to Archived (remembering the one it had, for Unarchive) and
-   *  stores the replacements (ids) and the alert on the record. On an
+  /** Commits the archive with what was picked — the caller sets the Cert's
+   *  archived flag (its visibility is left alone) and stores the replacements (ids) and the alert on the record. On an
    *  already-archived Cert it just saves the edited replacements / alert. */
   onArchive: (result: {
     replacementIds: string[];
     replacementAlert?: { en: string; es: string };
   }) => void;
 }) {
-  const alreadyArchived = cert.visibility === "Archived";
+  const alreadyArchived = !!cert.archived;
   // Replacements are a plain multi-select — the field is the shared
   // MultiSelect (Figma 591:1322), so the chosen Certs live as its pills. The
   // options are the LIVE list (Certifications created this session too),
@@ -4392,8 +4497,8 @@ export function ArchiveCertificationPage({
                   title={alreadyArchived ? "This Certification is archived." : "Archiving retires this Certification."}
                   body={
                     alreadyArchived
-                      ? "It is out of the catalog, so no one new can enroll. Enrolled learners keep their completion record and are pointed to the replacement Certification(s) below. Unarchive returns it to the visibility it had before."
-                      : "It leaves the catalog, so no one new can enroll. Enrolled learners keep their completion record and are pointed to the replacement Certification(s) below. You can unarchive it later from this page; it returns to the visibility it had before."
+                      ? "It is out of the catalog, so no one new can enroll. Enrolled learners keep their completion record and are pointed to the replacement Certification(s) below. Unarchive clears only the archive; its Visible / Hidden setting stays as it is."
+                      : "It leaves the catalog, so no one new can enroll. Enrolled learners keep their completion record and are pointed to the replacement Certification(s) below. You can unarchive it later from this page. Its Visible / Hidden setting is left as it is."
                   }
                 />
               </div>
@@ -4450,7 +4555,7 @@ export function ArchiveCertificationPage({
               alertOver
                 ? `Shorten this field to ${alreadyArchived ? "save" : "archive"}:\n• ${limitLabel("Replacement Alert", DESCRIPTION_MAX)}`
                 : ctaBlocked
-                  ? "No changes to save"
+                  ? NO_CHANGES_TIP
                   : undefined
             }
             onClick={() => {

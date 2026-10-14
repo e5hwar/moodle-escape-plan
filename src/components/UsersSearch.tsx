@@ -27,8 +27,6 @@ export type SearchScope = {
   example: string;
   /** What the suggested row promises ("Filter by Company"). */
   hint: string;
-  /** Right-hand note per option ("12 users"). */
-  describe?: (name: string) => string | undefined;
 };
 
 /** What a suggested value is, as the row's right-hand label: the scope's noun
@@ -316,7 +314,6 @@ export function EntitySearch({
                   >
                     <span className="usearch-chip">{mode.scope.token}:</span>
                     <span className="usearch-row-ex">{name}</span>
-                    <span className="usearch-row-desc">{mode.scope.describe?.(name)}</span>
                   </OptionRow>
                 ))
               )}
@@ -361,7 +358,6 @@ export function UsersSearch({
     optionsLabel: "Companies",
     example: "Company: Acme Inc.",
     hint: "Filter by Company",
-    describe: (name) => `${companies.counts.get(name)} users`,
   };
 
   return (

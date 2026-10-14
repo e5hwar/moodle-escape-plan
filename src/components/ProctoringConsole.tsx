@@ -142,8 +142,8 @@ export function ProctoringConsole({
   /* The queue's one on-screen control is Skip (Figma 445:878); ←/→ also step
      through it. NEXT vs PENDING, as on Hands-On: Skip walks every row of the
      queue whatever its status, and its "· n Pending" counts only the rows
-     after this one still awaiting review. On the queue's last row it becomes
-     Back — never hidden — and returns to the list the queue came from. */
+     after this one still awaiting review. On the queue's last row it is
+     hidden (spec review 2026-10-09); the breadcrumb is the way out. */
   const index = queue.findIndex((s) => s.id === submission.id);
   const hasPrev = index > 0;
   const hasNext = index >= 0 && index < queue.length - 1;
@@ -154,10 +154,10 @@ export function ProctoringConsole({
     onGoto(queue[idx].id);
   }
 
-  /* No toast — the screen changing is the feedback. */
-  function skipOrBack() {
+  /* No toast — the screen changing is the feedback. Nothing to skip to on
+     the last row (the button is hidden there, and N does nothing). */
+  function skip() {
     if (hasNext) gotoIndex(index + 1);
-    else onExit();
   }
 
   /* Approving is what saves the name — the Name Mismatch card promises exactly
@@ -216,7 +216,7 @@ export function ProctoringConsole({
       // No Reject button on ID-only submissions, so no R either.
       else if ((e.key === "r" || e.key === "R") && hasFootage) setConfirmKind("reject");
       else if ((e.key === "i" || e.key === "I") && !idAlreadyRequested) setConfirmKind("request");
-      else if (e.key === "n" || e.key === "N") skipOrBack();
+      else if (e.key === "n" || e.key === "N") skip();
       else if (e.key === "Escape") onExit();
     };
     window.addEventListener("keydown", handler);
@@ -310,10 +310,12 @@ export function ProctoringConsole({
                   only — on an ID-only submission the ID check IS the review. */}
               <ReviewSection
                 title="ID Verification"
-                /* Never both: requesting a re-upload drops the prior
-                   verification (it vouched for the document being replaced),
-                   so a row is one or the other. */
-                badge={isReupload ? <ReuploadedIdPill /> : idVerified ? <VerifiedPill /> : undefined}
+                /* Never both. Requesting a re-upload drops the prior
+                   verification (it vouched for the document being replaced);
+                   an approval on another of the learner's attempts verifies
+                   the ID again, re-upload or not (spec review 2026-10-09) —
+                   and then Verified is what the rail says. */
+                badge={idVerified ? <VerifiedPill /> : isReupload ? <ReuploadedIdPill /> : undefined}
                 stats={
                   idVerified ? (
                     <RailStat
@@ -391,34 +393,33 @@ export function ProctoringConsole({
             </div>
           </div>
 
-          {/* ── footer (Figma 445:878) — Skip on the left, the three CTAs on
-                 the right ── */}
+          {/* ── footer (Figma 445:878) — laid out like the Hands-On console's
+                 (spec review 2026-10-13): Back out to the list on the left;
+                 Skip and the three CTAs together on the right. ── */}
           <div className="wizard-footer rvc-footer prc-footer">
-            <div className="wizard-footer-left prc-footer-left">
-              {/* The Hands-On console's Skip atom (`.rvc-skip`): "Skip to Next ·
-                  n Pending" with its own N keycap, and "Back" on the queue's
-                  last row (see `skipOrBack`). */}
-              <button className="btn-save-draft rvc-skip" onClick={skipOrBack}>
-                <span className="rvc-skip-label">
-                  {hasNext ? (
-                    <>
-                      Skip to Next
-                      {!hidePendingCount && (
-                        <>
-                          {" "}
-                          <span className="rvc-skip-count">· {pendingCount} Pending</span>
-                        </>
-                      )}
-                    </>
-                  ) : (
-                    "Back"
-                  )}
-                </span>
-                <span className="cta-kbd">N</span>
-              </button>
-            </div>
+            <button className="wizard-cancel" onClick={() => onExit()}>
+              Back
+            </button>
 
             <div className="prc-footer-right">
+              {/* The Hands-On console's Skip atom (`.rvc-skip`): "Skip to Next ·
+                  n Pending" with its own N keycap. On the queue's last row it
+                  is hidden (spec review 2026-10-09); a decision there still
+                  returns to the list. */}
+              {hasNext && (
+                <button className="btn-save-draft rvc-skip" onClick={skip}>
+                  <span className="rvc-skip-label">
+                    Skip to Next
+                    {!hidePendingCount && (
+                      <>
+                        {" "}
+                        <span className="rvc-skip-count">· {pendingCount} Pending</span>
+                      </>
+                    )}
+                  </span>
+                  <span className="cta-kbd">N</span>
+                </button>
+              )}
               <button
                 className="btn-save-draft"
                 onClick={() => setConfirmKind("request")}

@@ -2,10 +2,10 @@ import { questionById, type Question } from "./questionBank";
 import { todayStamp } from "./companies";
 
 /* A form is live the moment it is created — there is no draft/activation
-   step. Disabled stops it firing (mappings and responses are preserved);
+   step. Archived stops it firing (mappings and responses are preserved);
    Deleted is a tombstone: the record stays for its responses, but the form is
    gone from the list. */
-export type FormStatus = "active" | "disabled" | "deleted";
+export type FormStatus = "active" | "archived" | "deleted";
 
 export type LinkStatus = "active" | "inactive";
 
@@ -138,8 +138,9 @@ export const feedbackForms: FeedbackForm[] = [
       link("Q-10440", false, "2026-02-10", "inactive", "2026-05-04"),
     ],
     triggers: [
-      /* EPA 608 Universal itself is B2B Companies Only (`audienceOf`), so it
-         can't fire a form; the Final Exam Tasks reach every learner. */
+      /* Mapped to the Final Exam Tasks, which reach every learner. (EPA 608
+         Universal itself is B2B Companies Only — a SkillCat Certification,
+         so it could fire a form too.) */
       { id: "tr-1", kind: "task", refId: "T-1198", refName: "EPA 608 Universal Final Exam", mappedAt: "2026-04-12" },
       { id: "tr-2", kind: "task", refId: "T-1156", refName: "EPA 608 Type I Final Exam", mappedAt: "2026-04-12" },
     ],
@@ -218,9 +219,9 @@ export const feedbackForms: FeedbackForm[] = [
   {
     id: "FB-0002",
     name: "Old EPA Survey (Q1)",
-    status: "disabled",
+    status: "archived",
     questions: [link("Q-10450", false, "2025-11-04")],
-    // Preserved but inactive while the form is disabled.
+    // Preserved but not firing while the form is archived.
     triggers: [
       { id: "tr-8", kind: "task", refId: "T-1876", refName: "EPA Certification Lookup", mappedAt: "2025-11-06" },
     ],
@@ -397,8 +398,8 @@ function mkResponses(
   form: FeedbackForm,
   count: number,
   seed: number,
-  // Responses spread backwards from `endDaysAgo` — disabled forms date theirs
-  // before they were disabled; a wide span lets some predate link deactivations.
+  // Responses spread backwards from `endDaysAgo` — archived forms date theirs
+  // before they were archived; a wide span lets some predate link deactivations.
   opts: { endDaysAgo?: number; spanDays?: number } = {},
 ): FormResponse[] {
   if (form.triggers.length === 0) return [];

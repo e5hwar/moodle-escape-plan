@@ -404,7 +404,6 @@ export function ReviewSearch({
                   <OptionRow key={name} active={active === i} onHover={() => setActive(i)} onClick={() => activate({ kind: "company", name })}>
                     <span className="usearch-chip">Company:</span>
                     <span className="usearch-row-ex">{name}</span>
-                    <span className="usearch-row-desc">{allCompanies.counts.get(name)} submissions</span>
                   </OptionRow>
                 ))
               )}
@@ -421,7 +420,6 @@ export function ReviewSearch({
                   <OptionRow key={name} active={active === i} onHover={() => setActive(i)} onClick={() => activate({ kind: "task", name })}>
                     <span className="usearch-chip">Task:</span>
                     <span className="usearch-row-ex">{name}</span>
-                    <span className="usearch-row-desc">{allTasks.counts.get(name)} submissions</span>
                   </OptionRow>
                 ))
               )}
@@ -438,7 +436,6 @@ export function ReviewSearch({
                   <OptionRow key={name} active={active === i} onHover={() => setActive(i)} onClick={() => activate({ kind: "certification", name })}>
                     <span className="usearch-chip">Certification:</span>
                     <span className="usearch-row-ex">{name}</span>
-                    <span className="usearch-row-desc">{allCerts.counts.get(name)} submissions</span>
                   </OptionRow>
                 ))
               )}

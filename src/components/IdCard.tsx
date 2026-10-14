@@ -22,7 +22,8 @@ function formatDate(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
   return Number.isNaN(d.getTime())
     ? iso
-    : d.toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" });
+    : // The app's one date shape, on the document too (the user, 2026-10-13).
+      d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 /** A realistic-looking mock ID card rendered as SVG so it stays crisp when zoomed. */

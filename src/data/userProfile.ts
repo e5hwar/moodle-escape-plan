@@ -22,15 +22,26 @@ export type OnboardingGoal =
   | "Other";
 export type MeritTier = "Bronze" | "Silver" | "Gold" | "Platinum";
 
+/** A physical-card order's status, in order of progress, spelled as the
+ *  Figma table prints them (1668:1554: "In Production", "Action Needed",
+ *  "Cancelled"). Cancelling is only possible before printing starts; a
+ *  canceled order is never refunded by the order itself — the charge is
+ *  refunded from Purchases & Bills. */
 export type EpaStatus =
-  | "Order received"
+  | "Order Received"
   | "Accepted"
-  | "In production"
+  | "Action Needed"
+  | "In Production"
   | "Shipped"
   | "Delivered"
-  | "Action needed"
-  | "Canceled"
-  | "Refunded";
+  | "Cancelled";
+export const EPA_STATUSES: EpaStatus[] = ["Order Received", "Accepted", "Action Needed", "In Production", "Shipped", "Delivered", "Cancelled"];
+/** Cancel Order is offered only before printing starts — received, accepted,
+ *  or waiting on the user (Action Needed: a bad address, say). */
+export function canCancelEpaOrder(o: Pick<EpaCardOrder, "status">): boolean {
+  return o.status === "Order Received" || o.status === "Accepted" || o.status === "Action Needed";
+}
+export const EPA_CANCEL_BLOCK = "Printing has started. This order cannot be cancelled.";
 
 export type SkillBadge = {
   name: string;
@@ -55,6 +66,9 @@ export type SubscriptionDetail = {
   status: SubscriptionStatus;
   platform?: Platform;
   cycle?: BillingCycle;
+  /** The currency a personal plan is billed in — USD or CAD, the two the
+   *  platform bills in (the Subscription card's Currency row). */
+  currency?: "USD" | "CAD";
   /** "$24/mo" / "$199/yr" — personal plans only. */
   price?: string;
   startedOn?: string;
@@ -104,13 +118,33 @@ export type Purchase = {
   key: string;
 };
 
-/* Refunds an admin issued from the Full Profile, by purchase key. Shared, like
-   every other edit to a user, and the one thing that revokes an Award: a
-   refunded Certification takes its Award with it. */
+/* Refunds recorded against a purchase key. The Full Profile no longer issues
+   them itself — Refund opens the charge on Stripe or Google, where the admin
+   refunds it — so this holds what the seed marks refunded; shared like every
+   other edit to a user, and the one thing that revokes an Award: a refunded
+   Certification takes its Award with it. */
 const refundStore = sharedStore<Record<string, true>>("refunds", {});
 export const useRefunds = refundStore.use;
 export function refundPurchase(key: string): void {
   refundStore.set((prev) => ({ ...prev, [key]: true }));
+}
+
+/** Where a charge's record lives — the Refund action opens it in a new tab.
+ *  Apple purchases have no page of ours: the user refunds through the App
+ *  Store, so the item is disabled with `APPLE_REFUND_NOTE`. */
+export const APPLE_REFUND_NOTE = "User must request a refund from Apple's App Store themselves";
+export function purchaseRecordUrl(p: Pick<Purchase, "platform" | "receiptId">): string | undefined {
+  if (p.platform === "Stripe") return `https://dashboard.stripe.com/payments/${p.receiptId}`;
+  if (p.platform === "Google") return `https://play.google.com/console/developers/orders/${p.receiptId}`;
+  return undefined;
+}
+
+/* EPA card orders an admin cancelled from the Full Profile, by order id —
+   shared across tabs like the refunds. */
+const epaCancelStore = sharedStore<Record<string, true>>("epaCancels", {});
+export const useEpaCancels = epaCancelStore.use;
+export function cancelEpaOrder(id: string): void {
+  epaCancelStore.set((prev) => ({ ...prev, [id]: true }));
 }
 
 /** The Certification a purchase bought — "EPA 608 Universal (Certification)"
@@ -120,11 +154,16 @@ function certOfPurchase(p: Purchase): string | null {
 }
 
 export type EpaCardOrder = {
+  /** Stable id — what a cancellation is recorded against. */
+  id: string;
   certification: string;
   status: EpaStatus;
   orderedOn: string;
   recipient: string;
   shippingAddress: string;
+  /** Bought by the user's company rather than the user (B2B only) — the
+   *  table flags it "Company Paid" beside the Certification. */
+  companyPaid?: boolean;
   tracking?: { carrier: string; number: string; url: string; shippedOn: string };
 };
 
@@ -147,7 +186,8 @@ export type UserProfile = {
   awards: AwardRecord[];
   subscription: SubscriptionDetail;
   purchases: Purchase[];
-  epaCard?: EpaCardOrder;
+  /** Every physical-card order, newest first. */
+  epaOrders: EpaCardOrder[];
   nate?: NateDetail;
 };
 
@@ -304,29 +344,41 @@ function ownProfile(user: User): UserProfile {
   // Subscription details — off the user record (the Users pill's source).
   const subscription = subscriptionOf(user, h);
 
-  // EPA card — HVAC/Refrigeration users, sometimes.
+  // EPA card orders — HVAC/Refrigeration users, one to three of them for
+  // most; the first is the most recent and the only one that may still be
+  // open. Cancellations this session recorded apply on top.
   const epaEligible = industry === "HVAC" || industry === "Refrigeration";
-  const epaStatuses: EpaStatus[] = ["Order received", "Accepted", "In production", "Shipped", "Delivered", "Action needed", "Canceled", "Refunded"];
-  let epaCard: EpaCardOrder | undefined;
+  const epaCancels = epaCancelStore.get();
+  const epaOrders: EpaCardOrder[] = [];
   if (epaEligible && h % 3 !== 2) {
-    const status = pick(epaStatuses, h);
-    const epaType = pick(["EPA 608 Universal", "EPA 608 Type I", "EPA 608 Type II", "EPA 608 Type III"], h + 5);
-    const shipped = status === "Shipped" || status === "Delivered";
-    epaCard = {
-      certification: epaType,
-      status,
-      orderedOn: daysAgo(7 + (h % 40)),
-      recipient: user.name,
-      shippingAddress: `${100 + (h % 8900)} Main St, ${pick(["Austin, TX", "Denver, CO", "Phoenix, AZ", "Chicago, IL", "Miami, FL"], h)} ${pick(ZIPS, h)}`,
-      tracking: shipped
-        ? {
-            carrier: pick(["USPS", "UPS", "FedEx"], h),
-            number: "1Z" + (h % 36 ** 8).toString(36).toUpperCase().padStart(8, "0"),
-            url: "https://tools.usps.com/go/TrackConfirmAction",
-            shippedOn: daysAgo(2 + (h % 5)),
-          }
-        : undefined,
-    };
+    const count = 1 + (h % 3);
+    const address = `${100 + (h % 8900)} Main St, ${pick(["Austin, TX", "Denver, CO", "Phoenix, AZ", "Chicago, IL", "Miami, FL"], h)} ${pick(ZIPS, h)}`;
+    for (let i = 0; i < count; i++) {
+      const k = hash(`${user.id}:epa${i}`);
+      // Older orders are long since delivered (or were cancelled); only the
+      // newest can still be in flight.
+      const status: EpaStatus =
+        i === 0 ? EPA_STATUSES[k % EPA_STATUSES.length] : k % 4 === 0 ? "Cancelled" : "Delivered";
+      const shipped = status === "Shipped" || status === "Delivered";
+      const id = `${user.id}-EPA${i}`;
+      epaOrders.push({
+        id,
+        certification: pick(["EPA 608 Universal", "EPA 608 Type I", "EPA 608 Type II", "EPA 608 Type III"], k + 5),
+        status: epaCancels[id] ? "Cancelled" : status,
+        orderedOn: daysAgo(7 + (k % 40) + i * 120),
+        recipient: user.name,
+        shippingAddress: address,
+        companyPaid: user.userType === "B2B" ? k % 3 !== 0 : undefined,
+        tracking: shipped
+          ? {
+              carrier: pick(["USPS", "UPS", "FedEx"], k),
+              number: "1Z" + (k % 36 ** 8).toString(36).toUpperCase().padStart(8, "0"),
+              url: "https://tools.usps.com/go/TrackConfirmAction",
+              shippedOn: daysAgo(2 + (k % 5) + i * 120),
+            }
+          : undefined,
+      });
+    }
   }
 
   // NATE — any user may have filled in the NATE form in the app; it is not tied
@@ -404,17 +456,22 @@ function ownProfile(user: User): UserProfile {
       refunded: false,
     });
   }
-  if (epaCard && epaCard.status !== "Canceled" && epaCard.status !== "Refunded") {
+  // Every order was paid for — a cancelled one too: cancelling doesn't refund
+  // the charge, that is done from this list.
+  epaOrders.forEach((o, i) => {
     purchases.push({
-      date: epaCard.orderedOn,
-      item: `${epaCard.certification} Physical Card`,
+      date: o.orderedOn,
+      item: `${o.certification} Physical Card`,
       kind: "EPA Card",
       amount: 60,
       platform: "Stripe",
-      receiptId: `RC-${(h + 13).toString(36).toUpperCase().slice(0, 6)}`,
+      receiptId: `RC-${(h + 13 + i * 29).toString(36).toUpperCase().slice(0, 6)}`,
       key: "", // set once the list is complete
+      // A cancelled older order has been refunded since (the seed's own
+      // refunded rows, Figma 1290:2943); the newest never is.
+      refunded: i > 0 && o.status === "Cancelled",
     });
-  }
+  });
   purchases.sort((a, b) => b.date.localeCompare(a.date));
 
   // Certifications an admin awarded (or withdrew) in Manage Completions.
@@ -443,6 +500,9 @@ function ownProfile(user: User): UserProfile {
   purchases.forEach((p) => {
     p.key = `${user.id}|${p.date}|${p.item}|${p.receiptId}`;
     if (user.userType === "B2B" && p.kind !== "Subscription") p.companyPaid = hash(p.key) % 3 !== 0;
+    // A deterministic few of the one-time purchases are refunded already —
+    // the greyed row with its "Refunded" pill — besides this session's.
+    if (p.kind === "Quiz Attempt" && hash(p.key + ":rf") % 4 === 0) p.refunded = true;
     if (refunds[p.key]) p.refunded = true;
   });
   for (const p of purchases) {
@@ -467,7 +527,7 @@ function ownProfile(user: User): UserProfile {
     awards,
     subscription,
     purchases,
-    epaCard,
+    epaOrders,
     nate,
   };
 }
@@ -516,6 +576,7 @@ function subscriptionOf(user: User, h: number): SubscriptionDetail {
         status,
         platform: user.platform,
         cycle,
+        currency: h % 7 === 0 ? "CAD" : "USD",
         price: planPriceLabel(cycle),
         // A few cycles back from the renewal the plan is paid up to.
         startedOn: cycle === "Annual" ? isoAddMonths(renews, -12 * (1 + (h % 2))) : isoAddMonths(renews, -(2 + (h % 10))),
@@ -537,7 +598,7 @@ function subscriptionOf(user: User, h: number): SubscriptionDetail {
     case "Company Plan":
       return { status, startedOn: user.joinedOn };
     case "Cancelled":
-      return { status, endsOn: user.cancelledOn, offerCode };
+      return { status, currency: h % 7 === 0 ? "CAD" : "USD", endsOn: user.cancelledOn, offerCode };
     case "Starter":
       return { status };
   }

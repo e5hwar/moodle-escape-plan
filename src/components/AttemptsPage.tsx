@@ -12,7 +12,7 @@ import {
   type Attempt,
   type AttemptStatus,
 } from "../data/attempts";
-import { taskById, useLiveTasks } from "../data/tasks";
+import { isPaid, taskById, useLiveTasks } from "../data/tasks";
 import { users as allUsers, type User } from "../data/users";
 import { todayIso, CURRENT_ADMIN } from "../data/certPurchases";
 import { GrantAttemptsModal } from "./GrantAttemptsModal";
@@ -27,6 +27,8 @@ import { AddIcon, SortIcon, RowKebabIcon, RowExternalLinkIcon, RowDeleteIcon, Pa
 import { TableCols } from "./TableCols";
 import { TableEmpty } from "./TableEmpty";
 import { useToast } from "./useToast";
+import { useListState, useResetPageOnChange } from "../hooks/useListState";
+import { useCertificationOptions } from "../data/filters";
 
 const PAGE_SIZE = 50;
 
@@ -186,29 +188,49 @@ export function AttemptsPage({
     [extraAttempts, droppedExtra, store.attempts],
   );
   const quizName = taskById(taskId)?.name ?? extraAttempts?.[0]?.quizName ?? "";
+  /* Additional Attempts only mean something on a FREE Quiz with a LIMITED
+     number of attempts: an unlimited Quiz has nothing to add to, and a paid
+     Quiz's extra attempts are granted from Who Paid (Grant Additional
+     Attempts). `maxAttempts` left unset is the wizard's default, 3. */
+  const quiz = library.find((t) => t.id === taskId) ?? taskById(taskId);
+  const canGrantHere = !!quiz && !isPaid(quiz) && quiz.maxAttempts !== null;
   const [granting, setGranting] = useState(false);
-  const [filters, setFilters] = useState<Filters>({
+  /* Kept for the session, per Quiz (spec review 2026-10-09: every list
+     restores). A deep link to one learner or one status starts fresh. */
+  const ls = `attempts:${taskId}`;
+  const fresh = !!initialNameFilter || !!initialStatusFilter || !!extraAttempts?.length;
+  const [filters, setFilters] = useListState<Filters>(`${ls}:filters`, {
     quizzes: [quizName],
     certifications: [],
     statuses: initialStatusFilter ? [initialStatusFilter] : [],
     attemptNumbers: [],
     startedRange: null,
     completedRange: null,
-  });
+  }, fresh);
   // Commit-on-Enter, like every other page on this bar: `search` is what the
   // table filters on, never the half-typed draft inside the component.
-  const [search, setSearch] = useState(initialNameFilter ?? "");
+  const [search, setSearch] = useListState(`${ls}:search`, initialNameFilter ?? "", fresh);
   /* Newest attempt first — an admin opens this page to see what just came in,
      and Started is the one stamp EVERY row has (an In Progress attempt has no
      completion to sort by, so sorting on that buried them all at one end). */
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
+  const [sort, setSort] = useListState<{ key: SortKey; dir: SortDir }>(`${ls}:sort`, {
     key: "startedAt",
     dir: "desc",
-  });
-  const [page, setPage] = useState(1);
+  }, fresh);
+  const [page, setPage] = useListState(`${ls}:page`, 1, fresh);
   const [menu, setMenu] = useState<{ attempt: Attempt; rect: DOMRect } | null>(null);
   // The attempt awaiting the delete confirm, if any.
   const [deleting, setDeleting] = useState<Attempt | null>(null);
+  /* Deleting an attempt on a PAID Quiz hands the purchase back (see
+     `deleteAttempt` in data/attempts.ts), and the confirm says so. Rows the
+     page was handed by a deep link aren't in the store, so they hold none. */
+  const deletingTask = deleting ? library.find((t) => t.id === deleting.taskId) ?? taskById(deleting.taskId) : undefined;
+  const deletingPaid =
+    !!deleting &&
+    !!deleting.userId &&
+    !!deletingTask &&
+    isPaid(deletingTask) &&
+    !extraAttempts?.some((x) => x.id === deleting.id);
 
   /* The attempt screen is out of scope here: an admin opening an attempt will
      land on the very page the learner saw, so there is nothing separate to
@@ -230,31 +252,15 @@ export function AttemptsPage({
         .sort(),
     [quizName, library],
   );
-  /* Every attempt number the selected Quiz(zes) actually reach, so the
-     checklist never offers a "#4" nobody has on them. */
+  /* Complete sources (spec review 2026-10-09), not the values the rows in
+     view hold: every attempt number on record (whichever Quiz is picked) and
+     every Certification. A pick with no rows shows the no-matches state. */
   const attemptOptions = useMemo(
     () =>
-      [
-        ...new Set(
-          list
-            .filter((a) => !filters.quizzes.length || filters.quizzes.includes(attemptQuizName(a)))
-            .map((a) => a.attemptNumber),
-        ),
-      ]
-        .sort((a, b) => a - b)
-        .map((n) => `#${n}`),
-    [list, filters.quizzes],
+      [...new Set(list.map((a) => a.attemptNumber))].sort((a, b) => a - b).map((n) => `#${n}`),
+    [list],
   );
-  const certOptions = useMemo(
-    () =>
-      [
-        ...new Set([
-          ...attemptCertifications(taskId),
-          ...list.flatMap((a) => attemptCertifications(a.taskId)),
-        ]),
-      ].sort(),
-    [taskId, list],
-  );
+  const certOptions = useCertificationOptions();
 
   const scopes: SearchScope[] = [
     {
@@ -325,7 +331,7 @@ export function AttemptsPage({
   }, [filtered, sort]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  useEffect(() => setPage(1), [filters, search, sort]);
+  useResetPageOnChange(setPage, [filters, search, sort]);
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
@@ -395,7 +401,7 @@ export function AttemptsPage({
             <div className="rvc-pagehead">
               <h1 className="tasks-title">Quiz Attempts</h1>
             </div>
-            {taskById(taskId) && (
+            {canGrantHere && (
               <div className="tasks-header-actions">
                 <button className="new-task" onClick={() => setGranting(true)}>
                   <AddIcon />
@@ -543,10 +549,18 @@ export function AttemptsPage({
           confirmLabel="Delete Attempt"
           danger
           doubleConfirm={
-            <>
-              {deleting.name}'s attempt #{deleting.attemptNumber}, with its answers and grade,
-              will be permanently deleted and their cooldown reset. This can't be undone.
-            </>
+            deletingPaid ? (
+              <>
+                {deleting.name}'s attempt #{deleting.attemptNumber}, with its answers and grade,
+                will be permanently deleted and their cooldown reset. They keep the purchase and
+                can re-attempt without paying. This can't be undone.
+              </>
+            ) : (
+              <>
+                {deleting.name}'s attempt #{deleting.attemptNumber}, with its answers and grade,
+                will be permanently deleted and their cooldown reset. This can't be undone.
+              </>
+            )
           }
           onCancel={() => setDeleting(null)}
           onConfirm={() => deleteAttempt(deleting)}
@@ -559,6 +573,14 @@ export function AttemptsPage({
             can start the next attempt straight away. Any later attempts move up a number.
             This can't be undone.
           </p>
+          {/* A paid Quiz keeps the purchase: the Who Paid row stays and goes
+              back to Not Started, so the attempt can be retaken for free. */}
+          {deletingPaid && (
+            <p className="prm-content">
+              The attempt was paid for, so the purchase stays: its Who Paid row returns to
+              Not Started and they can re-attempt without paying again.
+            </p>
+          )}
         </PrmModal>
       )}
 

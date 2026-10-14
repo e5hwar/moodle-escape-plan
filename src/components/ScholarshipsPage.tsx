@@ -17,18 +17,20 @@ import {
   RowKebabIcon,
   PagePrevIcon,
   PageNextIcon,
+  DropdownCaretIcon,
   } from "./icons";
 import { SearchTrailing } from "./SearchPanelParts";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
 import { FILTER_TIPS } from "../data/filterTips";
-import { PrmModal } from "./PrmModal";
-import { SelectField } from "./SelectField";
+import { NO_CHANGES_TIP, PrmModal } from "./PrmModal";
+import { SelectGrantUsersModal } from "./GrantAttemptsModal";
 import { DateField } from "./DateField";
 import { UserDetailsHover } from "./UserDetailsHover";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { TableCols } from "./TableCols";
 import { useToast } from "./useToast";
+import { useListState, useResetPageOnChange } from "../hooks/useListState";
 import { TableEmpty } from "./TableEmpty";
 
 const PAGE_SIZE = 25;
@@ -42,7 +44,7 @@ const EXPIRING_SOON_DAYS = 14;
 type ScholarshipStatus = "active" | "expired";
 
 /** The Status pill's options — the label each row's status reads as. */
-const STATUS_OPTIONS = ["Active", "Expired"];
+const STATUS_OPTIONS = ["Active", "Ended"];
 
 /* Every column carries a width, so a wide viewport hands the slack to all of
    them in proportion instead of leaving a gap on the right — the same
@@ -75,14 +77,14 @@ type SortKey = "user" | "status" | "expiresOn" | "assignedOn" | "assignedBy";
 type SortDir = "asc" | "desc";
 
 /* Active until its Expires On date, when access ends (isScholarshipActive).
-   Revoking only moves that date to today, so it reads Expired at once. */
+   Revoking only moves that date to today, so it reads Ended at once. */
 function statusOf(s: Scholarship): ScholarshipStatus {
   return isScholarshipActive(s, TODAY_ISO) ? "active" : "expired";
 }
 
 /** The Status column's (and filter's) label for a row. */
 function statusLabel(s: Scholarship): string {
-  return statusOf(s) === "active" ? "Active" : "Expired";
+  return statusOf(s) === "active" ? "Active" : "Ended";
 }
 
 function daysFromToday(iso: string): number {
@@ -155,14 +157,15 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
   /** Everyone who has handed out a scholarship — the Assigned By filter's
    *  options, new ones included. */
   const assigners = useMemo(() => [...new Set(records.map((s) => s.assignedBy))].sort(), [records]);
-  const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string[]>([]);
-  const [assignerFilter, setAssignerFilter] = useState<string[]>([]);
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
+  // Kept for the session (spec review 2026-10-09: every list restores).
+  const [query, setQuery] = useListState("scholarships:query", "");
+  const [statusFilter, setStatusFilter] = useListState<string[]>("scholarships:status", []);
+  const [assignerFilter, setAssignerFilter] = useListState<string[]>("scholarships:assigner", []);
+  const [sort, setSort] = useListState<{ key: SortKey; dir: SortDir }>("scholarships:sort", {
     key: "assignedOn",
     dir: "desc",
   });
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useListState("scholarships:page", 1);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [menu, setMenu] = useState<{ scholarship: Row; rect: DOMRect } | null>(null);
@@ -188,7 +191,7 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
   }, [filtered, sort]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  useEffect(() => setPage(1), [query, statusFilter, assignerFilter, sort]);
+  useResetPageOnChange(setPage, [query, statusFilter, assignerFilter, sort]);
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
@@ -229,7 +232,7 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
   }
 
   /* Revoking does NOT delete the row — the scholarship is part of the user's
-     history. Its end date moves to today, so it reads Expired and stops
+     history. Its end date moves to today, so it reads Ended and stops
      counting against the create picker's "already has an active one"
      exclusion. Nothing marks it as revoked: it can be extended from Edit like
      any expired one. */
@@ -555,7 +558,7 @@ function StatusPill({ scholarship }: { scholarship: Row }) {
 
   if (status === "expired") {
     return (
-      <span className="co-status-pill co-status-pill--grey">Expired</span>
+      <span className="co-status-pill co-status-pill--grey">Ended</span>
     );
   }
   if (days <= EXPIRING_SOON_DAYS) {
@@ -668,8 +671,8 @@ function ScholarshipRevokeConfirm({
       onConfirm={onConfirm}
     >
       <p className="prm-content">
-        Revoke <strong>{name}</strong>'s scholarship? It expires as of today and stays in
-        the list as Expired. To give it back, edit its expiry date.
+        Revoke <strong>{name}</strong>'s scholarship? It ends as of today and stays in
+        the list as Ended. To give it back, edit its expiry date.
       </p>
     </PrmModal>
   );
@@ -763,7 +766,7 @@ function ScholarshipActionsMenu({
           <span>Revoke</span>
           {!canRevoke && (
             <span className="u-menu-item-sub">
-              This scholarship has already expired
+              This scholarship has already ended
             </span>
           )}
         </span>
@@ -810,16 +813,11 @@ function ScholarshipModal({
           ),
     [scholarship, excludeUserIds, roster],
   );
-  /* SelectField works in display strings, so each option is the user's name —
-     with their email or phone after it when two share a name. */
-  const labelOf = useMemo(() => {
-    const counts = new Map<string, number>();
-    candidates.forEach((u) => counts.set(u.name, (counts.get(u.name) ?? 0) + 1));
-    return (u: User) => ((counts.get(u.name) ?? 0) > 1 ? `${u.name} (${u.email || u.phone})` : u.name);
-  }, [candidates]);
-  const candidateNames = useMemo(() => candidates.map(labelOf), [candidates, labelOf]);
-  const [selectedName, setSelectedName] = useState(scholarship ? labelOf(scholarship.user) : "");
-  const selected = candidates.find((u) => labelOf(u) === selectedName) ?? null;
+  const [selectedId, setSelectedId] = useState(scholarship?.user.id ?? "");
+  const selected = candidates.find((u) => u.id === selectedId) ?? null;
+  /* The User field opens the full-screen Select Users picker (682:2321) —
+     one user, eligible ones only. */
+  const [picking, setPicking] = useState(false);
 
   /* An expired scholarship is edited to bring it back — but not while the
      same user holds another active one (they can hold only one). */
@@ -844,6 +842,7 @@ function ScholarshipModal({
   }
 
   return (
+    <>
     <PrmModal
       title={editing ? "Edit Scholarship" : "Create Scholarship"}
       description={
@@ -854,11 +853,14 @@ function ScholarshipModal({
           : nowPaying
           ? "This user is now on a paid subscription, so this scholarship can't be brought back."
           : lapsed
-          ? "This scholarship has expired. Choose a new expiry date to bring it back — the recipient gets full Pro access again until then."
+          ? "This scholarship has ended. Choose a new expiry date to bring it back — the recipient gets full Pro access again until then."
           : "Change when this scholarship expires. The recipient keeps full Pro access until then."
       }
       confirmLabel={editing ? "Save Changes" : "Create Scholarship"}
       confirmDisabled={!valid}
+      confirmTip={
+        editing && !restoreBlocked && expiresOn === scholarship.expiresOn ? NO_CHANGES_TIP : undefined
+      }
       onCancel={onClose}
       onConfirm={submit}
     >
@@ -867,19 +869,15 @@ function ScholarshipModal({
           <span className="prm-label">
             User<span className="prm-req">*</span>
           </span>
-          <SelectField
-            value={selectedName}
-            options={candidateNames}
-            onChange={setSelectedName}
+          <button
+            type="button"
+            className={`select-field${selected ? "" : " is-placeholder"}`}
             disabled={editing}
-            placeholder="Select a User…"
-            searchPlaceholder="Search Users..."
-            popupMenu
-            optionDetail={(label) => {
-              const u = candidates.find((x) => labelOf(x) === label);
-              return u?.email || u?.phone || null;
-            }}
-          />
+            onClick={() => setPicking(true)}
+          >
+            <span className="select-field-value">{selected ? selected.name : "Select a User…"}</span>
+            <span className="field-chevron"><DropdownCaretIcon /></span>
+          </button>
           <p className="form-help">
             {editing
               ? "A scholarship can't move to another user — revoke this one and create a new one."
@@ -910,5 +908,19 @@ function ScholarshipModal({
         </div>
       </div>
     </PrmModal>
+    {picking && (
+      <SelectGrantUsersModal
+        description="Choose who gets the scholarship. Only B2C users without a subscription or an active scholarship are listed."
+        candidates={candidates}
+        single
+        value={selectedId ? [selectedId] : []}
+        onCancel={() => setPicking(false)}
+        onConfirm={([id]) => {
+          setSelectedId(id ?? "");
+          setPicking(false);
+        }}
+      />
+    )}
+    </>
   );
 }

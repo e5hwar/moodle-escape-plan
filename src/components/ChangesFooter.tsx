@@ -4,7 +4,7 @@ import { WizardKeyHint } from "./wizardKeys";
 
 /* The staged-changes save bar, shared by every page that holds edits until a
    confirm: Manage User Progress (its origin — Figma 1155:1140) and the
-   Industries reorders. Left: "N Changes Made", which opens a card on hover
+   Industries reorders and Product Config's settings. Left: "N Changes Made", which opens a card on hover
    listing each change as `subject → action`, every row droppable on its own.
    Right: Discard + Review & Save, the latter also on ⌘↵ / Ctrl+↵. The page
    owns the confirm dialog (`ChangesReviewList` is its body) and the apply.
@@ -27,12 +27,16 @@ export function ChangesFooter({
   onDiscard,
   onReview,
   shortcutEnabled = true,
+  blockedTip,
 }: {
   changes: StagedChange[];
   onDiscard: () => void;
   onReview: () => void;
   /** Off while the page has a modal up — that dialog has its own confirm. */
   shortcutEnabled?: boolean;
+  /** Set when something staged can't be saved yet: Review & Save goes
+   *  disabled and this names what's wrong on hover. */
+  blockedTip?: string;
 }) {
   const [open, setOpen] = useState(false);
   const count = changes.length;
@@ -43,7 +47,7 @@ export function ChangesFooter({
   const keyRef = useRef<(e: KeyboardEvent) => void>(() => {});
   keyRef.current = (e: KeyboardEvent) => {
     if (e.key !== "Enter" || !(e.metaKey || e.ctrlKey)) return;
-    if (!shortcutEnabled || count === 0) return;
+    if (!shortcutEnabled || count === 0 || blockedTip) return;
     e.preventDefault();
     onReview();
   };
@@ -92,7 +96,14 @@ export function ChangesFooter({
         <button className="btn-save-draft" onClick={onDiscard}>
           Discard
         </button>
-        <button className="btn-publish" onClick={onReview}>
+        {/* `aria-disabled` rather than `disabled`, so the tooltip naming
+            what blocks the save still shows on hover. */}
+        <button
+          className={`btn-publish${blockedTip ? " is-disabled" : ""}`}
+          aria-disabled={!!blockedTip || undefined}
+          data-tip={blockedTip}
+          onClick={() => !blockedTip && onReview()}
+        >
           Review &amp; Save
           <WizardKeyHint />
         </button>

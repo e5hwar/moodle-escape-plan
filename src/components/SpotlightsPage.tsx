@@ -20,6 +20,7 @@ import { formatShortDate } from "../formatDate";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { useLeaveGuard } from "./LeaveGuard";
 import { TableCols } from "./TableCols";
+import { useListState } from "../hooks/useListState";
 import { TableEmpty } from "./TableEmpty";
 
 type DisplayStatus = "active" | "pending" | "ended" | "rejected";
@@ -141,7 +142,8 @@ export function SpotlightsPage({
   // user saves — Discard (or leaving the page) restores `committed`. Every other
   // action commits to both immediately via `applyBoth`.
   const [list, setList] = useState<Spotlight[]>(committed);
-  const [query, setQuery] = useState("");
+  // Kept for the session (spec review 2026-10-09: every list restores).
+  const [query, setQuery] = useListState("spotlight:query", "");
   const [creating, setCreating] = useState(false);
   // Set alongside `creating` when the page was opened from a row's Edit action.
   const [editing, setEditing] = useState<Spotlight | null>(null);
@@ -150,7 +152,7 @@ export function SpotlightsPage({
      picked before it can go back into the queue. */
   const [enabling, setEnabling] = useState(false);
   const [previewing, setPreviewing] = useState<Spotlight | null>(null);
-  const [showArchived, setShowArchived] = useState(false);
+  const [showArchived, setShowArchived] = useListState("spotlight:show-past", false);
   /* Success toast (the shared CopiedToast chrome, as on Companies / Users) for
      a created, approved or rejected Spotlight. `at` keys it, so a second one
      restarts the toast instead of being swallowed by the first. */

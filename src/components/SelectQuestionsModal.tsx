@@ -122,6 +122,7 @@ export function SelectQuestionsModal({
   mode,
   editingPool,
   excludeIds,
+  lockedFlag,
   value,
   gradedOnly = true,
   onCancel,
@@ -132,6 +133,9 @@ export function SelectQuestionsModal({
   editingPool?: boolean;
   /** Static mode only: questions already on the Quiz — shown as locked rows. */
   excludeIds?: string[];
+  /** A small grey pill beside a locked row's question saying what holds it
+   *  ("Added to Quiz") — the Select Tasks locked-row pattern. */
+  lockedFlag?: string;
   /** Question ids already chosen — the modal opens pre-ticked. */
   value: string[];
   /** Quizzes only take graded questions; Feedback Forms take any Active one. */
@@ -466,7 +470,16 @@ export function SelectQuestionsModal({
                             cell" rule excludes — a local colour would lose to
                             it on specificity. */}
                         <td className="sqm-col-question col-name" title={question.text}>
-                          {inQuiz ? <span className="tsk-name">{question.text}</span> : question.text}
+                          {inQuiz ? (
+                            <>
+                              <span className="tsk-name">{question.text}</span>
+                              {lockedFlag && (
+                                <span className="pr-name-flag pr-name-flag--grey">{lockedFlag}</span>
+                              )}
+                            </>
+                          ) : (
+                            question.text
+                          )}
                         </td>
                         {/* The Bank's long name, so the column reads the same
                             as the filter that narrows it. */}

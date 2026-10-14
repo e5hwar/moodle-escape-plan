@@ -11,14 +11,25 @@ import { BoldIcon, ItalicIcon, UnderlineIcon, BulletListIcon, NumberListIcon, Li
 
    Buttons carry a selected state (Figma 640:922): a toggled control fills
    rgba(115,115,115,0.2) and its glyph goes white. The block-format picker opens
-   the reduced-size dropdown menu (Figma 640:1005). No command runs against the
-   text in the prototype — the state is per-toolbar, purely visual.
+   the reduced-size dropdown menu (Figma 640:1005). By default no command runs
+   against the text — the state is per-toolbar, purely visual (the textarea
+   fields). Pass `live` (`RichDocField`) and the bar drives a real editor: its
+   state mirrors the selection and every control runs its command.
 
    `onMouseDown` preventDefault + tabIndex -1 everywhere (menu rows included) so
    clicking a control never pulls the caret out of the editor. */
 
-const BLOCK_FORMATS = ["Paragraph", "Heading 1", "Heading 2", "Heading 3"] as const;
-type BlockFormat = (typeof BLOCK_FORMATS)[number];
+export const BLOCK_FORMATS = ["Paragraph", "Heading 1", "Heading 2", "Heading 3"] as const;
+export type BlockFormat = (typeof BLOCK_FORMATS)[number];
+
+/** A working editor behind the bar: what the selection currently carries, and
+ *  how to apply a control (by its label) or a block format. */
+export type RteLive = {
+  active: ReadonlySet<string>;
+  block: BlockFormat;
+  run: (label: string) => void;
+  setBlock: (f: BlockFormat) => void;
+};
 
 function RteBtn({ label, active, onToggle, children }: {
   label: string;
@@ -42,9 +53,12 @@ function RteBtn({ label, active, onToggle, children }: {
   );
 }
 
-export function RteToolbar() {
-  const [block, setBlock] = useState<BlockFormat>("Paragraph");
-  const [active, setActive] = useState<ReadonlySet<string>>(new Set());
+export function RteToolbar({ live }: { live?: RteLive } = {}) {
+  const [ownBlock, setOwnBlock] = useState<BlockFormat>("Paragraph");
+  const [ownActive, setActive] = useState<ReadonlySet<string>>(new Set());
+  const block = live ? live.block : ownBlock;
+  const active = live ? live.active : ownActive;
+  const setBlock = live ? live.setBlock : setOwnBlock;
 
   const toggle = (label: string) =>
     setActive((prev) => {
@@ -55,7 +69,11 @@ export function RteToolbar() {
     });
 
   const btn = (label: string, icon: ReactNode) => (
-    <RteBtn label={label} active={active.has(label)} onToggle={() => toggle(label)}>
+    <RteBtn
+      label={label}
+      active={active.has(label)}
+      onToggle={() => (live ? live.run(label) : toggle(label))}
+    >
       {icon}
     </RteBtn>
   );

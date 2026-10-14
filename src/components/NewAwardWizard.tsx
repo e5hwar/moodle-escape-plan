@@ -22,6 +22,7 @@ import {
   type AwardStatus,
   type MeritTier,
 } from "../data/awards";
+import { NO_CHANGES_TIP } from "./PrmModal";
 
 type Props = {
   /** The Certification this Award belongs to. An Award has no life of its own:
@@ -112,7 +113,7 @@ export function NewAwardWizard(props: Props) {
 
   function handleSave() {
     // The app's one clock, in the Awards' "Mon DD, YYYY" stamp.
-    const now = appToday().toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
+    const now = appToday().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
     const base = props.editingAward;
     /* Active issues retroactively to everyone who already completed the
        Certification (the Status help text's promise), so the holder count is
@@ -145,7 +146,7 @@ export function NewAwardWizard(props: Props) {
   const blockedTip = canSave
     ? undefined
     : appearanceValid
-    ? "No changes to save"
+    ? NO_CHANGES_TIP
     : "An Award needs at least one appearance to save: a Card or a Certificate design.";
 
   return (

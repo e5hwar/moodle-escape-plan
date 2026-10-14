@@ -268,19 +268,16 @@ type SeedRow = {
   rejectionReasons?: string[];
 };
 
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-const ordinal = (n: number) =>
-  n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th");
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-/** A moment in the seed rows' display form — "October 8th, 2026, 3:15 PM" —
- *  for dates the session writes (a re-upload request). */
+/** A moment in the rows' display form — "Oct 8, 2026, 3:15 PM": the app's one
+ *  date shape with the time after it (the user, 2026-10-13; was "October 8th,
+ *  2026, 3:15 PM"). Used for the seed rows and for dates the session writes
+ *  (a re-upload request, a verification). */
 export function displayDateTime(d: Date): string {
   const h = d.getHours() % 12 || 12;
   const m = String(d.getMinutes()).padStart(2, "0");
-  return `${MONTHS[d.getMonth()]} ${ordinal(d.getDate())}, ${d.getFullYear()}, ${h}:${m} ${d.getHours() < 12 ? "AM" : "PM"}`;
+  return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}, ${h}:${m} ${d.getHours() < 12 ? "AM" : "PM"}`;
 }
 
 /** Today at local midnight. Seed moments are offsets from it (as the Hands-On

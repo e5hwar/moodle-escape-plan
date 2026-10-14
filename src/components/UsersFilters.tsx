@@ -1,3 +1,4 @@
+import { SUBSCRIPTION_FILTER_OPTIONS } from "../data/users";
 import { useState, useMemo, useEffect, type ReactNode } from "react";
 import { Dropdown } from "./Dropdown";
 import { FILTER_TIPS } from "../data/filterTips";
@@ -61,7 +62,9 @@ export type UserMoreFilterKey = "roles" | "goals" | "industries";
 const MORE_ALL: UserMoreFilterKey[] = ["roles", "goals", "industries"];
 
 export const USER_TYPES = ["B2C", "B2B"];
-export const SUBSCRIPTIONS = ["Subscriber", "Company Plan", "Scholarship", "Free Trial", "Cancelled", "Starter"];
+/* "None" is the Starter row — no subscription, a dash in the column
+   (users.SUBSCRIPTION_FILTER_OPTIONS). */
+export const SUBSCRIPTIONS = SUBSCRIPTION_FILTER_OPTIONS;
 export const ROLES = ["Self-Learner", "Employee", "Manager", "Admin"];
 export const GOALS = ["Looking for First Trades Job", "Exploring Careers in the Skilled Trades", "Focussed on Advancing Career", "Other"];
 export const INDUSTRIES = ["HVAC", "Electrical", "Plumbing", "Solar", "Refrigeration", "Appliance Repair"];

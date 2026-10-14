@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useListState, useResetPageOnChange } from "../hooks/useListState";
 import { CopiedToast } from "./CopiedToast";
 import {
   activeLinks,
@@ -32,7 +33,6 @@ import {
   PillTrigger,
   SectionedMultiSelect,
   summarize,
-  useColumnOrder,
   orderedColumns,
 } from "./Filters";
 import {
@@ -50,13 +50,13 @@ const PAGE_SIZE = 50;
 
 const STATUS_LABEL: Record<FormStatus, string> = {
   active: "Active",
-  disabled: "Inactive",
+  archived: "Archived",
   deleted: "Deleted",
 };
 
 /* Deleted forms never reach the list, so the pill offers the two live
    states. */
-const STATUS_OPTIONS = ["Active", "Inactive"];
+const STATUS_OPTIONS = ["Active", "Archived"];
 
 /* Dates read the way every other table writes them — short month, zero-padded
    day ("Apr 03, 2026"), so the column stays flush down its left edge. */
@@ -68,11 +68,11 @@ export function formatDate(iso: string): string {
   return `${MONTHS[Number(m[2]) - 1]} ${m[3]}, ${m[1]}`;
 }
 
-/* What the grey "Inactive" tag on a row means. The tag is the only place the
+/* What the grey "Archived" tag on a row means. The tag is the only place the
    status is visible now that Status left the table, so it has to say what the
    state actually does rather than just naming it. */
-const DISABLED_TIP =
-  "Inactive — this form is no longer shown to users on its triggers. Responses already collected are kept, and it can be activated again from the row menu.";
+const ARCHIVED_TIP =
+  "Archived — this form is no longer shown to users on its triggers. Responses already collected are kept, and it can be unarchived from the row menu.";
 
 /* The Responses column counts what landed inside the Date Range, so the pill
    answers "how many responses in this period?" rather than hiding forms. The
@@ -225,7 +225,7 @@ export function FeedbackFormsPage({
   onFlashDone,
 }: Props) {
   // The page's toast: a flow's `flash` on arrival, or one raised here
-  // (Responses Downloaded, Activated / Deactivated, Deleted) — the
+  // (Responses Downloaded, Archived / Unarchived, Deleted) — the
   // Certifications page's pattern.
   const [toast, setToast] = useState<string | null>(flash ?? null);
   useEffect(() => {
@@ -235,17 +235,18 @@ export function FeedbackFormsPage({
     setToast(null);
     onFlashDone?.();
   }, [onFlashDone]);
-  const [query, setQuery] = useState("");
-  const [filters, setFilters] = useState<{ statuses: string[]; creators: string[] }>({
+  // The list is kept for the session (spec review 2026-10-09).
+  const [query, setQuery] = useListState("feedback:query", "");
+  const [filters, setFilters] = useListState<{ statuses: string[]; creators: string[] }>("feedback:filters", {
     statuses: [],
     creators: [],
   });
   // The Date Range never hides a form — it scopes the Responses column to a
   // period (default All Time, the user 2026-10-02 — so the column opens on
   // each form's whole total). Every form is always listed.
-  const [dateRange, setDateRange] = useState<DateRangeState>(() => allTimeDateRange());
+  const [dateRange, setDateRange] = useListState<DateRangeState>("feedback:date", () => allTimeDateRange());
   const [menu, setMenu] = useState<{ form: FeedbackForm; rect: DOMRect } | null>(null);
-  /* Activating / deactivating a form changes what real users are shown at the
+  /* Archiving / unarchiving a form changes what real users are shown at the
      end of a Task, so it confirms first — the row menu fires straight into the
      list otherwise, with nothing to undo it from except the same menu. */
   const [toggling, setToggling] = useState<FeedbackForm | null>(null);
@@ -257,19 +258,20 @@ export function FeedbackFormsPage({
      recently-touched one, and the column itself is provenance the table does not
      need to spend width on. Switch it on from Edit Columns to get the header
      arrow, and to sort by it again after sorting by something else. */
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
+  const [sort, setSort] = useListState<{ key: SortKey; dir: SortDir }>("feedback:sort", {
     key: "lastModified",
     dir: "desc",
   });
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useListState("feedback:page", 1);
   /* Seeded from the registry's `optional` flag, so adding a column decides its
      default in one place. */
-  const [columns, setColumns] = useState<Record<FbColumn, boolean>>(
+  const [columns, setColumns] = useListState<Record<FbColumn, boolean>>(
+    "feedback:columns",
     () =>
       Object.fromEntries(FB_COLS.map((c) => [c.key, !c.optional])) as Record<FbColumn, boolean>,
   );
   // Column display order — reordered by dragging in the Edit Columns menu.
-  const [order, setOrder] = useColumnOrder(FB_COLS);
+  const [order, setOrder] = useListState<FbColumn[]>("feedback:order", () => FB_COLS.map((c) => c.key));
   const visibleCols = useMemo(() => orderedColumns(FB_COLS, order, columns), [columns, order]);
   // C stands down while the row menu or either confirm owns the keyboard.
   useCreateShortcut(() => createBlank(), !menu && !toggling && !deleting);
@@ -297,16 +299,14 @@ export function FeedbackFormsPage({
   const sorted = useMemo(() => {
     const arr = [...filtered].sort((a, b) => compare(a, b, sort.key, dateRange));
     if (sort.dir === "desc") arr.reverse();
-    // Disabled forms always sink to the bottom (the user, 2026-09-29), in the
+    // Archived forms always sink to the bottom (the user, 2026-09-29), in the
     // chosen order among themselves, whichever column / direction is sorted.
-    return [...arr.filter((f) => f.status !== "disabled"), ...arr.filter((f) => f.status === "disabled")];
+    return [...arr.filter((f) => f.status !== "archived"), ...arr.filter((f) => f.status === "archived")];
   }, [filtered, sort, dateRange]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
 
-  useEffect(() => {
-    setPage(1);
-  }, [query, filters, dateRange, sort]);
+  useResetPageOnChange(setPage, [query, filters, dateRange, sort]);
 
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
@@ -520,10 +520,10 @@ export function FeedbackFormsPage({
           form={toggling}
           onCancel={() => setToggling(null)}
           onConfirm={() => {
-            const deactivating = toggling.status === "active";
-            setStatus(toggling, deactivating ? "disabled" : "active");
+            const archiving = toggling.status === "active";
+            setStatus(toggling, archiving ? "archived" : "active");
             setToggling(null);
-            setToast(deactivating ? "Feedback Form Deactivated" : "Feedback Form Activated");
+            setToast(archiving ? "Form Archived" : "Form Unarchived");
           }}
         />
       )}
@@ -614,16 +614,16 @@ function FormRow({
   // The row itself isn't a link — editing is only reached from the hover
   // bar's pencil or the row menu, so a stray click never opens the editor.
   return (
-    <tr className={`${form.status === "disabled" ? "task-dim" : ""} ${menuOpen ? "menu-open" : ""}`}>
+    <tr className={`${form.status === "archived" ? "task-dim" : ""} ${menuOpen ? "menu-open" : ""}`}>
       <td className={`col-name ${form.name ? "" : "fb-faint"}`} data-tip={form.name || undefined}>
         {/* Same markup a hidden Task row uses (`.task-dim` + `.tsk-name` +
             the grey name flag): the name truncates and the pill stays whole.
-            A deactivated form is the Feedback list's version of a hidden Task,
+            An archived form is the Feedback list's version of a hidden Task,
             so it reads the same — muted name, grey tag, every other cell dim. */}
         <span className="tsk-name">{form.name || "Untitled form"}</span>
-        {form.status === "disabled" && (
-          <span className="pr-name-flag pr-name-flag--grey" data-tip={DISABLED_TIP}>
-            Inactive
+        {form.status === "archived" && (
+          <span className="pr-name-flag pr-name-flag--grey" data-tip={ARCHIVED_TIP}>
+            Archived
           </span>
         )}
       </td>
@@ -708,7 +708,7 @@ function SortableHeader({
   );
 }
 
-/* Activate / Deactivate Form — the shared confirm shell (`PrmModal`, Figma
+/* Archive / Unarchive Form — the shared confirm shell (`PrmModal`, Figma
    483:588). **Not the `danger` variant**: both directions are reversible from
    the same row menu, and the red CTA stays reserved for Delete Form, the one
    action on this menu that cannot be undone. One sentence, no body — the row
@@ -722,24 +722,24 @@ function FormStatusConfirm({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  const deactivating = form.status === "active";
+  const archiving = form.status === "active";
   return (
     <PrmModal
-      title={deactivating ? "Deactivate Form?" : "Activate Form?"}
-      confirmLabel={deactivating ? "Deactivate Form" : "Activate Form"}
+      title={archiving ? "Archive Form?" : "Unarchive Form?"}
+      confirmLabel={archiving ? "Archive Form" : "Unarchive Form"}
       onCancel={onCancel}
       onConfirm={onConfirm}
     >
       <p className="prm-content">
-        {deactivating ? (
+        {archiving ? (
           <>
-            Deactivate <strong>{form.name || form.id}</strong>? It stops being shown to
+            Archive <strong>{form.name || form.id}</strong>? It stops being shown to
             users on its triggers, and responses already collected are kept. You can
-            activate it again from the same menu at any time.
+            unarchive it from the same menu at any time.
           </>
         ) : (
           <>
-            Activate <strong>{form.name || form.id}</strong>? It starts being shown to
+            Unarchive <strong>{form.name || form.id}</strong>? It starts being shown to
             users again on its triggers.
           </>
         )}
@@ -865,7 +865,7 @@ function FormActionsMenu({
   );
 
   // Responses are the permanent record of what users answered, so a form that
-  // collected any can never be deleted — only deactivated.
+  // collected any can never be deleted — only archived.
   const canDelete = form.responseCount === 0;
 
   return (
@@ -884,7 +884,7 @@ function FormActionsMenu({
       {item(<MenuResponsesIcon />, "Export Responses", onExportResponses)}
       {item(
         <MenuArchiveReplaceIcon />,
-        form.status === "active" ? "Deactivate Form" : "Activate Form",
+        form.status === "active" ? "Archive Form" : "Unarchive Form",
         onToggleActive,
       )}
       <button

@@ -8,6 +8,7 @@ import type { AwardDesignTemplate } from "../data/awards";
 import { LimitError } from "./CharCount";
 import { LimitedInput } from "./LimitedInput";
 import { NAME_MAX, isOver } from "../data/fieldLimits";
+import { NO_CHANGES_TIP } from "./PrmModal";
 
 type Props = {
   editingTemplate?: AwardDesignTemplate;
@@ -180,7 +181,7 @@ export function NewDesignTemplateWizard(props: Props) {
             <button
               className="btn-publish"
               disabled={!detailsReady || (isEditing && !dirty)}
-              data-tip={detailsReady && isEditing && !dirty ? "No changes to save" : undefined}
+              data-tip={detailsReady && isEditing && !dirty ? NO_CHANGES_TIP : undefined}
               onClick={handleSave}
             >
               {isEditing ? "Save Changes" : "Create Template"}

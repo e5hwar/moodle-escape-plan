@@ -20,15 +20,22 @@ export type RowMenuItem = {
   disabled?: boolean;
   /** Why it is disabled — the shared tooltip adopts it. */
   title?: string;
+  /** Why it is disabled, as the grey reason line under the label (Figma
+   *  668:942) — the convention every row menu's unavailable action follows. */
+  sub?: string;
+  /** A destructive row — the design-system red. */
+  danger?: boolean;
   onPick: () => void;
 };
 
 export function RowMenu({
-  rect, items, onClose,
+  rect, items, onClose, className,
 }: {
   rect: DOMRect;
   items: RowMenuItem[];
   onClose: () => void;
+  /** A page's own menu modifier — e.g. sizing its reason line's text box. */
+  className?: string;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number } | null>(null);
@@ -61,7 +68,7 @@ export function RowMenu({
   return (
     <div
       ref={ref}
-      className="u-menu"
+      className={`u-menu${className ? ` ${className}` : ""}`}
       style={{
         top: pos ? pos.top : rect.bottom + 6,
         right: window.innerWidth - rect.right,
@@ -72,7 +79,7 @@ export function RowMenu({
       {items.map((it) => (
         <button
           key={it.label}
-          className="u-menu-item"
+          className={`u-menu-item${it.danger ? " u-menu-item--danger" : ""}`}
           disabled={it.disabled}
           title={it.title}
           onClick={() => {
@@ -81,7 +88,14 @@ export function RowMenu({
           }}
         >
           {it.icon && <span className="u-menu-item-icon">{it.icon}</span>}
-          {it.label}
+          {it.disabled && it.sub ? (
+            <span className="u-menu-item-text">
+              {it.label}
+              <span className="u-menu-item-sub">{it.sub}</span>
+            </span>
+          ) : (
+            it.label
+          )}
         </button>
       ))}
     </div>

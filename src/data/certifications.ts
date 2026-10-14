@@ -3,7 +3,7 @@ import certThumbSample from "../assets/cert-thumb-sample.jpg";
 
 export type CareerStage = "Pre-Apprentice" | "Apprentice" | "Journeyman" | "Master";
 export type CertType = "Unit" | "Credential" | "Program" | "Bundle";
-export type CertVisibility = "Visible" | "Hidden" | "Archived";
+export type CertVisibility = "Visible" | "Hidden";
 // Paid certifications are either consumable (a credit/seat is spent on use) or
 // non-consumable (one-time purchase, reusable). A cert with no payment model is
 // free.
@@ -30,12 +30,13 @@ export type Certification = {
   dateCreated?: string;
   dateModified?: string;
   visibility?: CertVisibility;
-  /* Archive & Replace. Archiving is reversible: Unarchive puts the
-     Certification back to the visibility it had before (absent = Visible).
-     The replacements (Certification ids) and the bilingual Replacement Alert
-     are what enrolled learners see while it is archived; both are kept on
-     the record so the page reopens with them, and cleared on Unarchive. */
-  visibilityBeforeArchive?: Exclude<CertVisibility, "Archived">;
+  /* Archive & Replace. Archived is its own flag, independent of Visible /
+     Hidden: an archived Certification keeps its visibility (and can still be
+     made Hidden or Visible), and Unarchive clears only this flag. The
+     replacements (Certification ids) and the bilingual Replacement Alert are
+     what enrolled learners see while it is archived; both are kept on the
+     record so the page reopens with them, and cleared on Unarchive. */
+  archived?: boolean;
   replacementIds?: string[];
   replacementAlert?: { en: string; es: string };
   // Career stage and type can be blank — these are filterable as "No Career
@@ -87,7 +88,7 @@ export type Certification = {
   /** Completion: the Condition Sets (OR'd; each one's items AND'd). */
   conditionSets?: CertConditionSet[];
   /** Certification ids merged in via Import Courses, in plan order. Stored
-   *  by id, never name, so a rename shows everywhere (see certReferences). */
+   *  by id, never name, so a rename shows everywhere (see certNameById). */
   importedCerts?: string[];
 };
 
@@ -293,8 +294,9 @@ export const certifications: Certification[] = [
   C("C-0341", "OSHA 10 — General Industry", ["electrical-industrial"], "1.0", 6, "SkillCat", "Sep 02, 2023", "Jan 11, 2026", { careerStage: "Apprentice", type: "Credential", payment: "Consumable", keywords: ["osha", "10", "safety", "general industry"], tags: ["B2B Companies Only", "National Account"] }),
   C("C-0322", "Plumbing Apprentice Year 1", ["plumbing"], "3.2", 18, "SkillCat", "Jul 21, 2023", "Dec 04, 2025", { careerStage: "Apprentice", type: "Program", payment: "Non-consumable", keywords: ["plumbing", "apprentice", "year 1"], thumbnail: certThumbSample }),
   C("C-0298", "Electrical Code Refresher", ["electrical"], "1.4", 8, "SkillCat", "May 30, 2023", "Nov 18, 2025", { careerStage: "Journeyman", type: "Unit", visibility: "Hidden", keywords: ["electrical", "code", "nec", "refresher"] }),
-  // Blank career stage — exercises the "No Career Stage" filter. Archived too.
-  C("C-0265", "Forklift Operator", ["hvac-industrial"], "0.5", 3, "SkillCat", "Mar 12, 2023", "Oct 08, 2025", { type: "Credential", visibility: "Archived", keywords: ["forklift", "operator", "warehouse", "safety"] }),
+  // Blank career stage — exercises the "No Career Stage" filter. Archived (and
+  // still Visible) too.
+  C("C-0265", "Forklift Operator", ["hvac-industrial"], "0.5", 3, "SkillCat", "Mar 12, 2023", "Oct 08, 2025", { type: "Credential", archived: true, keywords: ["forklift", "operator", "warehouse", "safety"] }),
   C("C-0242", "Solar PV Installer Basics", ["electrical-residential"], "2.2", 12, "SkillCat", "Jan 18, 2023", "Sep 12, 2025", { careerStage: "Apprentice", type: "Program", payment: "Consumable", resetsProgress: true, keywords: ["solar", "pv", "installer", "renewables"] }),
   C("C-0221", "Welding Inspector Prep", ["plumbing-pipefitting"], "1.8", 10, "SkillCat", "Dec 02, 2022", "Aug 21, 2025", { careerStage: "Master", type: "Credential", payment: "Non-consumable", keywords: ["welding", "inspector", "cwi"] }),
   // Blank type — exercises the "No Type" filter.
@@ -375,12 +377,14 @@ export function certNameById(id: string): string {
   return certById(id)?.name ?? id;
 }
 
-/** Where other Certifications build on this one: each referencing
- *  Certification with the places it does ("Completion Criteria · Condition
- *  Set 2", "Imported Course: …"). Only STORED structure counts — a seed
- *  Certification that was never saved opens on generated sample structure,
- *  which isn't real data (and never requires a Certification anyway). A
- *  referenced Certification can't be deleted. */
+/** Where other Certifications require this one: each referencing
+ *  Certification with the Condition Sets that name it ("Completion Criteria ·
+ *  Condition Set 2"). Only a Condition Set item of kind "cert" counts —
+ *  imported Courses are independent copies and don't reference their source.
+ *  Only STORED structure counts — a seed Certification that was never saved
+ *  opens on generated sample structure, which isn't real data (and never
+ *  requires a Certification anyway). A referenced Certification can't be
+ *  deleted. */
 export type CertReference = { cert: Certification; where: string[] };
 export function certReferences(certId: string, certs: Certification[] = liveCerts): CertReference[] {
   return certs.flatMap((c) => {
@@ -390,10 +394,6 @@ export function certReferences(certId: string, certs: Certification[] = liveCert
       if (cs.items.some((it) => it.kind === "cert" && it.certId === certId))
         where.push(`Completion Criteria · Condition Set ${i + 1}`);
     });
-    const courses = (c.courses ?? []).filter((co) => co.sourceCertId === certId);
-    courses.forEach((co) => where.push(`Imported Course: ${co.nameEn || "Untitled Course"}`));
-    // Still in the Learning Plan with every Course it brought deleted.
-    if (courses.length === 0 && c.importedCerts?.includes(certId)) where.push("Imported Courses");
     return where.length ? [{ cert: c, where }] : [];
   });
 }
@@ -407,7 +407,12 @@ export function isSeedCert(id: string): boolean {
 // ─── Filter option constants ──────────────────────────────────────────────────
 export const CAREER_STAGES: CareerStage[] = ["Pre-Apprentice", "Apprentice", "Journeyman", "Master"];
 export const CERT_TYPES: CertType[] = ["Unit", "Credential", "Program", "Bundle"];
-export const CERT_VISIBILITIES: CertVisibility[] = ["Visible", "Hidden", "Archived"];
+export const CERT_VISIBILITIES: CertVisibility[] = ["Visible", "Hidden"];
+/** The Archived filter's options — separate from Visibility, since an archived
+ *  Certification is still Visible or Hidden. */
+export const CERT_ARCHIVED_OPTIONS = ["Archived", "Not Archived"] as const;
+export const archivedLabel = (c: Pick<Certification, "archived">) =>
+  c.archived ? "Archived" : "Not Archived";
 
 // Sentinel option labels for filtering certifications that have no value set.
 export const NO_CAREER_STAGE = "None";

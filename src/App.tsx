@@ -31,7 +31,6 @@ import { type CertImportReport } from "./data/certImport";
 import {
   awards as seedAwards,
   designTemplates as seedTemplates,
-  certForAward,
   appearanceSummary,
   type Award,
   type AwardDesignTemplate,
@@ -95,7 +94,6 @@ import {
 import { buildRows, exportFormCsv } from "./data/feedbackExport";
 import { LeaveGuardHost, confirmLeave, hasUnsavedChanges } from "./components/LeaveGuard";
 import { companies as seedCompanies, setLiveCompanies, todayStamp, type Company } from "./data/companies";
-import { AUDIENCE_ALL_USERS, audienceOf } from "./data/filters";
 import type { CompaniesListState } from "./components/CompaniesPage";
 
 // Map a certification onto its content-graph node. The graph is keyed by
@@ -208,6 +206,9 @@ type View =
       /** Deep link from Manage Completions: one learner on one Task. */
       userFilter?: string;
       extraSubmissions?: TaskSubmission[];
+      /** The submission open in the review console — its own URL,
+       *  `/review-hands-on/<id>` (spec review 2026-10-09). */
+      submissionId?: string;
     }
   | { name: "name-change-requests" }
   /* `restore`: back from the console — put the filters it was opened from back. */
@@ -310,11 +311,23 @@ function currentSlug(): string {
   return p.replace(/^\/+|\/+$/g, "");
 }
 
+/* A Hands-On submission's console has a URL of its own, under its page's:
+   `/review-hands-on/<submission id>`. */
+const HANDS_ON_SLUG = VIEW_SLUGS["review-hands-on"];
+
 function viewFromUrl(): View {
-  return SLUG_TO_VIEW[currentSlug()] ?? { name: "tasks" };
+  const slug = currentSlug();
+  if (slug.startsWith(HANDS_ON_SLUG + "/")) {
+    const id = decodeURIComponent(slug.slice(HANDS_ON_SLUG.length + 1));
+    if (id) return { name: "review-hands-on", submissionId: id };
+  }
+  return SLUG_TO_VIEW[slug] ?? { name: "tasks" };
 }
 
 function urlForView(view: View): string {
+  if (view.name === "review-hands-on" && view.submissionId) {
+    return `${BASE}${HANDS_ON_SLUG}/${encodeURIComponent(view.submissionId)}`;
+  }
   const slug = VIEW_SLUGS[view.name];
   return slug ? BASE + slug : BASE;
 }
@@ -326,23 +339,19 @@ export default function App() {
   const profileId = params.get("profile");
   const portfolioId = params.get("portfolio");
   const stripeCustomerId = params.get("stripeInvoices");
+  /* Companies › Manage Billing Emails' "Open Stripe": the same own-tab
+     placeholder pattern as View Invoices' `stripeInvoices`. */
+  const stripeBillingId = params.get("stripeBillingEmails");
   const loginAsCompany = params.get("loginAs");
   const loginAsUserId = params.get("loginAsUser");
   const editTaskId = params.get("editTask");
-  /* The Hands-On review screen's task link (a reviewer wants the brief, not the
-     editor): its own tab, holding a placeholder until the real read-only brief
-     exists. */
+  /* The Hands-On review screen's task link (a reviewer wants the Pre-Submission
+     Screen — what the user sees before attempting the Task — not the editor):
+     its own tab, holding a placeholder until that screen exists. */
   const taskBriefId = params.get("taskBrief");
-  /* The Certification builder's Add Existing Tasks "Preview ›": its own tab,
-     holding a placeholder until a learner-facing Task preview exists. */
-  const taskPreviewId = params.get("taskPreview");
-  if (taskPreviewId) {
-    const t = tasks.find((x) => x.id === taskPreviewId);
-    return t ? <PlaceholderPage name="Task Preview" /> : <StandaloneNotFound />;
-  }
   if (taskBriefId) {
     const t = tasks.find((x) => x.id === taskBriefId);
-    return t ? <PlaceholderPage name="Task Brief" /> : <StandaloneNotFound />;
+    return t ? <PlaceholderPage name="Pre-Submission Screen" /> : <StandaloneNotFound />;
   }
   // Task editor in its own tab — opened from the Hands-On review screen.
   if (editTaskId) {
@@ -375,19 +384,32 @@ export default function App() {
   if (stripeCustomerId) {
     return <PlaceholderPage name="Stripe Invoices" />;
   }
+  if (stripeBillingId) {
+    return <PlaceholderPage name="Stripe Billing Emails" />;
+  }
+  /* Login As (spec review 2026-10-09): a NEW TAB standing for the user's or
+     company's own session — the learner app or the Company Dashboard — under
+     a persistent "Viewing as <Name>" banner. The admin tab is untouched and
+     any number can be open. The name rides in the URL (`name=`) so a record
+     created this session, which a fresh tab's seed doesn't hold, still reads. */
   if (loginAsCompany) {
-    return <PlaceholderPage name="Login As (Company Library)" />;
+    return <PlaceholderPage name="Company Dashboard" viewingAs={loginAsCompany} />;
   }
   if (loginAsUserId) {
     const u = findUser(loginAsUserId);
-    return u ? <PlaceholderPage name="Login As (Learner)" /> : <StandaloneNotFound />;
+    const who = u?.name ?? params.get("name");
+    return who ? (
+      <PlaceholderPage name="Learner App" viewingAs={who} />
+    ) : (
+      <StandaloneNotFound />
+    );
   }
-  /* Own-tab placeholders with nothing to look up: the company's B2B dashboard
-     (Companies › View Company Dashboard) and a learner's attempt page (Quiz
-     Attempts › View Attempt). */
   if (params.has("companyDashboard")) {
-    return <PlaceholderPage name="Company Dashboard" />;
+    const id = params.get("companyDashboard");
+    const who = seedCompanies.find((c) => c.id === id)?.name ?? params.get("name") ?? undefined;
+    return <PlaceholderPage name="Company Dashboard" viewingAs={who} />;
   }
+  /* A learner's attempt page (Quiz Attempts › View Attempt): nothing to look up. */
   if (params.has("viewAttempt")) {
     return <PlaceholderPage name="View Attempt" />;
   }
@@ -540,15 +562,6 @@ function certTaskType(taskId: string): TaskType | null {
   return buildData().tasksById[taskId]?.type ?? null;
 }
 
-/** Opens the "Login As" Library placeholder for a company in a new tab. */
-function openLoginAsLibrary(company: string) {
-  window.open(
-    `${window.location.origin}${window.location.pathname}?loginAs=${encodeURIComponent(company)}`,
-    "_blank",
-    "noopener",
-  );
-}
-
 /* An id that resolves to nothing — a stale or hand-edited link. */
 function StandaloneNotFound() {
   return <PlaceholderPage name="Not Found Page" />;
@@ -683,7 +696,7 @@ function AdminApp() {
   function setTaskHidden(task: Task, hidden: boolean) {
     const dateModified = new Date().toLocaleDateString("en-US", {
       month: "short",
-      day: "2-digit",
+      day: "numeric",
       year: "numeric",
     });
     saveTask({ ...task, hidden, dateModified, updated: undefined });
@@ -709,6 +722,8 @@ function AdminApp() {
   /* Pending ID Re-Uploads' filters + sort, kept while its row is open in the
      Exam Reviews console so the way back lands on the same list. */
   const pendingIdListRef = useRef<PendingIdListState | null>(null);
+  /* The Question Bank's view as it was last left. */
+  const qbListRef = useRef<QbViewState | null>(null);
 
   function addTask(task: Omit<Task, "id">) {
     setCreatedTasks((prev) => [
@@ -771,6 +786,8 @@ function AdminApp() {
   // ⌘K hint), ready to type. Picks the first visible matching input.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      // A rich-text editor takes ⌘K for its link (and prevents the default).
+      if (e.defaultPrevented) return;
       if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "k") {
         // An open modal owns the shortcut: the page's own bar is still
         // "visible" behind the overlay, so without this ⌘K would reach past a
@@ -982,14 +999,15 @@ function AdminApp() {
     };
   }
 
-  /* The trigger picker's rule (SelectRequirementModal `allUsersOnly`): only a
-     SkillCat-made, All Users Certification can fire a Feedback Form. */
+  /* The trigger picker's rule (SelectRequirementModal `skillCatOnly`): any
+     SkillCat-made Certification can fire a Feedback Form, B2B Companies Only
+     included; a company-created one never can. */
   function canHaveFeedbackForm(cert: Certification): boolean {
-    return isSkillCatCert(cert) && audienceOf(cert.tags) === AUDIENCE_ALL_USERS;
+    return isSkillCatCert(cert);
   }
 
   /* The ACTIVE Feedback Form this Certification fires — matched by id, never
-     by name. A deactivated form doesn't fire, so it doesn't count as set up. */
+     by name. An archived form doesn't fire, so it doesn't count as set up. */
   function feedbackFormFor(cert: Certification): FeedbackForm | undefined {
     return forms.find(
       (f) =>
@@ -1011,9 +1029,9 @@ function AdminApp() {
      the record, every Content Link touching its graph node (either end), its
      Award, and the Feedback Form triggers that fire on it (the forms stay).
      Other Certifications stop naming it as a replacement. The page clears
-     its own "Mark as Done" flag. A Certification other Certifications build
-     on (Condition Sets, imported Courses — certReferences) is never deleted,
-     whatever path asks; the Certifications page explains why first. */
+     its own "Mark as Done" flag. A Certification another one requires in a
+     Condition Set (certReferences) is never deleted, whatever path asks; the
+     Certifications page disables its Delete and says why. */
   function deleteCertEverywhere(cert: Certification) {
     if (certReferences(cert.id, certs).length > 0) return;
     const nodeId = certToFocusNode(cert).id;
@@ -1058,9 +1076,9 @@ function AdminApp() {
      Create (which wants a name and a question first); leaving drops it. */
   function addFeedbackFormFor(cert: Certification) {
     if (!canHaveFeedbackForm(cert)) return;
-    /* A deactivated form still holds its mappings (one form per
+    /* An archived form still holds its mappings (one form per
        Certification), so when one already fires on this Certification "Add"
-       opens it — to activate it from the list, or re-map — rather than
+       opens it — to unarchive it from the list, or re-map — rather than
        starting a second form the trigger lock would refuse. */
     const holder = forms.find(
       (f) =>
@@ -1146,6 +1164,25 @@ function AdminApp() {
         : savedForm ?? null
       : null;
 
+  /* The bank's view on arrival (spec review 2026-10-09: every list restores,
+     whatever route comes back). The editor's own `returnTo` wins; a new
+     question's category (`openPath`) opens on that category with the rest of
+     the saved view (filters, sort, columns) kept; Version History deep links
+     open on their own. */
+  const qbRestore: QbViewState | undefined =
+    view.name !== "question-bank" || view.historyForId
+      ? undefined
+      : view.restore ??
+        (qbListRef.current && view.openPath
+          ? {
+              ...qbListRef.current,
+              atTable: true,
+              selection: [view.openPath[0]],
+              subFilter: view.openPath.length > 1 ? [view.openPath.slice(0, 2).join(" > ")] : [],
+              page: 1,
+            }
+          : qbListRef.current ?? undefined);
+
   return (
     <div className="app">
       <HoverTooltip />
@@ -1162,7 +1199,6 @@ function AdminApp() {
               initialCertificationFilter={view.certificationFilter}
               onNewTask={(t) => setView({ name: "new-task", taskType: t })}
               onEditTask={(task) => setView({ name: "edit-task", task })}
-              onOpenCompanyDashboard={openLoginAsLibrary}
               onViewAttempts={(task) =>
                 /* A Hands-On Task has no Quiz Attempts row — its attempts are
                    the review submissions, so send it to Hands-On scoped to
@@ -1178,9 +1214,13 @@ function AdminApp() {
               onOpenQuestionBank={() => navigate("question-bank")}
               onOpenSkills={() => navigate("skills")}
               tasks={liveTasks}
+              skills={skills}
               onSetHidden={setTaskHidden}
               onDeleteTask={deleteTask}
-              restore={view.restore ? tasksListRef.current : null}
+              /* The list as it was last left, whatever route came back here
+                 (spec review 2026-10-09) — only a "View All Tasks" deep link
+                 starts from its own Certification filter instead. */
+              restore={view.certificationFilter ? null : tasksListRef.current}
               onSaveState={(state) => {
                 tasksListRef.current = state;
               }}
@@ -1219,7 +1259,6 @@ function AdminApp() {
           onImportCert={(imported) => setView({ name: "new-cert", imported })}
           onRestoreCert={(restored) => setView({ name: "new-cert", restored })}
           onEditCert={(cert) => setView({ name: "edit-cert", cert })}
-          onOpenCompanyDashboard={openLoginAsLibrary}
           onViewPayers={(cert) => setView({ name: "cert-purchasers", cert })}
           onViewAllTasks={(cert) => setView({ name: "tasks", certificationFilter: cert.name })}
           onManageContentLinks={(cert) => setView({ name: "content-links", cert })}
@@ -1313,6 +1352,7 @@ function AdminApp() {
         })()
       ) : view.name === "question-bank" ? (
         <QuestionBankPage
+          key={view.historyForId ?? "bank"}
           questions={bank}
           setQuestions={setBank}
           categories={qbCategories}
@@ -1325,8 +1365,12 @@ function AdminApp() {
           }
           initialHistoryId={view.historyForId}
           onBackToTasks={() => navigate("tasks")}
-          initialPath={view.openPath}
-          restore={view.restore}
+          initialPath={qbRestore ? undefined : view.openPath}
+          restore={qbRestore}
+          onSaveState={(state) => {
+            qbListRef.current = state;
+          }}
+          allFormNames={forms.filter((f) => f.status !== "deleted").map((f) => f.name)}
           flash={flash}
           onFlashDone={() => setFlash(null)}
         />
@@ -1442,7 +1486,9 @@ function AdminApp() {
           onDeleteCompany={deleteCompany}
           initialQuery={view.query}
           pinnedIds={createdCompanyIds}
-          restore={view.restore ? companiesListRef.current : null}
+          // Always the list as last left, Create included — a "View Company"
+          // deep link (by name) starts from its own search instead.
+          restore={view.query ? null : companiesListRef.current}
           onSaveState={(state) => { companiesListRef.current = state; }}
           onNewCompany={() => setView({ name: "new-company" })}
           onEditCompany={(company) => setView({ name: "edit-company", company })}
@@ -1455,12 +1501,12 @@ function AdminApp() {
         <NewCompanyWizard
           onClose={() => setView({ name: "companies", restore: true })}
           onCreate={addCompany}
-          /* A finished create opens the list fresh — default sort, no search
-             or filters — with the new company pinned at the top. Cancel
-             (onClose) still goes back to the list as it was. */
+          /* A finished create returns to the list as it was left (spec
+             review 2026-10-09 — no more fresh-list reset), with the new
+             company pinned at the top. */
           onCreated={(message) => {
             setFlash(message);
-            setView({ name: "companies" });
+            setView({ name: "companies", restore: true });
           }}
           onNavigateToProductConfig={() => setView({ name: "product-config", tab: "b2b" })}
         />
@@ -1498,7 +1544,9 @@ function AdminApp() {
           onOpenMergeAccounts={() => navigate("merge-accounts")}
           onOpenTransferSubscription={() => navigate("transfer-subscription")}
           initialCompanyFilter={view.companyFilter}
-          restore={view.restore ? usersListRef.current : null}
+          // Always the list as last left; View Employees' company deep link
+          // starts from that company instead (UsersPage drops `restore`).
+          restore={usersListRef.current}
           onSaveState={saveUsersList}
           flash={flash}
           onFlashDone={() => setFlash(null)}
@@ -1508,6 +1556,16 @@ function AdminApp() {
           initialTaskFilter={view.taskFilter}
           initialQuery={view.userFilter}
           extraSubmissions={view.extraSubmissions}
+          openSubmissionId={view.submissionId ?? null}
+          onOpenSubmission={(id, replace) => {
+            /* Opening pushes the submission's URL; Skip / Submit & Next
+               replace it (no history entry per row); closing pushes the
+               list's URL back. */
+            const next: View = { ...view, submissionId: id ?? undefined };
+            setView(next);
+            if (replace) window.history.replaceState({}, "", urlForView(next));
+            else window.history.pushState({}, "", urlForView(next));
+          }}
         />
       ) : view.name === "pending-id-reuploads" ? (
         <PendingIdReuploadsPage
@@ -1516,7 +1574,7 @@ function AdminApp() {
             pendingIdListRef.current = state;
             goToView({ name: "proctoring", openSubmissionId: id, originQueue: queueIds });
           }}
-          restore={view.restore ? pendingIdListRef.current : null}
+          restore={pendingIdListRef.current}
           flash={flash}
           onFlashDone={() => setFlash(null)}
         />
@@ -1549,10 +1607,6 @@ function AdminApp() {
           setTemplates={setAwardTemplates}
           usageOf={b2bValueUsage}
           onRemoveValue={removeB2BValue}
-          onEditAward={(award) => {
-            const cert = certForAward(award);
-            if (cert) setView({ name: "cert-award", cert });
-          }}
         />
       ) : view.name === "merge-accounts" ? (
         <MergeAccountsPage
@@ -1655,6 +1709,7 @@ function AdminApp() {
         <NewTaskWizard
           taskType={taskTypeKey(view.task.type)}
           editingTask={view.task}
+          skills={skills}
           onClose={() => setView({ name: "tasks" })}
           onSave={(task) => {
             saveTask(task);
@@ -1679,17 +1734,16 @@ function AdminApp() {
           cert={certs.find((c) => c.id === view.cert.id) ?? view.cert}
           onClose={() => setView({ name: "certs" })}
           onUnarchive={() => {
-            // Back to the visibility it had before it was archived (Visible
-            // when that was never recorded). The replacement settings only
-            // mean anything while archived, so they are cleared with it.
+            // Only the archived flag clears — Visible / Hidden is its own
+            // state and stays as it is. The replacement settings only mean
+            // anything while archived, so they are cleared with it.
             const id = view.cert.id;
             setCerts((prev) =>
               prev.map((c) =>
                 c.id === id
                   ? {
                       ...c,
-                      visibility: c.visibilityBeforeArchive ?? "Visible",
-                      visibilityBeforeArchive: undefined,
+                      archived: undefined,
                       replacementIds: undefined,
                       replacementAlert: undefined,
                     }
@@ -1702,19 +1756,16 @@ function AdminApp() {
           onArchive={({ replacementIds, replacementAlert }) => {
             const id = view.cert.id;
             const current = certs.find((c) => c.id === id) ?? view.cert;
-            const wasArchived = current.visibility === "Archived";
+            const wasArchived = !!current.archived;
             // The replacements and alert are stored on the record (absent when
-            // empty). A first archive also remembers the visibility it had,
-            // which Unarchive restores; re-saving an archived one keeps it.
+            // empty). Archiving sets only its own flag; the visibility is left
+            // as it is.
             setCerts((prev) =>
               prev.map((c) => {
                 if (c.id !== id) return c;
-                const prevVis = c.visibility ?? "Visible";
                 return {
                   ...c,
-                  visibility: "Archived" as const,
-                  visibilityBeforeArchive:
-                    prevVis === "Archived" ? c.visibilityBeforeArchive : prevVis,
+                  archived: true,
                   replacementIds: replacementIds.length > 0 ? replacementIds : undefined,
                   replacementAlert,
                 };

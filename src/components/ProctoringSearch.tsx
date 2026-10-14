@@ -300,7 +300,6 @@ export function ProctoringSearch({
                   <OptionRow key={name} active={active === i} onHover={() => setActive(i)} onClick={() => activate({ kind: "exam", name })}>
                     <span className="usearch-chip">Quiz:</span>
                     <span className="usearch-row-ex">{name}</span>
-                    <span className="usearch-row-desc">{allExams.counts.get(name) ?? 0} submissions</span>
                   </OptionRow>
                 ))
               )}

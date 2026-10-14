@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { subscriptionFilterStatus, subscriptionText, type User } from "../data/users";
+import { SUBSCRIPTION_FILTER_OPTIONS, subscriptionFilterLabel, subscriptionText, type User } from "../data/users";
 import { PrmModal } from "./PrmModal";
 import { TableCols } from "./TableCols";
 import { MultiSelectTags } from "./MultiSelectTags";
@@ -57,9 +57,9 @@ const MAX_GRANT = 10;
  *  Two, not the Skill wizard's three: the field is 470px inside the modal and
  *  a third name pushed the "+N" past the caret, where the field clips it. */
 const USER_TYPES = ["B2C", "B2B"];
-/* Every status the Users page and Who Paid filter on (`subscriptionFilterStatus`),
+/* Every status the Users page and Who Paid filter on (`subscriptionFilterLabel`),
    so a Company Plan or Cancelled user can be found here too. */
-const SUBSCRIPTIONS = ["Starter", "Subscriber", "Company Plan", "Scholarship", "Free Trial", "Cancelled"];
+const SUBSCRIPTIONS = SUBSCRIPTION_FILTER_OPTIONS;
 const ROLES = ["Self-Learner", "Employee", "Manager", "Admin"];
 
 type SortKey =
@@ -278,7 +278,6 @@ export function SelectGrantUsersModal({
       optionsLabel: "Companies",
       example: "Company: Acme Inc.",
       hint: "Filter by Company",
-      describe: (name) => `${companyOptions.counts.get(name)} users`,
     },
   ];
 
@@ -296,7 +295,7 @@ export function SelectGrantUsersModal({
       )
         return false;
       if (types.length && !types.includes(u.userType)) return false;
-      if (subs.length && !subs.includes(subscriptionFilterStatus(u))) return false;
+      if (subs.length && !subs.includes(subscriptionFilterLabel(u))) return false;
       if (roles.length && !roles.includes(u.role)) return false;
       if (companies.length && !companies.includes(companyOf(u))) return false;
       return true;

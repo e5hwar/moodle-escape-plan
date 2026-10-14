@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { RowExternalLinkIcon, CopyIcon, PencilIcon } from "./icons";
 import { leave, useTouchedKeys } from "./fieldFlags";
 import { useHoverCard, type HoverPos } from "../hooks/useHoverCard";
-import { PrmModal } from "./PrmModal";
+import { NO_CHANGES_TIP, PrmModal } from "./PrmModal";
 import { LimitError } from "./CharCount";
 import { LimitedInput } from "./LimitedInput";
 import { NAME_MAX, isOver } from "../data/fieldLimits";
@@ -283,6 +283,7 @@ function EditNameModal({
       description="The name shown on this user's profile and submissions."
       confirmLabel="Save Changes"
       confirmDisabled={!isValid}
+      confirmTip={trimmed === initial.trim() ? NO_CHANGES_TIP : undefined}
       onCancel={onCancel}
       onConfirm={() => isValid && onSave(trimmed)}
     >

@@ -14,6 +14,7 @@ import {
   SALES_REP_OPTIONS,
   defaultRate,
   getCompanyBilling,
+  hasSubscriptionHistory,
   monthlyRate,
   newPaymentLink,
   appToday,
@@ -47,7 +48,7 @@ import { WizardStepRail, useWizardStepStatuses } from "./WizardStepRail";
 import { leave, useMovedPast, useTouchedKeys } from "./fieldFlags";
 import { useEdgeLineGate, WizardGateEdges } from "./wizardGate";
 import { DateField, type DateShortcut } from "./DateField";
-import { PrmModal } from "./PrmModal";
+import { NO_CHANGES_TIP, PrmModal } from "./PrmModal";
 import { draftKey, useLeaveGuard } from "./LeaveGuard";
 import { CopiedToast } from "./CopiedToast";
 import { useToast } from "./useToast";
@@ -199,6 +200,9 @@ export function planFor(c: Company): Plan {
   return "subscription";
 }
 
+/** The wizard's step names, in order — the Create tip's "field — step". */
+const STEP_LABELS = ["Company Details", "Admin Account", "Plan"];
+
 export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, onSave, subscriptionOnly = false, detailsOnly = false, onNavigateToProductConfig }: Props) {
   const isEdit = !!editCompany;
   // Billing defaults are derived for seed companies that have no explicit values,
@@ -208,13 +212,6 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
   // Partnership options, and the Free Trial length.
   const b2b = useB2BConfig();
   const trialDays = b2b.trialDays;
-
-  /* A cancellation that is scheduled but hasn't taken effect yet freezes the
-     plan: Manage Subscription opens read-only, every field disabled and no
-     Save, under a lock card naming the date. Changing the plan would quietly
-     undo the cancellation. */
-  const cancelLocked =
-    subscriptionOnly && editBilling?.status === "Canceled" && editBilling.cancelScheduled;
 
   // A company whose free trial has expired cannot be put back onto a trial — it
   // can only convert to a paid Subscription or be granted Free Access.
@@ -233,7 +230,7 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
      reactivates the company — a fresh subscription, so it may pick either
      payment method and set its seats, and the old cancellation is cleared. */
   const reactivating =
-    isEdit && editBilling?.status === "Canceled" && !editBilling.cancelScheduled;
+    isEdit && editBilling?.status === "Cancelled" && !editBilling.cancelScheduled;
   const automaticLocked =
     isEdit && !!editCompany && !!editBilling && !reactivating &&
     planFor(editCompany) === "subscription" &&
@@ -242,7 +239,9 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
     isEdit && !!editBilling &&
     (editBilling.status === "Active" ||
       editBilling.status === "Past Due" ||
-      (editBilling.status === "Canceled" && editBilling.cancelScheduled));
+      // Unreachable from the list (a scheduled cancellation drops Manage
+      // Subscription from the row menu), kept so the rule stands on its own.
+      (editBilling.status === "Cancelled" && editBilling.cancelScheduled));
 
   // When editing a company that already has a running paid subscription, the
   // billing-impact rail becomes a change preview (diff + proration) instead of
@@ -323,6 +322,8 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
   // a mandatory field say "cannot be left empty" (fieldFlags.tsx).
   const { touched, touch } = useTouchedKeys();
   const movedPast = useMovedPast(step);
+  // Set by a blocked Create: every gap shows, on steps never opened too.
+  const [attemptedCreate, setAttemptedCreate] = useState(false);
 
   // Success / confirmation
   const [createdCompany, setCreatedCompany] = useState<Omit<Company, "id"> | null>(null);
@@ -452,22 +453,25 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
   // fields aren't shown, so identity is taken as already-valid. Each list is
   // ordered top-to-bottom to match the form layout, so the CTA tooltip always
   // surfaces the first thing the admin needs to fix as they scan down the page.
-  const step0Checks: { valid: boolean; message: string }[] = subscriptionOnly ? [] : [
-    { valid: name.trim().length > 0, message: "Add a company name to continue." },
+  /* `field` names the gap in the Create button's missing-fields tip
+     ("field — step"), the Tasks / Certifications wizards' list. */
+  type StepCheck = { valid: boolean; message: string; field?: string };
+  const step0Checks: StepCheck[] = subscriptionOnly ? [] : [
+    { valid: name.trim().length > 0, message: "Add a company name to continue.", field: "Company Name" },
     // Soft limit: typing past it is allowed, saving isn't.
-    { valid: !isOver(NAME_MAX, name), message: `Shorten the company name to ${NAME_MAX} characters to continue.` },
-    { valid: !zipRequired(country) || addrPin.trim().length > 0, message: "Add a Zipcode to continue." },
-    { valid: !zipFormatError(addrPin, country), message: `${zipFormatError(addrPin, country)} to continue.` },
+    { valid: !isOver(NAME_MAX, name), message: `Shorten the company name to ${NAME_MAX} characters to continue.`, field: `Company Name (over ${NAME_MAX} characters)` },
+    { valid: !zipRequired(country) || addrPin.trim().length > 0, message: "Add a Zipcode to continue.", field: "Zipcode" },
+    { valid: !zipFormatError(addrPin, country), message: `${zipFormatError(addrPin, country)} to continue.`, field: "Zipcode (format)" },
     // Only when this step IS the save — in the full wizard it is a way-point,
     // and an untouched details step is a perfectly good one to walk past.
     ...(detailsOnly && isEdit
       ? [{ valid: detailsDirty, message: "Change something to save." }]
       : []),
   ];
-  const step1Checks: { valid: boolean; message: string }[] = subscriptionOnly ? [] : [
-    { valid: contactName.trim().length > 0, message: "Add an account holder name to continue." },
-    { valid: !isOver(NAME_MAX, contactName), message: `Shorten the account holder name to ${NAME_MAX} characters to continue.` },
-    { valid: email.trim().length > 0, message: "Add an account email to continue." },
+  const step1Checks: StepCheck[] = subscriptionOnly ? [] : [
+    { valid: contactName.trim().length > 0, message: "Add an account holder name to continue.", field: "Account Holder Name" },
+    { valid: !isOver(NAME_MAX, contactName), message: `Shorten the account holder name to ${NAME_MAX} characters to continue.`, field: `Account Holder Name (over ${NAME_MAX} characters)` },
+    { valid: email.trim().length > 0, message: "Add an account email to continue.", field: "Account Email" },
   ];
   // A per-seat rate that isn't a saved Stripe price can't be used to create a
   // subscription — the admin must save it as a new price first.
@@ -476,26 +480,27 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
   );
   // A subscription must have at least one paid seat before it can be saved.
   const seatsValid = !isSubscription || seatCount > 0;
-  const seatsMissing = !seatsValid && touched.has("seats");
+  const seatsMissing = !seatsValid && (touched.has("seats") || attemptedCreate);
   // Free Access is open-ended unless an end date is set, so one is required.
   const freeAccessValid = plan !== "complimentary" || freeAccessEndDate.trim().length > 0;
   // The Plan step is the last one, so its fields flag on touch alone (Figma
   // 1376:1675 Price, 1390:1710 Seats, 1387:1311 End Date).
-  const priceMissing = isSubscription && !(parseFloat(priceStr) > 0) && touched.has("price");
-  const endDateMissing = !freeAccessValid && touched.has("endDate");
-  const step2Checks: { valid: boolean; message: string }[] = [
+  const priceMissing =
+    isSubscription && !(parseFloat(priceStr) > 0) && (touched.has("price") || attemptedCreate);
+  const endDateMissing = !freeAccessValid && (touched.has("endDate") || attemptedCreate);
+  const step2Checks: StepCheck[] = [
     // Editing saves a CHANGE. With the form still exactly as it was loaded
     // there is nothing to write, so the CTA stays disabled and says why.
     // Reactivating is itself the change, so an untouched form can save it.
-    ...(isEdit && !reactivating ? [{ valid: planDirty, message: "No changes to save" }] : []),
+    ...(isEdit && !reactivating ? [{ valid: planDirty, message: NO_CHANGES_TIP }] : []),
     ...(isSubscription
       ? [
-          { valid: priceValid, message: "Save the custom price before creating the subscription." },
-          { valid: seatsValid, message: "Enter at least one seat for a subscription." },
+          { valid: priceValid, message: "Save the custom price before creating the subscription.", field: "Price per Seat (save the custom price)" },
+          { valid: seatsValid, message: "Enter at least one seat for a subscription.", field: "Seats" },
         ]
       : []),
     ...(plan === "complimentary"
-      ? [{ valid: freeAccessValid, message: "Set an end date for Free Access." }]
+      ? [{ valid: freeAccessValid, message: "Set an end date for Free Access.", field: "End Date" }]
       : []),
   ];
 
@@ -504,7 +509,24 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
   const companyValid = step0Checks.every((c) => c.valid);
   const adminValid = step1Checks.every((c) => c.valid);
   const detailsValid = companyValid && adminValid;
-  const canSave = !cancelLocked && detailsValid && step2Checks.every((c) => c.valid);
+  const canSave = detailsValid && step2Checks.every((c) => c.valid);
+
+  /* Creating a company is gated like the Tasks / Certifications wizards
+     (spec review 2026-10-09): the last step's CTA is dimmed but clickable
+     while anything blocks it. Hover lists every gap as "field — step";
+     a click flags every gap (fields and rail) and jumps to the first. */
+  const createGaps = isEdit
+    ? []
+    : stepChecks.flatMap((checks, i) =>
+        checks.filter((c) => !c.valid && c.field).map((c) => ({ step: i, field: c.field! })),
+      );
+  const createTip =
+    createGaps.length > 0
+      ? [
+          "Fill in every required field to create this company:",
+          ...createGaps.map((g) => `• ${g.field} — ${STEP_LABELS[g.step]}`),
+        ].join("\n")
+      : undefined;
 
   // First unmet requirement on the step currently in view, shown as a tooltip
   // on the disabled CTA (hover, not static text).
@@ -512,7 +534,7 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
      Changes stays off the same way Manage Subscription's does. */
   const detailsUnchanged = detailsOnly && !detailsDirty;
   const ctaTooltip = step === 0
-    ? step0Checks.find((c) => !c.valid)?.message ?? (detailsUnchanged ? "No changes to save" : "")
+    ? step0Checks.find((c) => !c.valid)?.message ?? (detailsUnchanged ? NO_CHANGES_TIP : "")
     : step === 1
     ? step1Checks.find((c) => !c.valid)?.message ?? ""
     : step2Checks.find((c) => !c.valid)?.message ?? "";
@@ -551,36 +573,66 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
     ? {
         ...builtPreview,
         rows: [
-          { label: "Plan", oldStr: "Canceled", newStr: planLabel(plan) },
+          { label: "Plan", oldStr: "Cancelled", newStr: planLabel(plan) },
           ...builtPreview.rows.filter((r) => r.label !== "Plan"),
         ],
       }
     : builtPreview;
-  // What happens on save, in one line under the modal's title.
-  const saveEffect = change?.anyChange
-    ? change.chargeReason
-    : plan === "complimentary"
-    ? "Free access continues until the end date above. Nothing is charged."
-    : planTypeChange
-    ? "The change is scheduled for the end of the current billing cycle."
-    : "The new plan takes effect today.";
+  /* Converting a trial or a Free Access grant (running or ended) into a
+     Subscription. On automatic payment it is the same hand-off as a new
+     company: the account waits in Pending Payment Setup for the payment method,
+     and the admin gets the Stripe link to send. On invoice it is live at once. */
+  /* Reactivating an ended cancellation runs the same way: Automatic waits in
+     Pending Payment Setup with a fresh link, Invoice is Active at once. */
+  const converting =
+    isEdit && plan === "subscription" &&
+    ((currentPlanKind !== null && currentPlanKind !== "subscription") || reactivating);
+  const convertingToAuto = converting && payment === "Automatic";
+
+  /* What saving costs today, in one line under the confirm's table: the
+     prorated charge when there is one, otherwise a plain "nothing charged". */
+  const chargedNow = (amount: string, daysLeft: number, cycleDays: number) =>
+    `Company will be charged ${amount} immediately. This is prorated for the ${daysLeft} of ${cycleDays} days left in this cycle.`;
+  const saveEffect = (() => {
+    if (change?.anyChange) {
+      if (change.collectionOnly) return "Nothing is charged today. Only how invoices are collected changes.";
+      if (!change.immediate) return `Nothing is charged today. The change is scheduled for the end of this cycle, on ${change.renewStr}.`;
+      return change.chargeNow > 0.005
+        ? chargedNow(change.chargeStr, change.daysLeft, change.cycleDays)
+        : "Nothing is charged today. The change applies now, with nothing to prorate.";
+    }
+    if (planTypeChange) return "Nothing is charged today. The change is scheduled for the end of this cycle.";
+    // Converting into a Subscription. Automatic waits on the payment method;
+    // Invoice is live today and prorates the rest of this month (createToModel).
+    if (converting && plan === "subscription") {
+      if (payment === "Automatic") {
+        return "Nothing is charged today. The company is charged once it sets up its payment method through the payment link.";
+      }
+      const { daysLeft, cycleDays, frac } = daysLeftInCycle("", "Monthly");
+      const amount = monthlyRate(planTotal, billingCycle) * frac;
+      return amount > 0.005
+        ? chargedNow(money(amount, sym), daysLeft, cycleDays)
+        : "Nothing is charged today.";
+    }
+    return "Nothing is charged.";
+  })();
 
   const STEPS: { id: string; label: string; sub: string; desc: string }[] = [
     {
       id: "details",
-      label: "Company Details",
+      label: STEP_LABELS[0],
       sub: "Identity & segmentation",
-      desc: "Identify the company. Industry and partnership are used for segmentation and reporting.",
+      desc: "Identify the company. Trade and partnership are used for segmentation and reporting.",
     },
     {
       id: "admin",
-      label: "Admin Account",
+      label: STEP_LABELS[1],
       sub: "Primary contact",
       desc: "The primary contact and first Admin account for the company.",
     },
     {
       id: "plan",
-      label: "Plan",
+      label: STEP_LABELS[2],
       sub: "Access & billing",
       desc: "Choose the access plan. Subscription plans require billing configuration.",
     },
@@ -605,20 +657,21 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
     step,
     count: STEPS.length,
     incomplete: (i) => (stepChecks[i] ?? []).some((c) => !c.valid),
+    flagAll: attemptedCreate,
   });
 
   // Company Details and Admin Account fields: clicked into and out of, or the
   // step was moved past (Address per Figma 1389:1624 — its Zipcode is the one
   // mandatory part).
-  const nameMissing = !name.trim() && (movedPast(0) || touched.has("name"));
+  const nameMissing = !name.trim() && (movedPast(0) || touched.has("name") || attemptedCreate);
   const zipMissing =
-    zipRequired(country) && !addrPin.trim() && (movedPast(0) || touched.has("zip"));
+    zipRequired(country) && !addrPin.trim() && (movedPast(0) || touched.has("zip") || attemptedCreate);
   // A Zipcode that doesn't fit the selected Country's format — shown once the
   // address was left (or the step passed), like the empty check, then live.
   const zipInvalid =
-    movedPast(0) || touched.has("zip") ? zipFormatError(addrPin, country) : null;
-  const holderMissing = !contactName.trim() && (movedPast(1) || touched.has("holder"));
-  const emailMissing = !email.trim() && (movedPast(1) || touched.has("email"));
+    movedPast(0) || touched.has("zip") || attemptedCreate ? zipFormatError(addrPin, country) : null;
+  const holderMissing = !contactName.trim() && (movedPast(1) || touched.has("holder") || attemptedCreate);
+  const emailMissing = !email.trim() && (movedPast(1) || touched.has("email") || attemptedCreate);
 
   // Details-only edit: patch the identity & segmentation fields onto the
   // existing company, leaving plan, billing, status, and the admin account
@@ -655,17 +708,6 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
     if (onCreated) onCreated(message);
     else onClose();
   }
-
-  /* Converting a trial or a Free Access grant (running or ended) into a
-     Subscription. On automatic payment it is the same hand-off as a new
-     company: the account waits in Pending Payment Setup for the payment method,
-     and the admin gets the Stripe link to send. On invoice it is live at once. */
-  /* Reactivating an ended cancellation runs the same way: Automatic waits in
-     Pending Payment Setup with a fresh link, Invoice is Active at once. */
-  const converting =
-    isEdit && plan === "subscription" &&
-    ((currentPlanKind !== null && currentPlanKind !== "subscription") || reactivating);
-  const convertingToAuto = converting && payment === "Automatic";
 
   /* Manage Subscription writes the PLAN fields only — onto the company as it
      stands, so sign-up method, seats used, created date, a cancellation and
@@ -705,6 +747,9 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
       // Out of an ended cancellation (to a Subscription or Free Access): the
       // cancellation is over, so its date and reason go with it.
       ...(reactivating ? { cancelsOn: undefined, cancellationReason: undefined } : {}),
+      // Its invoices outlive the plan: a paid account moved onto Free Access
+      // or reactivated into Pending keeps View Invoices.
+      ...(hasSubscriptionHistory(editCompany) ? { subscribedBefore: true } : {}),
     };
     onSave?.(next);
     if (convertingToAuto) {
@@ -807,24 +852,46 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
     }
   }
 
+  /* The full Create Company wizard's footer follows the Tasks /
+     Certifications pattern (wizardGate.tsx, `canPublish`): Back · Review
+     Details (⌘⇧↵, creates from any step) · Continue (⌘↵, always moves on).
+     A step left with a mandatory field still empty is reported by the rail,
+     never by a Continue that refuses. Edit Company and Manage Subscription
+     are single-step and keep their own Save Changes button. */
+  const fullWizard = !detailsOnly && !subscriptionOnly;
+  const isLastStep = step === lastStep;
+
+  /* The create action, from either footer button or its shortcut: dimmed but
+     clickable while anything blocks it — a click flags every gap (fields and
+     rail) and jumps to the first. */
+  function createOrFlag() {
+    if (!canSave) {
+      if (!isEdit && createGaps.length > 0) {
+        setAttemptedCreate(true);
+        gate.goStep(createGaps[0].step);
+      }
+      return;
+    }
+    if (isEdit) setShowSaveConfirm(true);
+    else handleCreate();
+  }
+
   /* ⌘/Ctrl+Enter runs the footer's primary button — Continue, then Review
-     Details / Save Changes — under the same guards that disable it. The review
-     and done screens register their own, so this one stands down while either
-     has the screen. */
+     Details / Save Changes; ⌘/Ctrl+Shift+Enter the create button beside it.
+     The review and done screens register their own, so this one stands down
+     while either has the screen. */
   useWizardEnterShortcut(
     () => {
-      if (step === 0) {
-        if (!companyValid || detailsUnchanged) return;
-        if (detailsOnly) handleSaveDetails();
-        else gate.goStep(1);
-      } else if (step === 1) {
-        if (adminValid) gate.goStep(2);
+      if (fullWizard) {
+        if (!isLastStep) gate.goStep(step + 1);
+        else createOrFlag();
+      } else if (detailsOnly) {
+        if (companyValid && !detailsUnchanged) handleSaveDetails();
       } else if (canSave) {
-        if (isEdit) setShowSaveConfirm(true);
-        else handleCreate();
+        createOrFlag();
       }
     },
-    undefined,
+    fullWizard ? createOrFlag : undefined,
     !createdCompany && !pendingCompany,
   );
 
@@ -951,7 +1018,6 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
                   seatsLocked={seatsLocked}
                   manageMode={subscriptionOnly}
                   trialDays={trialDays}
-                  cancelsOn={cancelLocked ? editBilling?.cancelsOn : undefined}
                   hideSummary
                 />
               )}
@@ -974,51 +1040,64 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
               <span className="wizard-gate-btn-inner">Back</span>
             </button>
           )}
-          {step === 0 ? (
-            /* `aria-disabled`, not `disabled`: a disabled button fires no
-               mouse events, so the shared tooltip couldn't name what's
-               missing. The click guards itself instead. */
+          {fullWizard ? (
+            <>
+              {/* Creates from any step (it opens Review Details, where Create
+                  Company commits). `aria-disabled`, not `disabled`: a disabled
+                  button fires no mouse events, so it could neither show the tip
+                  that lists what's missing nor answer a click by jumping to the
+                  first gap. Hidden on the last step, where it IS the primary. */}
+              {!isLastStep && (
+                <button
+                  className={`btn-save-draft${canSave ? "" : " is-disabled"}`}
+                  aria-disabled={!canSave}
+                  data-tip={createTip}
+                  onClick={createOrFlag}
+                >
+                  {saveCta}
+                  <WizardKeyHint shift />
+                </button>
+              )}
+              {/* Continue, until the last step — where it becomes the create
+                  action itself, carrying the same gate. */}
+              <button
+                className={`btn-publish${isLastStep ? "" : " wizard-gate-btn"}${
+                  isLastStep && !canSave ? " is-disabled" : ""
+                }`}
+                aria-disabled={isLastStep && !canSave}
+                data-tip={isLastStep ? createTip : undefined}
+                onClick={isLastStep ? createOrFlag : () => gate.goStep(step + 1)}
+              >
+                {!isLastStep && <span className="wizard-gate-fill" ref={gate.nextFillRef} />}
+                <span className="wizard-gate-btn-inner">
+                  {isLastStep ? saveCta : "Continue"}
+                  <WizardKeyHint />
+                </span>
+              </button>
+            </>
+          ) : detailsOnly ? (
+            /* Edit Company: one step, saved straight from here. Dimmed until
+               something changed or while a field blocks it (the tip says
+               which); the click guards itself. */
             <button
-              className={`btn-publish${detailsOnly ? "" : " wizard-gate-btn"}${
-                !companyValid || detailsUnchanged ? " is-disabled" : ""
-              }`}
+              className={`btn-publish${!companyValid || detailsUnchanged ? " is-disabled" : ""}`}
               aria-disabled={!companyValid || detailsUnchanged}
               data-tip={ctaTooltip || undefined}
               onClick={() => {
                 if (!companyValid || detailsUnchanged) return;
-                if (detailsOnly) handleSaveDetails();
-                else gate.goStep(1);
+                handleSaveDetails();
               }}
             >
-              {!detailsOnly && <span className="wizard-gate-fill" ref={gate.nextFillRef} />}
-              <span className="wizard-gate-btn-inner">
-                {detailsOnly ? "Save Changes" : "Continue"}
-                <WizardKeyHint />
-              </span>
+              Save Changes
+              <WizardKeyHint />
             </button>
-          ) : step === 1 ? (
-            <button
-              className={`btn-publish wizard-gate-btn${adminValid ? "" : " is-disabled"}`}
-              aria-disabled={!adminValid}
-              data-tip={ctaTooltip || undefined}
-              onClick={() => adminValid && gate.goStep(2)}
-            >
-              <span className="wizard-gate-fill" ref={gate.nextFillRef} />
-              <span className="wizard-gate-btn-inner">
-                Continue
-                <WizardKeyHint />
-              </span>
-            </button>
-          ) : cancelLocked ? null : (
+          ) : (
+            /* Manage Subscription: one step, Save Changes opens the confirm. */
             <button
               className={`btn-publish${canSave ? "" : " is-disabled"}`}
               aria-disabled={!canSave}
               data-tip={ctaTooltip || undefined}
-              onClick={() => {
-                if (!canSave) return;
-                if (isEdit) setShowSaveConfirm(true);
-                else handleCreate();
-              }}
+              onClick={createOrFlag}
             >
               {saveCta}
               <WizardKeyHint />
@@ -1042,6 +1121,7 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
       {showNewPriceModal && (
         <CreatePriceModal
           initialCycle={billingCycle}
+          selectedCurrency={currency}
           onClose={() => setShowNewPriceModal(false)}
           onCreate={(p) => {
             setSavedPrices((prev) => [...prev, p]);
@@ -1192,6 +1272,13 @@ type ChangePreview = {
   chargeNow: number;
   chargeStr: string;
   chargeReason: string;
+  /** Only the collection method moves — nothing is billed differently. */
+  collectionOnly: boolean;
+  /** Days left in the current cycle, and its length — the proration basis. */
+  daysLeft: number;
+  cycleDays: number;
+  /** The cycle boundary a scheduled change lands on ("Nov 1, 2026"). */
+  renewStr: string;
   applyLabel: string;
   // Subscription-preview redesign (Figma 107:1236): an "Effective Today"-style
   // pill on the What's-Changing header, and the Billing Impact timeline.
@@ -1385,6 +1472,7 @@ function computeChange(cur: CurrentSub, tgt: Target): ChangePreview {
   return {
     anyChange, label, channel, immediate, prorationParam, rows,
     chargeNow, chargeStr: money(chargeNow, newSym), chargeReason,
+    collectionOnly, daysLeft, cycleDays, renewStr: fmtFullDate(renewDate),
     applyLabel, pill, timeline,
   };
 }
@@ -1455,10 +1543,12 @@ function buildPreviewModel({
     : model;
 }
 
-/* Confirmation step for a Manage Subscription save (Figma 483:588's confirm
-   shell). It restates the change exactly as the preview card does — the admin
-   reads the same rows twice rather than a second, differently-worded summary —
-   and says what saving will do. */
+/* Confirmation step for a Manage Subscription save (General Modal, Figma
+   667:884). It lists ONLY what changes, old → new — unlike the preview rail,
+   which keeps every field for context — then says what saving charges today,
+   as pop-up content. A change of plan (a conversion, a reactivation, a move
+   onto Free Access) makes every field of the new plan a change, so those rows
+   come along with "—" as their old value. */
 function SaveChangesModal({
   model, effect, onCancel, onConfirm,
 }: {
@@ -1467,6 +1557,10 @@ function SaveChangesModal({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const planChanged = model.rows.some((r) => r.label === "Plan" && r.oldStr != null);
+  const rows = planChanged
+    ? model.rows.map((r) => (r.oldStr != null ? r : { ...r, oldStr: "—" }))
+    : model.rows.filter((r) => r.oldStr != null);
   return (
     <PrmModal
       title="Save Changes"
@@ -1476,9 +1570,9 @@ function SaveChangesModal({
       onConfirm={onConfirm}
     >
       <div className="prm-stack">
-        {model.rows.length > 0 && (
+        {rows.length > 0 && (
           <div className="sub-summary">
-            {model.rows.map((r) => (
+            {rows.map((r) => (
               <div className="sub-summary-row" key={r.label}>
                 <span className="sub-summary-label">{r.label}</span>
                 <span className="sub-summary-val">
@@ -1494,7 +1588,7 @@ function SaveChangesModal({
             ))}
           </div>
         )}
-        <p className="prm-text">{effect}</p>
+        <p className="prm-content">{effect}</p>
       </div>
     </PrmModal>
   );
@@ -1895,7 +1989,7 @@ function Step1Details({
     <>
       <h1 className="tasks-title">Company Details</h1>
       <p className="tasks-subtitle wizard-desc">
-        Identify the company. Industry and partnership are used for segmentation and reporting.
+        Identify the company. Trade and partnership are used for segmentation and reporting.
       </p>
 
       <div className="form-group" onBlur={leave(() => touch("name"))}>
@@ -2038,16 +2132,16 @@ function Step1Details({
 
       <div className="form-row-2">
         <div className="form-group">
-          <label className="form-label">Industries</label>
+          <label className="form-label">Trade</label>
           <MultiSelect
             options={withCurrent(tradeOptions, industries)}
             value={industries}
             onChange={setIndustries}
-            placeholder="Select Industries"
-            searchPlaceholder="Search Industries..."
+            placeholder="Select Trade"
+            searchPlaceholder="Search Trade..."
           />
           <p className="form-help co-w-manage-link">
-            Manage Industries on{" "}
+            Manage Trade on{" "}
             <a
               href="#"
               className="text-link"
@@ -2205,13 +2299,9 @@ function Step2Plan({
   hideSummary = false,
   manageMode = false,
   trialDays,
-  cancelsOn,
 }: {
   /** Product Config's B2B Free Trial length, in days. */
   trialDays: number;
-  /** Set when a cancellation is scheduled: the step is read-only, under a
-   *  lock card naming this date. */
-  cancelsOn?: string;
   seatsMissing?: boolean;
   priceMissing?: boolean;
   endDateMissing?: boolean;
@@ -2237,16 +2327,13 @@ function Step2Plan({
   manageMode?: boolean;
 }) {
   const isSubscription = plan === "subscription";
-  const readOnly = !!cancelsOn;
 
   // Why an option of the Plan field can't be picked — the lock card's copy.
   // The options themselves keep their normal subtext (the Quiz Structure lock's
   // format). A trial that has expired leaves Free Access open; a paid plan that
   // is still running closes both.
   const trialUnavailable = trialExpired || trialLocked;
-  const planLock: { title: string; sub: string } | null = readOnly
-    ? null
-    : trialExpired
+  const planLock: { title: string; sub: string } | null = trialExpired
     ? {
         title: "Free Trial Unavailable",
         sub: "This company's trial has already expired. Convert to a Subscription or grant Complimentary Free Access.",
@@ -2272,16 +2359,8 @@ function Step2Plan({
     <>
       <h1 className="tasks-title">{manageMode ? "Manage Subscription" : "Plan Selection"}</h1>
       <p className="tasks-subtitle wizard-desc">
-        {readOnly ? "View the company's plan" : manageMode ? "Update the company's plan" : "Set up the company's plan"}
+        {manageMode ? "Update the company's plan" : "Set up the company's plan"}
       </p>
-
-      {/* A scheduled cancellation: the whole plan is disabled under the shared
-          Locked Field banner, and the footer drops Save. */}
-      <LockedField
-        locked={readOnly}
-        title="Subscription Cancelling"
-        sub={`This subscription cancels on ${cancelsOn}. Its plan can't be changed while the cancellation is scheduled.`}
-      >
 
       <div className="form-group">
         <label className="form-label">Plan<span className="req">*</span></label>
@@ -2313,7 +2392,7 @@ function Step2Plan({
               onSelect={() => setPlan("complimentary")}
               disabled={complimentaryLocked}
               title="Complimentary Free Access"
-              desc="Free access, with all the same features as that of the Pro Tier."
+              desc="Free access, with all the same features as that of the Professional Tier."
             />
           </div>
         </LockedField>
@@ -2388,7 +2467,7 @@ function Step2Plan({
             />
             <p className="form-help">
               {seatsLocked
-                ? "Seat count is set when the company is created and can't be changed here."
+                ? "Seats are added and removed from the Company's Dashboard"
                 : "Minimum 1. Number of seats to be billed for the company's first invoice."}
             </p>
           </div>
@@ -2396,7 +2475,7 @@ function Step2Plan({
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Payment Method<span className="req">*</span></label>
             <LockedField
-              locked={automaticLocked && !readOnly}
+              locked={automaticLocked}
               lockChildren={false}
               title="Automatic Payment Unavailable"
               sub="Companies can switch to automatic payment via the Billing Tab of their Dashboard."
@@ -2440,7 +2519,7 @@ function Step2Plan({
       )}
 
       {plan === "complimentary" && (
-        <div className="form-group" onBlur={leave(() => touch("endDate"))} style={{ marginTop: 16, marginBottom: 0 }}>
+        <div className="form-group" onBlur={leave(() => touch("endDate"))} style={{ marginBottom: 0 }}>
           <label className="form-label">
             Access End Date<span className="req">*</span>
             {endDateMissing && <span className="form-label-error">Access End Date cannot be left empty</span>}
@@ -2454,7 +2533,6 @@ function Step2Plan({
           />
         </div>
       )}
-      </LockedField>
     </>
   );
 }
@@ -2697,7 +2775,7 @@ function CompanyReviewCards({
     ["Company Name", company.name],
     ["Address", company.address, true],
     ["Tax Behaviour", company.taxStatus],
-    ["Industries", company.industry.join(", ")],
+    ["Trade", company.industry.join(", ")],
     ["Partnership", company.partnership.join(", ")],
     ["Assigned CSM", company.assignedCsm],
     ["Assigned Sales Rep", company.assignedSalesRep],
@@ -2845,25 +2923,31 @@ function PaymentLinkScreen({
 
 function CreatePriceModal({
   initialCycle,
+  selectedCurrency,
   onClose,
   onCreate,
 }: {
   initialCycle: BillingCycle;
+  /** The currency the Plan step has selected for the company. */
+  selectedCurrency: Currency;
   onClose: () => void;
   onCreate: (p: SavedPrice) => void;
 }) {
   const [label, setLabel] = useState("");
   const [cycle, setCycle] = useState<BillingCycle>(initialCycle);
-  // Always USD then CAD, both empty. The wizard's own currency and rate are
-  // deliberately NOT carried in: this creates a catalogue price, and seeding it
-  // from whatever the form happened to show made the two look linked when they
-  // are not. Any other currency is added from the row below.
-  const [rows, setRows] = useState<{ code: string; amount: string }[]>([
-    { code: "USD", amount: "" },
-    { code: "CAD", amount: "" },
-  ]);
+  /* The currencies a price can be set in: USD, CAD and — when the company's
+     selected currency is anything else — that one too (the list comes from
+     Stripe). All start as empty rows; the form's RATE is deliberately not
+     carried in, since this creates a catalogue price, not this company's.
+     Rates are stored as typed, never converted between currencies. */
+  const offered = CURRENCY_INFO.filter(
+    (c) => c.code === "USD" || c.code === "CAD" || c.code === selectedCurrency,
+  );
+  const [rows, setRows] = useState<{ code: string; amount: string }[]>(() =>
+    offered.map((c) => ({ code: c.code, amount: "" })),
+  );
   const usedCodes = rows.map((r) => r.code);
-  const available = CURRENCY_INFO.filter((c) => !usedCodes.includes(c.code));
+  const available = offered.filter((c) => !usedCodes.includes(c.code));
   // Every row's currency is now editable and every row is removable, so the
   // price is valid once ANY row carries a rate — not just the first. A price
   // that omits the wizard's own currency simply leaves its price field empty,
@@ -2957,7 +3041,7 @@ function CreatePriceModal({
                     alone — hence the custom trigger and the wider menu. */}
                 <SelectField
                   value={currencyOptionFor(row.code)}
-                  options={CURRENCY_INFO.filter(
+                  options={offered.filter(
                     (c) => c.code === row.code || !usedCodes.includes(c.code),
                   ).map((c) => currencyOptionFor(c.code))}
                   onChange={(next) => setCode(i, codeFromCurrencyOption(next))}
@@ -3017,9 +3101,9 @@ function CreatePriceModal({
           </button>
         </div>
         <p className="form-help">
-          Set the price in all currencies we support. Leave blank if a price is not
-          applicable to a certain country. Prices set here won’t automatically update
-          if exchange rate changes.
+          Currencies come from Stripe. Leave a currency blank if the price doesn’t
+          apply to it. Rates are saved as typed and never converted, even if
+          exchange rates change.
         </p>
       </div>
     </PrmModal>
@@ -3035,7 +3119,17 @@ export function MultiSelect({
   options, value, onChange, placeholder, searchPlaceholder, popupMenu = false, defaultOpen = false,
   hasError = false,
   onLeave,
+  locked,
+  disabled = false,
 }: {
+  /** Inside a Locked Field: the trigger is a div, so the fieldset's `disabled`
+   *  can't reach it — the menu stays shut and the field stays drawn as it is.
+   *  (The chips' × are buttons; the fieldset already disables those.) */
+  disabled?: boolean;
+  /** Options listed but not pickable, keyed by label → the reason, set as
+   *  the row's right-aligned muted detail (the 668:943 option row). No
+   *  checkbox; the name is solid grey and the row ignores clicks. */
+  locked?: Record<string, { detail: string; tip?: string }>;
   /** Flagged after a blocked save: the dropdown's red edge (Figma 1376:1618). */
   hasError?: boolean;
   /** The menu was opened and closed (fieldFlags.tsx) — the trigger is a div,
@@ -3092,8 +3186,9 @@ export function MultiSelect({
         trigger={({ open, toggle: toggleOpen }) => (
           <div
             ref={fieldRef}
-            className={`multiselect-field${open ? " is-open" : ""}${hasError ? " has-error" : ""}`}
-            onClick={toggleOpen}
+            className={`multiselect-field${open ? " is-open" : ""}${hasError ? " has-error" : ""}${disabled ? " is-disabled" : ""}`}
+            aria-disabled={disabled || undefined}
+            onClick={disabled ? undefined : toggleOpen}
           >
             {value.length === 0 ? (
               <span className="multiselect-placeholder">{placeholder}</span>
@@ -3114,6 +3209,7 @@ export function MultiSelect({
           <MultiSelectMenu
             options={filtered}
             value={value}
+            locked={locked}
             toggle={toggle}
             searchPlaceholder={searchPlaceholder}
             query={query}
@@ -3129,9 +3225,10 @@ export function MultiSelect({
    `autoFocus`: the overlay Dropdown's first paint is the hidden one it measures,
    and focusing a hidden element does nothing. */
 function MultiSelectMenu({
-  options, value, toggle, searchPlaceholder, query, setQuery,
+  options, value, locked, toggle, searchPlaceholder, query, setQuery,
 }: {
   options: string[]; value: string[]; toggle: (opt: string) => void;
+  locked?: Record<string, { detail: string; tip?: string }>;
   searchPlaceholder?: string; query: string; setQuery: (v: string) => void;
 }) {
   const searchRef = useRef<HTMLInputElement | null>(null);
@@ -3160,6 +3257,16 @@ function MultiSelectMenu({
           either way. */}
       <div className="dropdown-list" style={{ maxHeight: 5 * 35 + 16 }}>
         {options.map((opt) => {
+          const lock = locked?.[opt];
+          if (lock) {
+            return (
+              <div key={opt} className="dropdown-item ms-menu-item--locked" data-tip={lock.tip}>
+                <span className="ms-menu-check-slot" />
+                <span className="dropdown-item-name">{opt}</span>
+                <span className="dropdown-item-detail">{lock.detail}</span>
+              </div>
+            );
+          }
           const selected = value.includes(opt);
           return (
             <button

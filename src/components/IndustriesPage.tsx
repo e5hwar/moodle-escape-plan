@@ -1,3 +1,4 @@
+import { useListState } from "../hooks/useListState";
 import {
   Fragment,
   useEffect,
@@ -31,10 +32,11 @@ import {
 } from "./icons";
 import { IndustriesSearch } from "./IndustriesSearch";
 import { useToast } from "./useToast";
-import { PrmModal } from "./PrmModal";
+import { NO_CHANGES_TIP, PrmModal } from "./PrmModal";
 import { SelectRequirementModal } from "./SelectRequirementModal";
 import { formatTimeToComplete, isSkillCatCert, type Certification } from "../data/certifications";
-import { SelectField } from "./SelectField";
+import { MultiSelect } from "./NewCompanyWizard";
+import { AUDIENCE_ALL_USERS, audienceOf } from "../data/filters";
 import { CharCount, LimitError } from "./CharCount";
 import { NAME_MAX, isOver, limitClass } from "../data/fieldLimits";
 import { ImageUploadField, type PickedImage } from "./ImageUploadField";
@@ -364,8 +366,10 @@ export function IndustriesPage({
   const guard = useLeaveGuard(steps.length > 0);
   const onBackToCerts = leavePage ? () => guard(leavePage) : undefined;
   // `null` is the launcher; a scope is the hub for that industry / sub-industry.
-  const [scope, setScope] = useState<Scope | null>(null);
-  const [search, setSearch] = useState("");
+  /* Which hub is open and the launcher's search are kept for the session
+     (spec review 2026-10-09: every list restores, whatever route back). */
+  const [scope, setScope] = useListState<Scope | null>("industries:scope", null);
+  const [search, setSearch] = useListState("industries:search", "");
   const [cursor, setCursor] = useState(0);
   /* The highlight is only DRAWN while a row is actually being driven — hovered
      ("pointer") or walked with the arrows ("keyboard") — or while a query is
@@ -388,8 +392,10 @@ export function IndustriesPage({
     quiet && scope === null,
   );
 
-  /* SkillCat-created Certifications tagged nowhere — in no Industry and no
-     Sub-Industry (company-created ones can't be tagged at all). The
+  /* SkillCat-created All Users Certifications tagged nowhere — in no
+     Industry and no Sub-Industry (company-created ones can't be tagged at
+     all). B2B-only ones (Audience B2B, or any Trade / Partnership tag) can
+     still be tagged from the hubs, but are never nagged here. The
      launcher flags them in a banner (Figma 1424:1416, the Certifications
      setup banner's shape) whose Assign Industries opens the picker on them;
      its ✕ puts the banner off for the ones it named, so a Certification that
@@ -397,7 +403,12 @@ export function IndustriesPage({
   const untagged = useMemo(
     () =>
       certs
-        .filter((c) => isSkillCatCert(c) && industryTagLabels(c.industries, saved).length === 0)
+        .filter(
+          (c) =>
+            isSkillCatCert(c) &&
+            audienceOf(c.tags) === AUDIENCE_ALL_USERS &&
+            industryTagLabels(c.industries, saved).length === 0,
+        )
         .sort((a, b) => a.name.localeCompare(b.name)),
     [certs, saved],
   );
@@ -1102,7 +1113,6 @@ export function IndustriesPage({
             industryName={ind.name}
             subName={sub?.name}
             alreadyAtScope={new Set(already)}
-            tagsForCert={tagsForCert}
             onAdd={(ids) => {
               tagCerts(target, ids);
               setModal({ kind: "none" });
@@ -1113,13 +1123,12 @@ export function IndustriesPage({
         );
       })()}
       {modal.kind === "assign-industries" && (
-        <AddCertsModal
-          certs={certs}
-          pickScope={industries}
-          tagsForCert={tagsForCert}
-          onAdd={(ids, target) => {
-            if (!target) return;
-            tagCerts(target, ids);
+        <AssignIndustriesModal
+          certs={untagged}
+          industries={industries}
+          onAssign={(picks) => {
+            for (const { certId, scopes } of picks)
+              for (const sc of scopes) tagCerts(sc, [certId]);
             setModal({ kind: "none" });
             toast("Industries Assigned");
           }}
@@ -1654,6 +1663,8 @@ function CertList({
 }) {
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
+  // The row's 3-dot menu: Remove is its only item.
+  const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
 
   if (certIds.length === 0) {
     return (
@@ -1675,9 +1686,10 @@ function CertList({
 
   /* Figma 1306:1232 — the Large Table row: position (the order the handle
      sets, and the order learners browse in), name, "Apprentice · 8 hours",
-     and a labelled Remove cell (the shared bar's single-action cut) that
-     removes the tag from this scope only. */
+     and a 3-dot menu (the Industry rows' kebab) whose one item, Remove,
+     takes the tag off this scope only. */
   return (
+    <>
     <div className="ind-rowlist ind-certtable">
       {certIds.map((id, idx) => {
         const cert = certsById.get(id);
@@ -1687,7 +1699,7 @@ function CertList({
         return (
           <LargeRow
             key={id}
-            className={`${isDragging ? "is-dragging" : ""} ${isOver ? "is-drop-over" : ""}`}
+            className={`${isDragging ? "is-dragging" : ""} ${isOver ? "is-drop-over" : ""} ${menu?.id === id ? "menu-open" : ""}`}
             draggable
             onDragStart={() => setDragIdx(idx)}
             onDragOver={(e) => {
@@ -1708,17 +1720,40 @@ function CertList({
                 .join(" · ") || null
             }
             action={
-              <span className="row-action-bar">
-                <button className="row-action-btn row-action-btn--label" onClick={() => onRemove(id)}>
-                  Remove
-                  <RowDeleteIcon />
-                </button>
-              </span>
+              <RowKebab
+                label="Certification options"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                  setMenu({ id, x: r.right, y: r.bottom });
+                }}
+              />
             }
           />
         );
       })}
     </div>
+    {menu && (
+      <>
+        <div className="ind-menu-backdrop" onClick={() => setMenu(null)} />
+        <div
+          className="u-menu ind-row-menu"
+          style={{ top: menu.y + 6, left: menu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="u-menu-item u-menu-item--danger"
+            onClick={() => {
+              onRemove(menu.id);
+              setMenu(null);
+            }}
+          >
+            <span className="u-menu-item-icon"><RowDeleteIcon /></span> Remove
+          </button>
+        </div>
+      </>
+    )}
+    </>
   );
 }
 
@@ -1792,6 +1827,7 @@ function NameModal({
       description={nameHelp}
       confirmLabel={submitLabel}
       confirmDisabled={!isValid}
+      confirmTip={unchanged && trimmed ? NO_CHANGES_TIP : undefined}
       onCancel={onCancel}
       onConfirm={submit}
     >
@@ -2045,6 +2081,11 @@ function RemoveCertConfirm({
       title="Remove Certification?"
       confirmLabel="Remove Certification"
       danger
+      doubleConfirm={
+        <>
+          <strong>{certName}</strong> will no longer be listed under <strong>{scopeLabel}</strong>.
+        </>
+      }
       onCancel={onCancel}
       onConfirm={onConfirm}
     >
@@ -2065,35 +2106,72 @@ function RemoveCertConfirm({
    2026-10-06; it replaced this page's own copy with Hours / Tagged / Time
    filters). The page's tagging pool is adapted into the picker's rows: name,
    the Industries it is already tagged under, and its career stage.
-   Add Certifications: Certifications already at this scope stay listed but
-   locked, flagged with where they are. Assign Industries (the launcher
-   banner): no scope yet — an "Add to" destination select sits above the
-   search, the list is the untagged Certifications, and the chosen scope comes
-   back with the picks. Selection is staged until confirm. */
+   Certifications already at this scope stay listed but locked, flagged with
+   where they are. Selection is staged until confirm. */
 function AddCertsModal({
   certs,
   industryName,
   subName,
   alreadyAtScope,
-  pickScope,
-  tagsForCert,
   onAdd,
   onClose,
 }: {
   /** App's Certifications; only SkillCat-created ones can be tagged. */
   certs: Certification[];
-  industryName?: string;
+  industryName: string;
   subName?: string;
-  alreadyAtScope?: Set<string>;
-  pickScope?: Industry[];
-  tagsForCert: (id: string) => { industryName: string; subName?: string }[];
-  onAdd: (ids: string[], scope?: Scope) => void;
+  alreadyAtScope: Set<string>;
+  onAdd: (ids: string[]) => void;
   onClose: () => void;
 }) {
-  // Destination options, "Industry" / "Industry › Sub-Industry", in browse order.
-  const destOptions = useMemo(() => {
+  const scopeLabel = subName ? `${industryName} › ${subName}` : `${industryName} (Industry-level)`;
+
+  // The catalog's SkillCat-created Certifications (company-created ones can't
+  // carry Industry tags).
+  const pool = useMemo<Certification[]>(() => certs.filter(isSkillCatCert), [certs]);
+  const lockedNames = useMemo(
+    () => pool.filter((c) => alreadyAtScope.has(c.id)).map((c) => c.name),
+    [pool, alreadyAtScope],
+  );
+
+  return (
+    <SelectRequirementModal
+      only="cert"
+      certPool={pool}
+      existingNames={lockedNames}
+      title="Add Certifications"
+      description={`Adding to ${scopeLabel}`}
+      confirmNoun="Certification"
+      confirmVerb="Add"
+      lockedTip="Already added here"
+      lockedFlag={() => `In ${scopeLabel}`}
+      onCancel={onClose}
+      onConfirm={(picks) => onAdd(picks.flatMap((p) => (p.kind === "cert" ? [p.cert.id] : [])))}
+    />
+  );
+}
+
+/* ─── Assign Industries modal (Figma 1650:1669) ───────────────────────────── */
+
+/* The launcher banner's Assign Industries: a Card Table of the untagged
+   Certifications, each with its own Industries multi-select — Industries and
+   Sub-Industries ("Industry › Sub-Industry"), in browse order. A row left
+   empty stays untagged (and keeps the banner up); new tags join the end of
+   each scope's order, which the Industry / Sub-Industry page reorders. */
+function AssignIndustriesModal({
+  certs,
+  industries,
+  onAssign,
+  onClose,
+}: {
+  certs: Certification[];
+  industries: Industry[];
+  onAssign: (picks: { certId: string; scopes: Scope[] }[]) => void;
+  onClose: () => void;
+}) {
+  const options = useMemo(() => {
     const out: { label: string; scope: Scope }[] = [];
-    for (const ind of [...(pickScope ?? [])].sort((a, b) => a.displayPosition - b.displayPosition)) {
+    for (const ind of [...industries].sort((a, b) => a.displayPosition - b.displayPosition)) {
       out.push({ label: ind.name, scope: { kind: "industry", industryKey: ind.key } });
       for (const sub of [...ind.subIndustries].sort((a, b) => a.displayPosition - b.displayPosition)) {
         out.push({
@@ -2103,65 +2181,55 @@ function AddCertsModal({
       }
     }
     return out;
-  }, [pickScope]);
-  const [destLabel, setDestLabel] = useState("");
-  const dest = destOptions.find((o) => o.label === destLabel) ?? null;
-
-  const scopeLabel = subName ? `${industryName} › ${subName}` : `${industryName ?? ""} (Industry-level)`;
-
-  /* The catalog's SkillCat-created Certifications (company-created ones
-     can't carry Industry tags). Assign Industries lists only the untagged
-     ones — that banner exists to tag them. */
-  const pool = useMemo<Certification[]>(
-    () =>
-      certs
-        .filter(isSkillCatCert)
-        .filter((c) => !pickScope || tagsForCert(c.id).length === 0),
-    [certs, pickScope, tagsForCert],
-  );
-  const lockedNames = useMemo(
-    () => pool.filter((c) => alreadyAtScope?.has(c.id)).map((c) => c.name),
-    [pool, alreadyAtScope],
-  );
+  }, [industries]);
+  const labels = useMemo(() => options.map((o) => o.label), [options]);
+  const [picked, setPicked] = useState<Record<string, string[]>>({});
+  const count = Object.values(picked).filter((v) => v.length > 0).length;
 
   return (
-    <SelectRequirementModal
-      only="cert"
-      certPool={pool}
-      existingNames={lockedNames}
-      title={pickScope ? "Assign Industries" : "Add Certifications"}
-      description={
-        pickScope
-          ? "Pick the Industry or Sub-Industry these Certifications are listed under."
-          : `Adding to ${scopeLabel}`
-      }
-      confirmNoun="Certification"
-      confirmVerb={pickScope ? "Assign" : "Add"}
-      confirmBlocked={!!pickScope && !dest}
-      lockedTip="Already added here"
-      lockedFlag={() => `In ${scopeLabel}`}
-      header={
-        pickScope && (
-          <div className="stm-dest">
-            <span className="stm-dest-label">Add to</span>
-            <SelectField
-              value={destLabel}
-              options={destOptions.map((o) => o.label)}
-              onChange={(v) => setDestLabel(v)}
-              placeholder="Choose an Industry or Sub-Industry"
-              searchPlaceholder="Search Industries..."
-              popupMenu
-            />
-          </div>
-        )
-      }
+    <PrmModal
+      className="ind-assign-modal"
+      title="Assign Industries"
+      description="Pick the Industry or Sub-Industry these Certifications are listed under. The order can later be updated from the Industry/Sub-Industry page"
+      confirmLabel="Assign Industries"
+      confirmDisabled={count === 0}
       onCancel={onClose}
-      onConfirm={(picks) =>
-        onAdd(
-          picks.flatMap((p) => (p.kind === "cert" ? [p.cert.id] : [])),
-          dest?.scope,
+      onConfirm={() =>
+        onAssign(
+          certs
+            .filter((c) => picked[c.id]?.length)
+            .map((c) => ({
+              certId: c.id,
+              scopes: options.filter((o) => picked[c.id].includes(o.label)).map((o) => o.scope),
+            })),
         )
       }
-    />
+    >
+      <div className="ind-assign">
+        <div className="ind-assign-hd">
+          <span>CERTIFICATION</span>
+          <span>INDUSTRIES</span>
+        </div>
+        {certs.map((c) => {
+          const meta = [c.careerStage, formatTimeToComplete(c.timeToComplete)].filter(Boolean).join(" · ");
+          return (
+            <div key={c.id} className="ind-assign-row">
+              <div className="ind-assign-cert">
+                <span className="ind-assign-name">{c.name}</span>
+                {meta && <span className="ind-assign-meta">{meta}</span>}
+              </div>
+              <MultiSelect
+                options={labels}
+                value={picked[c.id] ?? []}
+                onChange={(v) => setPicked((prev) => ({ ...prev, [c.id]: v }))}
+                placeholder="Select Industries..."
+                searchPlaceholder="Search Industries..."
+                popupMenu
+              />
+            </div>
+          );
+        })}
+      </div>
+    </PrmModal>
   );
 }

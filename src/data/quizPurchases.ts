@@ -167,21 +167,25 @@ export function buildQuizPurchases(task: Task, store: Store): QuizPurchase[] {
       order: date,
     });
   }
+  /* A deleted paid attempt keeps its purchase: the SAME Who Paid row (same
+     id, purchase or grant details, payment) stays, back at Not Started, so
+     the learner can re-attempt without paying. */
   for (const a of store.deletedPaid.filter((d) => d.taskId === task.id && d.userId)) {
     const id = `P-${a.id}`;
+    const by = comped(id);
     const date = minusDays(isoOf(a.startedAt), phash(id) % 4);
     unused.push({
       ...blank,
-      id: `${id}-returned`,
+      id,
       userId: a.userId!,
-      purchaseDate: date,
+      purchaseDate: by ? null : date,
       status: "Not Started",
       score: null,
       passed: null,
-      granted: false,
-      grantDate: null,
-      grantedBy: null,
-      ...payment(id, a.userId!),
+      granted: !!by,
+      grantDate: by ? date : null,
+      grantedBy: by,
+      ...(by ? { purchaser: null, platform: null } : payment(id, a.userId!)),
       order: date,
     });
   }

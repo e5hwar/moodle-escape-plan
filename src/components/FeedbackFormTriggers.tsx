@@ -36,7 +36,7 @@ export function FeedbackFormTriggers({ form, allForms, onSave, invalid = false, 
     onPickingChange?.(open);
   };
 
-  const isDisabled = form.status === "disabled";
+  const isArchived = form.status === "archived";
 
   /* The live record a trigger points at, by id — the name it shows and the
      name the picker knows its row by. A trigger whose record is gone keeps
@@ -48,7 +48,7 @@ export function FeedbackFormTriggers({ form, allForms, onSave, invalid = false, 
 
   // Live view of the at-most-one-form rule, keyed by the mapped record's ID:
   // refId → the form holding it. This form counts as its STAGED copy (the
-  // edits not saved yet), every other form as saved. Inactive forms still
+  // edits not saved yet), every other form as saved. Archived forms still
   // occupy their mappings (preserved, just not firing); a deleted form is
   // gone from every list, so it frees them. The picker names the holder on
   // each locked row, so it never reads as "preselected".
@@ -119,15 +119,15 @@ export function FeedbackFormTriggers({ form, allForms, onSave, invalid = false, 
 
   return (
     <>
-      {/* An inactive form keeps its mappings but they don't fire — the shared
+      {/* An archived form keeps its mappings but they don't fire — the shared
           callout above the table rather than a line inside it. */}
-      {isDisabled && (
+      {isArchived && (
         <NoteCard
           className="fb-inactive-note"
           mutedIcon
           icon={<InfoIcon14 />}
-          title="This form is inactive"
-          body="Its trigger mappings are preserved but don't fire. Activate the form to resume firing them."
+          title="This form is archived"
+          body="Its trigger mappings are preserved but don't fire. Unarchive the form to resume firing them."
         />
       )}
       {/* Figma 1236:1161 — the Questions table's twin: one `.qz` card whose
@@ -147,14 +147,14 @@ export function FeedbackFormTriggers({ form, allForms, onSave, invalid = false, 
         )}
 
         {form.triggers.map((t) => (
-          <div key={t.id} className={`qz-row${isDisabled ? " qz-row--inactive" : ""}`}>
+          <div key={t.id} className={`qz-row${isArchived ? " qz-row--inactive" : ""}`}>
             <div className="qz-q fb-trigger-cell">
               <span className="fb-trigger-name">{liveName(t)}</span>
               <span className="fb-trigger-kindtext">· {kindLabel(t)}</span>
             </div>
-            {/* An inactive form's triggers stay editable — the note above
+            {/* An archived form's triggers stay editable — the note above
                 says they don't fire; mapping them now is set-up for when the
-                form is activated again. */}
+                form is unarchived. */}
             <button
               className="qz-x"
               aria-label="Remove trigger"
@@ -190,12 +190,17 @@ export function FeedbackFormTriggers({ form, allForms, onSave, invalid = false, 
             /* Both tabs, one staged selection: Tasks and Certifications can
                be mapped in the same trip. */
             title="Add Triggers"
-            description="Completing any of these Tasks or Certifications shows this form."
+            /* Each tab says what it lists — only SkillCat-made records. */
+            description={(tab) =>
+              tab === "task"
+                ? "Completing any of these Tasks shows this form. Only Tasks created by SkillCat are shown."
+                : "Completing any of these Certifications shows this form. Only Certifications created by SkillCat are shown."
+            }
             confirmNoun="Trigger"
-            /* Only SkillCat-made content every learner can reach (no
-               Audience/B2B tag) — a form must be showable to everyone who
-               completes its trigger. Certifications lead. */
-            allUsersOnly
+            /* Only SkillCat-made content: Tasks and Certifications of either
+               audience (B2B Companies Only ones included). Company-created
+               content never triggers a form. Certifications lead. */
+            skillCatOnly
             certFirst
             existingNames={takenNames}
             lockedFlag={(name) =>

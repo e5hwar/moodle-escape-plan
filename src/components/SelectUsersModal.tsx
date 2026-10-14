@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { mergeUserOf, userTypeOf, type MergeUser } from "../data/mergeAccounts";
 import {
+  SUBSCRIPTION_FILTER_OPTIONS,
   matchesUserQuery,
+  subscriptionFilterLabel,
   subscriptionFilterStatus,
   subscriptionText,
   useUsers,
@@ -38,7 +40,7 @@ const MAX_PICKED = 2;
 const USER_TYPES = ["B2C", "B2B"];
 /* The Users page's Subscription vocabulary — a Subscriber already cancelling
    files under Cancelled (subscriptionFilterStatus), as it does there. */
-const SUBSCRIPTIONS = ["Subscriber", "Company Plan", "Scholarship", "Free Trial", "Cancelled", "Starter"];
+const SUBSCRIPTIONS = SUBSCRIPTION_FILTER_OPTIONS;
 const ROLES = ["Self-Learner", "Employee", "Manager", "Admin"];
 
 type SortKey = "name" | "email" | "phone" | "company" | "role" | "subscription";
@@ -78,6 +80,7 @@ export function SelectUsersModal({
   value,
   description = "You can select both users here. The one which is kept and removed can be swapped later.",
   ineligible,
+  b2cOnly = false,
   onCancel,
   onConfirm,
 }: {
@@ -91,12 +94,19 @@ export function SelectUsersModal({
    *  and the reason is its hover tip — hiding the row would leave a search for
    *  it answering "no accounts match", which is a different claim. */
   ineligible?: (u: MergeUser) => string | undefined;
+  /** Transfer Subscription: only B2C accounts are listed, so the User Type and
+   *  Role filters and the Role column — which could only ever read one value —
+   *  drop out (the user, 2026-10-13). */
+  b2cOnly?: boolean;
   onCancel: () => void;
   onConfirm: (ids: string[]) => void;
 }) {
   // Every account on the live Users roster, as these flows see it.
   const roster = useUsers();
-  const mergeUsers = useMemo<PickRow[]>(() => roster.map((u) => ({ ...mergeUserOf(u), user: u })), [roster]);
+  const mergeUsers = useMemo<PickRow[]>(
+    () => roster.filter((u) => !b2cOnly || u.userType === "B2C").map((u) => ({ ...mergeUserOf(u), user: u })),
+    [roster, b2cOnly],
+  );
   // The Users page's search: commit-on-Enter, so only the applied query filters.
   const [committedQuery, setCommittedQuery] = useState("");
   const [types, setTypes] = useState<string[]>([]);
@@ -147,7 +157,6 @@ export function SelectUsersModal({
       optionsLabel: "Companies",
       example: "Company: Acme Inc.",
       hint: "Filter by Company",
-      describe: (name) => `${companyOptions.counts.get(name)} users`,
     },
   ];
 
@@ -157,7 +166,7 @@ export function SelectUsersModal({
       // Phone matches on digits, as on the Users page (matchesUserQuery).
       if (q && !matchesUserQuery(q, u)) return false;
       if (types.length && !types.includes(userTypeOf(u))) return false;
-      if (subs.length && !subs.includes(subscriptionFilterStatus(u.user))) return false;
+      if (subs.length && !subs.includes(subscriptionFilterLabel(u.user))) return false;
       if (companies.length && !(u.company && companies.includes(u.company))) return false;
       if (roles.length && !roles.includes(u.role)) return false;
       return true;
@@ -226,6 +235,7 @@ export function SelectUsersModal({
           />
 
           <div className="filters stm-filters">
+            {!b2cOnly && (
             <Dropdown
               width={200}
               trigger={({ open, toggle: t }) => (
@@ -250,6 +260,7 @@ export function SelectUsersModal({
                 />
               )}
             </Dropdown>
+            )}
 
             <Dropdown
               width={220}
@@ -301,6 +312,7 @@ export function SelectUsersModal({
               )}
             </Dropdown>
 
+            {!b2cOnly && (
             <Dropdown
               width={220}
               trigger={({ open, toggle: t }) => (
@@ -325,6 +337,7 @@ export function SelectUsersModal({
                 />
               )}
             </Dropdown>
+            )}
           </div>
         </div>
 
@@ -336,7 +349,7 @@ export function SelectUsersModal({
             style={{ "--table-min": `${TABLE_MIN}px` } as React.CSSProperties}
           >
             <table className="table table-head stm-table sum-table">
-              <ColGroup />
+              <ColGroup b2cOnly={b2cOnly} />
               <thead>
                 <tr>
                   {/* Spacer only — there is no select-all when the cap is two. */}
@@ -345,7 +358,7 @@ export function SelectUsersModal({
                   <Th col="email" label="Email" cls="sum-col-email" sort={sort} toggle={toggleSort} />
                   <Th col="phone" label="Phone Number" cls="sum-col-phone" sort={sort} toggle={toggleSort} />
                   <Th col="company" label="Company" cls="sum-col-company" sort={sort} toggle={toggleSort} />
-                  <Th col="role" label="Role" cls="sum-col-role" sort={sort} toggle={toggleSort} />
+                  {!b2cOnly && <Th col="role" label="Role" cls="sum-col-role" sort={sort} toggle={toggleSort} />}
                   <Th col="subscription" label="Subscription" cls="sum-col-plan" sort={sort} toggle={toggleSort} />
                 </tr>
               </thead>
@@ -353,7 +366,7 @@ export function SelectUsersModal({
 
             <div className="tasks-scroll">
               <table className="table table-body stm-table sum-table">
-                <ColGroup />
+                <ColGroup b2cOnly={b2cOnly} />
                 <tbody>
                   {rows.map((u) => {
                     const on = picked.includes(u.id);
@@ -398,7 +411,7 @@ export function SelectUsersModal({
                         <td className="sum-col-email">{u.email || "—"}</td>
                         <td className="sum-col-phone">{u.phone || "—"}</td>
                         <td className="sum-col-company">{u.company || "—"}</td>
-                        <td className="sum-col-role">{u.role}</td>
+                        {!b2cOnly && <td className="sum-col-role">{u.role}</td>}
                         <td className="sum-col-plan">{planText(u)}</td>
                       </tr>
                     );
@@ -445,10 +458,12 @@ export function SelectUsersModal({
    the 24px of cell insets, slack shared in proportion; the check gutter fixed. */
 const CHECK_W = 44;
 const COL_WIDTHS = [160, 304, 156, 216, 120, 224];
+/** Without the Role column (B2C-only mode). */
+const COL_WIDTHS_B2C = [160, 304, 156, 216, 224];
 const TABLE_MIN = CHECK_W + COL_WIDTHS.reduce((n, w) => n + w, 0);
 
-function ColGroup() {
-  return <TableCols lead={[CHECK_W]} data={COL_WIDTHS} />;
+function ColGroup({ b2cOnly = false }: { b2cOnly?: boolean }) {
+  return <TableCols lead={[CHECK_W]} data={b2cOnly ? COL_WIDTHS_B2C : COL_WIDTHS} />;
 }
 
 function Th({

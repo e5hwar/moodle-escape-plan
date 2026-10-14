@@ -23,6 +23,7 @@ import {
   type Skill,
   type SkillStatus,
 } from "../data/skills";
+import { NO_CHANGES_TIP } from "./PrmModal";
 
 /* ─────────────── Shared badge (complete + auto-greyed states) ─────────────── */
 
@@ -229,7 +230,7 @@ export function NewSkillWizard(props: Props) {
   const blockedTip = canSave
     ? undefined
     : fieldsValid
-    ? "No changes to save"
+    ? NO_CHANGES_TIP
     : [
         "Fill in every required field to save:",
         ...[
@@ -486,6 +487,8 @@ function TaskPicker({
       {open && createPortal(
         <SelectTasksModal
           value={selected}
+          allUsersOnly
+          description="Only All-User Tasks created by SkillCat are shown and can be selected here"
           onCancel={() => { setOpen(false); onLeave?.(); }}
           onConfirm={(ids) => {
             onChange(ids);

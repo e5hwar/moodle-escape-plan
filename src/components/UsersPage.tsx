@@ -4,7 +4,9 @@ import {
   updateUserContact,
   accessMoment,
   subscriptionFilterStatus,
-  canCancelSubscription,
+  subscriptionFilterLabel,
+  offersCancelSubscription,
+  cancelSubscriptionBlock,
   cancelSubscription,
   matchesUserQuery,
   type User,
@@ -29,7 +31,7 @@ import { UsersSearch } from "./UsersSearch";
 import { loginAs } from "./loginAs";
 import { useCollapsingHeader } from "../hooks/useCollapsingHeader";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
-import { NoteChevronIcon, SortIcon, RowEditIcon, RowExternalLinkIcon, RowKebabIcon, MenuEnterIcon, MenuUsersIcon, MenuProfileIcon, MenuProgressIcon, MenuBankIcon, MenuCardOffIcon, MenuMergeIcon, MenuTransferIcon, MenuScholarshipIcon, PagePrevIcon, PageNextIcon } from "./icons";
+import { NoteChevronIcon, SortIcon, RowEditIcon, RowKebabIcon, MenuEnterIcon, MenuUsersIcon, MenuProfileIcon, MenuProgressIcon, MenuBankIcon, MenuCardOffIcon, MenuMergeIcon, MenuTransferIcon, MenuScholarshipIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { TableCols } from "./TableCols";
 import { TableEmpty } from "./TableEmpty";
 import { SubscriptionPill } from "./SubscriptionPill";
@@ -259,10 +261,10 @@ export function UsersPage({
   // Search bar: committedQuery only changes on Enter. The company filter is shared
   // with the Filters row (filters.companies) and applies immediately.
   const [committedQuery, setCommittedQuery] = useState(restored?.query ?? "");
-  /* A company's roster opens grouped by seniority (Admin, Manager, then
-     Employee); any header still re-sorts it. */
+  /* The Company filter — View Employees deep link included — is a filter like
+     any other: it never changes the sort (the user, 2026-10-13). */
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>(
-    restored?.sort ?? (initialCompanyFilter ? { key: "role", dir: "desc" } : { key: "lastAccess", dir: "desc" }),
+    restored?.sort ?? { key: "lastAccess", dir: "desc" },
   );
   const [page, setPage] = useState(restored?.page ?? 1);
   const [menu, setMenu] = useState<{ user: User; rect: DOMRect } | null>(null);
@@ -275,7 +277,7 @@ export function UsersPage({
   // Edit User — the Full Profile's own modal, from the row pencil or the menu.
   const [editing, setEditing] = useState<User | null>(null);
   /** The page's own success toast — "Profile Updated" after an Edit User
-   *  save (the user, 2026-10-04), "Subscription Canceled" after a cancel. */
+   *  save (the user, 2026-10-04), "Subscription Cancelled" after a cancel. */
   const [toast, toastNode] = useToast();
   /* S opens Scholarships (page 3-dot menu), N the name-change queue (the
      banner's Review Names) — never through an open dialog or menu, and N only
@@ -301,7 +303,7 @@ export function UsersPage({
     return rows.filter(({ u, f }) => {
       if (filters.companies.length && !(u.companyName && filters.companies.includes(u.companyName))) return false;
       if (filters.types.length && !filters.types.includes(u.userType)) return false;
-      if (filters.subscriptions.length && !filters.subscriptions.includes(filterStatus(u))) return false;
+      if (filters.subscriptions.length && !filters.subscriptions.includes(subscriptionFilterLabel(u))) return false;
       if (filters.roles.length && !filters.roles.includes(u.role)) return false;
       if (filters.goals.length && !filters.goals.includes(f.goal)) return false;
       if (filters.industries.length && !filters.industries.includes(f.industryPreference)) return false;
@@ -309,12 +311,6 @@ export function UsersPage({
     });
   }, [rows, committedQuery, filters]);
 
-  // Picking a company groups its roster by seniority (Admin, Manager, then
-  // Employee) — a starting order, not a lock: any header re-sorts it.
-  const companyFilterActive = filters.companies.length > 0;
-  useOnChange([companyFilterActive], () => {
-    if (companyFilterActive) setSort({ key: "role", dir: "desc" });
-  });
   const effectiveSort = sort;
 
   const sorted = useMemo(() => {
@@ -414,7 +410,8 @@ export function UsersPage({
                       label and chevron are separate pieces so each can arrive from
                       its twin in the card (the count's no-break space stands in
                       for the space a flex item would drop), so the button
-                      carries its sentence as a label. */}
+                      carries its sentence as a label. The label is the card's
+                      title verbatim so the two read as one line mid-morph. */}
                   {hasNameChanges && (
                     <button
                       className="tasks-note"
@@ -423,8 +420,7 @@ export function UsersPage({
                     >
                       <span className="tasks-note-count">{pendingNames}{" "}</span>
                       <span className="tasks-note-text">
-                        <span className="nc-shared">Name Change</span>
-                        <span className="nc-rest">s Pending Review</span>
+                        <span className="nc-shared">Name Changes Pending Review</span>
                       </span>
                       <NoteChevronIcon />
                     </button>
@@ -461,12 +457,11 @@ export function UsersPage({
                         <div className="lm-banner-main">
                           <div className="lm-banner-count">{pendingNames}</div>
                           <div className="note-card-text">
-                            {/* "Name Change" is the words the title shares with
-                                the note's label, so the morph can hold it while
-                                only the rest swaps. */}
+                            {/* The title is the note's label word for word
+                                (bar the count), so the morph holds the whole
+                                line and nothing has to hand over. */}
                             <p className="note-card-title">
-                              <span className="nc-shared">Name Change</span>
-                              <span className="nc-rest"> Requests Pending</span>
+                              <span className="nc-shared">Name Changes Pending Review</span>
                             </p>
                             <p className="note-card-body">Check against their ID saved on SkillCat</p>
                           </div>
@@ -531,7 +526,6 @@ export function UsersPage({
                           row={row}
                           cols={visibleCols}
                           onOpenMenu={(el) => setMenu({ user: row.u, rect: el.getBoundingClientRect() })}
-                          onEdit={() => setEditing(row.u)}
                           menuOpen={menu?.user.id === row.u.id}
                         />
                       ))}
@@ -573,10 +567,11 @@ export function UsersPage({
           }
           onManageCompletions={() => onManageCompletions(menu.user.id)}
           onCancelSubscription={
-            /* Only a personal plan billed through a platform we can cancel
-               from here, not already cancelling (users.canCancelSubscription). */
-            canCancelSubscription(menu.user) ? () => setCancelSub(menu.user) : undefined
+            /* Anyone on a B2C Subscription not already cancelling sees it
+               (users.offersCancelSubscription); Apple's stays disabled. */
+            offersCancelSubscription(menu.user) ? () => setCancelSub(menu.user) : undefined
           }
+          cancelSubscriptionBlock={cancelSubscriptionBlock(menu.user)}
           onEdit={() => setEditing(menu.user)}
         />
       )}
@@ -596,7 +591,7 @@ export function UsersPage({
           onConfirm={() => {
             cancelSubscription(cancelSub.id);
             setCancelSub(null);
-            toast("Subscription Canceled");
+            toast("Subscription Cancelled");
           }}
         />
       )}
@@ -667,13 +662,11 @@ function UserRow({
   row,
   cols,
   onOpenMenu,
-  onEdit,
   menuOpen,
 }: {
   row: Row;
   cols: ColMeta[];
   onOpenMenu: (anchor: HTMLElement) => void;
-  onEdit: () => void;
   /** This row's 3-dot menu is open — hold the hover treatment. */
   menuOpen: boolean;
 }) {
@@ -696,17 +689,14 @@ function UserRow({
         >
           <RowKebabIcon />
         </button>
+        {/* The two quick actions (the user, 2026-10-13): View Profile and
+            Login As, each the menu item's own glyph (386:269 bar). */}
         <div className="row-action-bar">
-          <button className="row-action-btn" aria-label="Edit User Details" onClick={(e) => { e.stopPropagation(); onEdit(); }}>
-            <RowEditIcon />
+          <button className="row-action-btn" aria-label="View Profile" onClick={(e) => { e.stopPropagation(); openProfile(u); }}>
+            <MenuProfileIcon />
           </button>
-          <button
-            className="row-action-btn"
-            aria-label="Open profile in new tab"
-            title="Open full profile in a new tab"
-            onClick={(e) => { e.stopPropagation(); openProfile(u); }}
-          >
-            <RowExternalLinkIcon />
+          <button className="row-action-btn" aria-label="Login As" onClick={(e) => { e.stopPropagation(); loginAs(u); }}>
+            <MenuEnterIcon />
           </button>
           <button
             className="row-action-btn"
@@ -737,6 +727,7 @@ function UserActionsMenu({
   onViewAllEmployees,
   onManageCompletions,
   onCancelSubscription,
+  cancelSubscriptionBlock,
   onEdit,
 }: {
   rect: DOMRect;
@@ -747,8 +738,11 @@ function UserActionsMenu({
   onViewCompany?: () => void;
   onViewAllEmployees?: () => void;
   onManageCompletions: () => void;
-  /** Omitted when the user can't be cancelled from here — the item is hidden. */
+  /** Omitted when the user holds no B2C Subscription — the item is hidden. */
   onCancelSubscription?: () => void;
+  /** Why the offered item is disabled (an Apple subscription) — the grey
+   *  reason line under its label (Figma 668:942). */
+  cancelSubscriptionBlock?: string;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
@@ -823,7 +817,20 @@ function UserActionsMenu({
       {item(<MenuProgressIcon />, "Manage Training Progress", onManageCompletions)}
       {onViewCompany && item(<MenuBankIcon />, "View User's Company", onViewCompany)}
       {onViewAllEmployees && item(<MenuUsersIcon />, "View All Company Employees", onViewAllEmployees)}
-      {onCancelSubscription && item(<MenuCardOffIcon />, "Cancel Subscription", onCancelSubscription)}
+      {/* Red (673:1437); an Apple subscription keeps the row, disabled, with
+          the reason under the label. */}
+      {onCancelSubscription &&
+        (cancelSubscriptionBlock ? (
+          <button className="u-menu-item u-menu-item--danger" disabled>
+            <span className="u-menu-item-icon"><MenuCardOffIcon /></span>
+            <span className="u-menu-item-text">
+              Cancel Subscription
+              <span className="u-menu-item-sub">{cancelSubscriptionBlock}</span>
+            </span>
+          </button>
+        ) : (
+          item(<MenuCardOffIcon />, "Cancel Subscription", onCancelSubscription, true)
+        ))}
     </div>
   );
 }

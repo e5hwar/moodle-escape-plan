@@ -7,7 +7,7 @@ import type { User } from "../data/users";
    company-side "Open Company Dashboard" opens its `?loginAs=` stand-in. */
 export function loginAs(user: User) {
   window.open(
-    `${window.location.origin}${window.location.pathname}?loginAsUser=${encodeURIComponent(user.id)}`,
+    `${window.location.origin}${window.location.pathname}?loginAsUser=${encodeURIComponent(user.id)}&name=${encodeURIComponent(user.name)}`,
     "_blank",
     "noopener",
   );

@@ -890,6 +890,14 @@ export const MenuInvoiceIcon = () => (
   </svg>
 );
 
+/* Return arrow — Refund on the Full Profile's Purchases & Bills row menu
+   (Figma 1666:1457, transcribed from the exported asset 2026-10-13). */
+export const MenuRefundIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+    <path d="M3.833 4.667H9.333C10.394 4.667 11.412 5.088 12.162 5.838C12.912 6.588 13.333 7.606 13.333 8.667C13.333 9.728 12.912 10.745 12.162 11.495C11.412 12.245 10.394 12.667 9.333 12.667H4.333M5.333 7L3 4.667L5.333 2.333" />
+  </svg>
+);
+
 /* Padlock — Revoke Access on the Who Paid menus (Figma 786:1719 available /
    785:1699 disabled). Transcribed from the exported asset, which draws in an
    11.333×14 box inset 18.75% left/right and 8.33%/12.5% top/bottom of the 16px

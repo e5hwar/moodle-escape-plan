@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   users as allUsers,
   subscriptionFilterStatus,
+  subscriptionFilterLabel,
   type User,
   type UserRole,
   type SubscriptionStatus,
@@ -22,7 +23,7 @@ import {
   MultiPill,
   type UserFilterState,
 } from "./UsersFilters";
-import { useColumnOrder, orderedColumns } from "./Filters";
+import { orderedColumns } from "./Filters";
 import { FILTER_TIPS } from "../data/filterTips";
 import { PrmModal } from "./PrmModal";
 import { SelectGrantUsersModal } from "./GrantAttemptsModal";
@@ -31,6 +32,7 @@ import { SortIcon, AddIcon, RowKebabIcon, MenuLockIcon, PagePrevIcon, PageNextIc
 import { TableCols } from "./TableCols";
 import { SubscriptionPill } from "./SubscriptionPill";
 import { useToast } from "./useToast";
+import { useListState, useResetPageOnChange } from "../hooks/useListState";
 import { TableEmpty } from "./TableEmpty";
 
 const PAGE_SIZE = 50;
@@ -195,15 +197,18 @@ export function CertPurchasersPage({
   const [purchases, setPurchases] = useState<CertPurchase[]>(() =>
     buildAllCertPurchases(paidCerts),
   );
-  const [columns, setColumns] = useState<PurchaserColumnState>(DEFAULT_COLUMNS);
+  /* Kept for the session, per Certification (spec review 2026-10-09: every
+     list restores) — coming back to this one's Who Paid puts the list back. */
+  const ls = `who-paid-cert:${cert.id}`;
+  const [columns, setColumns] = useListState<PurchaserColumnState>(`${ls}:columns`, DEFAULT_COLUMNS);
   // Column display order — reordered by dragging in the Edit Columns menu.
-  const [order, setOrder] = useColumnOrder(COLS);
-  const [filters, setFilters] = useState<UserFilterState>(EMPTY_FILTERS);
-  const [certNames, setCertNames] = useState<string[]>([cert.name]);
-  const [accessTypes, setAccessTypes] = useState<string[]>([]);
-  const [committedQuery, setCommittedQuery] = useState("");
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "purchaseDate", dir: "desc" });
-  const [page, setPage] = useState(1);
+  const [order, setOrder] = useListState<ColMeta["key"][]>(`${ls}:order`, () => COLS.map((c) => c.key));
+  const [filters, setFilters] = useListState<UserFilterState>(`${ls}:filters`, EMPTY_FILTERS);
+  const [certNames, setCertNames] = useListState<string[]>(`${ls}:certs`, [cert.name]);
+  const [accessTypes, setAccessTypes] = useListState<string[]>(`${ls}:access`, []);
+  const [committedQuery, setCommittedQuery] = useListState(`${ls}:query`, "");
+  const [sort, setSort] = useListState<{ key: SortKey; dir: SortDir }>(`${ls}:sort`, { key: "purchaseDate", dir: "desc" });
+  const [page, setPage] = useListState(`${ls}:page`, 1);
   // Selection is per row (user × Certification), so one user's other rows stay
   // unselected.
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -254,7 +259,6 @@ export function CertPurchasersPage({
       optionsLabel: "Companies",
       example: "Company: Acme Inc.",
       hint: "Filter by Company",
-      describe: (name) => `${companyOptions.counts.get(name)} users`,
     },
   ];
 
@@ -265,7 +269,7 @@ export function CertPurchasersPage({
       if (accessTypes.length && !accessTypes.includes(p.granted ? "Free" : "Paid")) return false;
       if (filters.companies.length && !(u.companyName && filters.companies.includes(u.companyName))) return false;
       if (filters.types.length && !filters.types.includes(u.userType)) return false;
-      if (filters.subscriptions.length && !filters.subscriptions.includes(subscriptionFilterStatus(u))) return false;
+      if (filters.subscriptions.length && !filters.subscriptions.includes(subscriptionFilterLabel(u))) return false;
       if (filters.roles.length && !filters.roles.includes(u.role)) return false;
       if (!q) return true;
       return (
@@ -284,9 +288,7 @@ export function CertPurchasersPage({
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
 
-  useEffect(() => {
-    setPage(1);
-  }, [committedQuery, filters, certNames, accessTypes, sort]);
+  useResetPageOnChange(setPage, [committedQuery, filters, certNames, accessTypes, sort]);
 
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
@@ -513,6 +515,7 @@ export function CertPurchasersPage({
         <PurchaserActionsMenu
           row={menu.row}
           rect={menu.rect}
+          consumable={revokeTerms(menu.row).consumable}
           onClose={() => setMenu(null)}
           onRevoke={() => setRevoking(menu.row)}
         />
@@ -658,11 +661,15 @@ function PurchaserRow({
 function PurchaserActionsMenu({
   row,
   rect,
+  consumable,
   onClose,
   onRevoke,
 }: {
   row: Row;
   rect: DOMRect;
+  /** The row's Certification is a Consumable purchase — the only kind whose
+   *  access an admin can revoke. */
+  consumable: boolean;
   onClose: () => void;
   onRevoke: () => void;
 }) {
@@ -698,9 +705,16 @@ function PurchaserActionsMenu({
     };
   }, [onClose]);
 
-  // Revoke Access is always shown for Certifications; it greys out once access
-  // has already been revoked.
+  /* Revoke Access is always listed. It is live only on a Consumable purchase
+     (spec review 2026-10-09): a Non-Consumable purchase's access ends only by
+     refund, so there it stays in the menu disabled, with the reason (the
+     row-menu-disabled-items pattern). It also greys out once revoked. */
   const alreadyRevoked = !!row.p.revokedDate;
+  const revokeBlock = !consumable
+    ? "Non-Consumable access ends only by refund"
+    : alreadyRevoked
+      ? "Access has already been revoked for this purchase"
+      : undefined;
 
   const item = (
     icon: JSX.Element,
@@ -748,8 +762,8 @@ function PurchaserActionsMenu({
         "Revoke Access",
         onRevoke,
         true,
-        alreadyRevoked,
-        alreadyRevoked ? "Access has already been revoked for this purchase" : undefined,
+        !!revokeBlock,
+        revokeBlock,
       )}
     </div>
   );

@@ -1,6 +1,7 @@
 import { taskById, type Skill } from "./skills";
 import { useMemo } from "react";
-import { CERT_BY_USEDIN, certById } from "./certifications";
+import { CERT_BY_USEDIN, certById, getLiveCerts } from "./certifications";
+import { taskCertifications } from "./tasks";
 import { industryTagLabels, industryTagOptions, useLiveIndustries } from "./industries";
 
 /* How a Skill reaches the rest of the content graph — through its Tasks.
@@ -18,8 +19,18 @@ export function skillTaskNames(s: Skill): string[] {
   });
 }
 
+/* By CANONICAL Certification name (`taskCertifications` resolves a Task's
+   `usedIn` aliases), so the Linked Certifications filter can list every
+   Certification on record and still match (spec review 2026-10-09). */
 export function skillCertifications(s: Skill): string[] {
-  return s.taskIds.flatMap((id) => taskById(id)?.usedIn ?? []);
+  return [
+    ...new Set(
+      s.taskIds.flatMap((id) => {
+        const t = taskById(id);
+        return t ? taskCertifications(t).map((c) => c.name) : [];
+      }),
+    ),
+  ];
 }
 
 /* A Skill has no Industry of its own — it inherits the Industries of every
@@ -31,9 +42,9 @@ export function skillIndustryPaths(s: Skill): string[] {
   return [
     ...new Set(
       skillCertifications(s).flatMap((name) => {
-        const seed = CERT_BY_USEDIN.get(name);
         // The live record, so tags set this session show here too.
-        const c = seed && (certById(seed.id) ?? seed);
+        const seed = CERT_BY_USEDIN.get(name);
+        const c = getLiveCerts().find((x) => x.name === name) ?? (seed && (certById(seed.id) ?? seed));
         return c ? industryTagLabels(c.industries) : [];
       }),
     ),

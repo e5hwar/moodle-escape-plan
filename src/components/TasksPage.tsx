@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ACCESS_CHAIN_REASON, accessChainLines, discoverableLabel, isIdUpload, subscriptionLabel, isPaid, taskCertifications, taskInCertifications, type Task, type TaskType } from "../data/tasks";
+import { discoverableLabel, isIdUpload, subscriptionLabel, isPaid, taskCertifications, taskInCertifications, type Task, type TaskType } from "../data/tasks";
 // ARCHIVED: RotaryDialPreview side panel — kept for future use; re-enable by uncommenting
 // the import below and the <RotaryDialPreview /> render at the bottom of <div className="tasks-row">.
 // import { RotaryDialPreview } from "./RotaryDialPreview";
@@ -23,7 +23,9 @@ import { PreviewPanel, formatCount, seededInt, type PreviewStat } from "./Previe
 import { ListCard } from "./ConfirmCard";
 import { TableCols } from "./TableCols";
 import { TableEmpty } from "./TableEmpty";
+import { useResetPageOnChange } from "../hooks/useListState";
 import { useToast } from "./useToast";
+import type { Skill } from "../data/skills";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
@@ -184,6 +186,7 @@ export type TasksListState = {
 
 export function TasksPage({
   tasks: taskList,
+  skills,
   onSetHidden,
   onDeleteTask,
   restore,
@@ -191,7 +194,6 @@ export function TasksPage({
   initialCertificationFilter,
   onNewTask,
   onEditTask,
-  onOpenCompanyDashboard,
   onViewAttempts,
   onViewPayers,
   onManageProgress,
@@ -204,6 +206,8 @@ export function TasksPage({
    *  this session, deleted ones gone. Owned by App, so a hide or delete
    *  survives leaving the page. */
   tasks: Task[];
+  /** The live Skills — a Task one links to can't be hidden or deleted. */
+  skills: Skill[];
   onSetHidden: (task: Task, hidden: boolean) => void;
   onDeleteTask: (task: Task) => void;
   /** The list as it was left — restored on mount instead of the defaults. */
@@ -215,7 +219,6 @@ export function TasksPage({
   initialCertificationFilter?: string;
   onNewTask: (t: TaskTypeKey) => void;
   onEditTask: (task: Task) => void;
-  onOpenCompanyDashboard: (companyName: string) => void;
   onViewAttempts: (task: Task) => void;
   onViewPayers: (task: Task) => void;
   onManageProgress: (task: Task) => void;
@@ -229,15 +232,10 @@ export function TasksPage({
   const [toast, toastNode] = useToast(flash, onFlashDone);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [menu, setMenu] = useState<{ task: Task; rect: DOMRect } | null>(null);
-  // Set when someone tries to edit a Task owned by a company — company Tasks are
-  // managed from the B2B Dashboard, not here.
-  const [blockedEdit, setBlockedEdit] = useState<Task | null>(null);
-  // The Task awaiting a Hide confirmation (Figma 667:884). Unhiding is instant;
-  // only hiding routes through the modal.
+  // The Task awaiting a Hide confirmation (Figma 667:884).
   const [hideTarget, setHideTarget] = useState<Task | null>(null);
-  // Set when the Task can't be hidden or deleted at all — it sits in an
-  // Access Restriction chain, as the gate or behind one.
-  const [blockedHide, setBlockedHide] = useState<{ task: Task; action: "hide" | "delete" } | null>(null);
+  // The hidden Task awaiting a Make Visible confirmation — the same shell.
+  const [showTarget, setShowTarget] = useState<Task | null>(null);
   // The Task awaiting a Delete confirmation — the same 667:884 shell as Hide,
   // in its destructive variant.
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
@@ -318,14 +316,8 @@ export function TasksPage({
 
   // A new query, filter or sort starts on page 1 — but not the mount itself,
   // which may be putting a restored page back.
-  const mounted = useRef(false);
-  useEffect(() => {
-    if (!mounted.current) {
-      mounted.current = true;
-      return;
-    }
-    setPage(1);
-  }, [committedQuery, filters, sort]);
+  // (Compares values, so StrictMode's double mount can't reset it either.)
+  useResetPageOnChange(setPage, [committedQuery, filters, sort]);
 
   // Keyboard shortcuts: "C" opens the Create Task menu; once open, each task
   // type's letter (Q, X, H, …) launches that wizard. Ignored while typing in a
@@ -335,7 +327,7 @@ export function TasksPage({
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       // The Create menu (z 500) would open above the drawer's scrim, and over
       // any modal or row menu that is up.
-      if (drawerId || menu || blockedEdit || hideTarget || blockedHide || deleteTarget) return;
+      if (drawerId || menu || hideTarget || showTarget || deleteTarget) return;
       const target = e.target as HTMLElement | null;
       if (
         target &&
@@ -367,7 +359,7 @@ export function TasksPage({
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [createMenuOpen, drawerId, menu, blockedEdit, hideTarget, blockedHide, deleteTarget, onNewTask]);
+  }, [createMenuOpen, drawerId, menu, hideTarget, showTarget, deleteTarget, onNewTask]);
 
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
@@ -422,49 +414,40 @@ export function TasksPage({
   const setHidden = onSetHidden;
 
   function toggleVisibility(task: Task) {
-    // Unhiding restores the Task straight away — only hiding needs confirming.
+    // Both directions confirm in front of the Certifications the Task is in
+    // (Figma 667:884): hiding pulls it out of them, unhiding puts it back.
     if (task.hidden) {
-      setHidden(task, false);
-      toast("Task Visible");
+      setShowTarget(task);
       return;
     }
-    // Access Restriction chains gate other content, so the Task can't be hidden
-    // while it's still part of one.
-    if (task.accessRestricted) {
-      setBlockedHide({ task, action: "hide" });
-      return;
-    }
-    // Hiding pulls the Task out of every Certification carrying it, so the full
-    // list goes in front of the confirm (Figma 667:884).
+    // A Task in an Access Restriction chain or linked to a Skill can't be
+    // hidden — its menu item is disabled with the reason, and its row has no
+    // Hide quick action.
+    if (removeBlockedReason(task, skills)) return;
     setHideTarget(task);
   }
 
-  // A row menu opened from the preview panel's kebab: every item closes the
-  // panel first, so the modal or page it opens isn't left under the panel.
+  /* A row menu opened from the preview panel's kebab (spec review
+     2026-10-09): an item that NAVIGATES to another page closes the panel
+     first; an item that opens a MODAL (Hide, Make Visible, Delete) leaves the panel open behind it, so the panel shows the
+     result when the modal closes. Copy / new-tab actions never touch it. */
   function closePanelThen(run: () => void) {
     setDrawerId(null);
     run();
   }
 
   function editTask(task: Task) {
-    // The ID Upload Task isn't editable (its menu row says why).
-    if (isIdUpload(task)) return;
-    // Tasks created by a company are owned by that company's B2B account and can
-    // only be edited from the B2B Dashboard. Everything else is SkillCat-owned.
-    if (task.createdBy !== "SkillCat") {
-      setBlockedEdit(task);
-      return;
-    }
-    onEditTask(task);
+    // The ID Upload Task and company-created Tasks aren't editable here —
+    // their Edit Task menu item is disabled and says why (Figma 1629:1420 /
+    // 735:1375), and their rows carry no Edit quick action.
+    if (!canEditHere(task)) return;
+    closePanelThen(() => onEditTask(task));
   }
 
   function deleteTask(task: Task) {
-    // The same Access Restriction check Hide makes: a Task in a chain can't
-    // be deleted out from under it either.
-    if (task.accessRestricted) {
-      setBlockedHide({ task, action: "delete" });
-      return;
-    }
+    // The same rule Hide follows: the menu item is disabled while the Task
+    // is in a chain or linked to a Skill.
+    if (removeBlockedReason(task, skills)) return;
     // Deleting routes through the shared confirm modal (Figma 667:884), not the
     // browser's own dialog.
     setDeleteTarget(task);
@@ -558,7 +541,6 @@ export function TasksPage({
 
               <div className="toolbar">
                 <TasksSearch
-                  tasks={taskList}
                   certifications={filters.certifications}
                   onCertificationsChange={(c) => setFilters((prev) => ({ ...prev, certifications: c }))}
                   types={filters.types}
@@ -611,6 +593,7 @@ export function TasksPage({
                       onOpen={() => setDrawerId(task.id)}
                       onEdit={() => editTask(task)}
                       onToggleVisibility={() => toggleVisibility(task)}
+                      hideBlocked={!!removeBlockedReason(task, skills)}
                       onOpenMenu={(rect) => setMenu({ task, rect })}
                       menuOpen={menu?.task.id === task.id}
                     />
@@ -644,25 +627,15 @@ export function TasksPage({
       {menu && (
         <TaskActionsMenu
           task={menu.task}
+          skills={skills}
           rect={menu.rect}
           onClose={() => setMenu(null)}
-          onEdit={() => closePanelThen(() => editTask(menu.task))}
-          onToggleVisibility={() => closePanelThen(() => toggleVisibility(menu.task))}
+          onEdit={() => editTask(menu.task)}
+          onToggleVisibility={() => toggleVisibility(menu.task)}
           onViewPayers={() => closePanelThen(() => onViewPayers(menu.task))}
           onViewAttempts={() => closePanelThen(() => onViewAttempts(menu.task))}
           onManageProgress={() => closePanelThen(() => onManageProgress(menu.task))}
-          onDelete={() => closePanelThen(() => deleteTask(menu.task))}
-        />
-      )}
-
-      {blockedEdit && (
-        <CompanyEditBlockedModal
-          task={blockedEdit}
-          onClose={() => setBlockedEdit(null)}
-          onOpenDashboard={() => {
-            onOpenCompanyDashboard(blockedEdit.createdBy);
-            setBlockedEdit(null);
-          }}
+          onDelete={() => deleteTask(menu.task)}
         />
       )}
 
@@ -678,11 +651,15 @@ export function TasksPage({
         />
       )}
 
-      {blockedHide && (
-        <HideBlockedModal
-          task={blockedHide.task}
-          action={blockedHide.action}
-          onClose={() => setBlockedHide(null)}
+      {showTarget && (
+        <ShowTaskModal
+          task={showTarget}
+          onCancel={() => setShowTarget(null)}
+          onConfirm={() => {
+            setHidden(showTarget, false);
+            setShowTarget(null);
+            toast("Task Visible");
+          }}
         />
       )}
 
@@ -695,7 +672,7 @@ export function TasksPage({
       )}
 
       {drawerTask && (
-        <TaskDrawer
+        <TaskPreviewPanel
           key={drawerTask.id}
           task={drawerTask}
           onClose={() => setDrawerId(null)}
@@ -710,15 +687,16 @@ export function TasksPage({
 
 /** A Task's row preview panel (Figma 1514:2860): the wizard's review cards
  *  and the Certifications it's in, as accordions, then its figures as
- *  Activity. */
-function TaskDrawer({
+ *  Activity. The Certification builder's Add Existing Tasks opens it too,
+ *  read-only — without `onMore` there is no ⋮ menu. */
+export function TaskPreviewPanel({
   task,
   onClose,
   onMore,
 }: {
   task: Task;
   onClose: () => void;
-  onMore: (rect: DOMRect) => void;
+  onMore?: (rect: DOMRect) => void;
 }) {
   // The Certifications carrying it, by their canonical names (usedIn holds
   // aliases such as "NATE RTW"). The wizard's save confirm lists the same.
@@ -726,23 +704,20 @@ function TaskDrawer({
   const graded = task.type === "Quiz" || task.type === "Hands-On Task";
   const attempts = seededInt(task.id, "attempts", 90, 5200);
   const rate = seededInt(task.id, "rate", graded ? 58 : 70, graded ? 92 : 97);
-  const stats: PreviewStat[] = task.hidden
-    ? [
-        { count: "—", title: graded ? "Attempts" : "Completions", sub: "Hidden from learners" },
-        { count: "—", title: graded ? "Pass Rate" : "Completion Rate", sub: "Hidden from learners" },
-      ]
-    : [
-        {
-          count: formatCount(attempts),
-          title: graded ? "Attempts" : "Completions",
-          sub: `+${seededInt(task.id, "month", 6, 180)} / month`,
-        },
-        {
-          count: `${rate}%`,
-          title: graded ? "Pass Rate" : "Completion Rate",
-          sub: graded ? "Of attempts" : "Of starters",
-        },
-      ];
+  // A hidden Task keeps its figures — hiding stops new activity, it doesn't
+  // erase what happened — and says it's hidden where the monthly trend sits.
+  const stats: PreviewStat[] = [
+    {
+      count: formatCount(attempts),
+      title: graded ? "Attempts" : "Completions",
+      sub: task.hidden ? "Hidden from users" : `+${seededInt(task.id, "month", 6, 180)} / month`,
+    },
+    {
+      count: `${rate}%`,
+      title: graded ? "Pass Rate" : "Completion Rate",
+      sub: graded ? "Of attempts" : "Of starters",
+    },
+  ];
 
   return (
     <PreviewPanel title={task.name} subtitle={task.description} onMore={onMore} stats={stats} onClose={onClose}>
@@ -859,71 +834,48 @@ function DeleteTaskModal({
   );
 }
 
-/** Access Restriction chains gate other content, so a Task inside one — the
- *  gate or a Task behind it — can't be hidden or deleted until it leaves the
- *  chain. Acknowledgment only, no CTA to confirm; the chain is named. */
-function HideBlockedModal({
+/** Make Visible confirmation — the same Figma 667:884 "General Modal" as
+ *  Hide, with the primary CTA. The content slot lists every Certification the
+ *  Task will show in again. */
+function ShowTaskModal({
   task,
-  action,
-  onClose,
+  onCancel,
+  onConfirm,
 }: {
   task: Task;
-  action: "hide" | "delete";
-  onClose: () => void;
+  onCancel: () => void;
+  onConfirm: () => void;
 }) {
-  const chains = accessChainLines(task);
+  // PrmModal has no key handling of its own, so the owner closes on Escape.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onCancel();
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onCancel]);
 
   return (
     <PrmModal
-      title={`Can't ${action} “${task.name}”`}
-      confirmLabel="Okay"
-      hideCancel
-      onCancel={onClose}
-      onConfirm={onClose}
+      title={`Make “${task.name}” Visible`}
+      confirmLabel="Make Visible"
+      onCancel={onCancel}
+      onConfirm={onConfirm}
     >
-      <div className="prm-content">
-        <p>
-          This Task is part of an Access Restriction chain.{" "}
-          {action === "hide" ? "Hiding" : "Deleting"} it would break the chain:
-        </p>
-        <ul>
-          {chains.map((c) => (
-            <li key={c}>{c}</li>
-          ))}
-        </ul>
-        <p>Remove the Task from the chain first, then {action} it.</p>
-      </div>
-    </PrmModal>
-  );
-}
-
-function CompanyEditBlockedModal({
-  task,
-  onClose,
-  onOpenDashboard,
-}: {
-  task: Task;
-  onClose: () => void;
-  onOpenDashboard: () => void;
-}) {
-  return (
-    <PrmModal
-      title="Can't edit this task here"
-      confirmLabel="Open Company Dashboard"
-      onCancel={onClose}
-      onConfirm={onOpenDashboard}
-    >
-      <p className="prm-content">
-        Tasks created by a company can only be edited from the B2B Dashboard.
-        Login as <strong>{task.createdBy}</strong> to make changes.
-      </p>
+      <p className="prm-content">Making the Task visible restores it for all users.</p>
+      {task.usedIn.length > 0 && (
+        <div className="prm-content">
+          <p>
+            This Task is in the following Certification(s). Making it visible shows it in
+            them again.
+          </p>
+          <ul>
+            {taskCertifications(task).map((c) => (
+              <li key={c.name}>{c.name}</li>
+            ))}
+          </ul>
+        </div>
+      )}
     </PrmModal>
   );
 }
@@ -977,6 +929,7 @@ function TableRow({
   onOpen,
   onEdit,
   onToggleVisibility,
+  hideBlocked,
   onOpenMenu,
   menuOpen,
 }: {
@@ -987,6 +940,9 @@ function TableRow({
   onOpen: () => void;
   onEdit: () => void;
   onToggleVisibility: () => void;
+  /** Hide is disabled in the menu (Access Restriction or a linked Skill), so
+   *  the row has no Hide quick action. */
+  hideBlocked: boolean;
   onOpenMenu: (rect: DOMRect) => void;
   /** This row's 3-dot menu is open — hold the hover treatment. */
   menuOpen: boolean;
@@ -1017,27 +973,30 @@ function TableRow({
           <RowKebabIcon />
         </button>
         <div className="row-action-bar">
-          {/* The ID Upload Task can't be edited, hidden or deleted, so its bar
-              is just the menu — which says why on each disabled row. */}
-          {!isIdUpload(task) && (
-            <>
-              <button
-                className="row-action-btn"
-                aria-label="Edit"
-                title="Edit task"
-                onClick={(e) => { e.stopPropagation(); onEdit(); }}
-              >
-                <RowEditIcon />
-              </button>
-              <button
-                className="row-action-btn"
-                aria-label={task.hidden ? "Make visible" : "Hide task"}
-                title={task.hidden ? "Make visible" : "Hide task"}
-                onClick={(e) => { e.stopPropagation(); onToggleVisibility(); }}
-              >
-                {task.hidden ? <RowEyeOffIcon /> : <RowEyeIcon />}
-              </button>
-            </>
+          {/* Rule: an action that is disabled in the menu has NO quick action
+              here — the menu is where it says why. So no Edit on
+              company-created Tasks or the ID Upload Task, no Hide on a Task in
+              an Access Restriction or linked to a Skill, and the ID Upload
+              Task's bar is just the menu. */}
+          {canEditHere(task) && (
+            <button
+              className="row-action-btn"
+              aria-label="Edit"
+              title="Edit task"
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            >
+              <RowEditIcon />
+            </button>
+          )}
+          {!isIdUpload(task) && (task.hidden || !hideBlocked) && (
+            <button
+              className="row-action-btn"
+              aria-label={task.hidden ? "Make visible" : "Hide task"}
+              title={task.hidden ? "Make visible" : "Hide task"}
+              onClick={(e) => { e.stopPropagation(); onToggleVisibility(); }}
+            >
+              {task.hidden ? <RowEyeOffIcon /> : <RowEyeIcon />}
+            </button>
           )}
           <button
             className="row-action-btn"
@@ -1052,11 +1011,47 @@ function TableRow({
   );
 }
 
+/** Why a Task can't be edited from here, or undefined when it can: the ID
+ *  Upload Task never (Figma 1629:1420), a company-created Task only from that
+ *  company's B2B Dashboard (Figma 735:1375). */
+function editBlockedReason(task: Task): string | undefined {
+  if (isIdUpload(task)) return "This Task is used for accepting ID Uploads. Edits are not allowed.";
+  if (task.createdBy !== "SkillCat") return "Can only be edited from the B2B Dashboard";
+  return undefined;
+}
+/* Figma 735:1375's copy for the disabled Hide row; Delete's follows it. */
+const HIDE_CHAIN_REASON = "Tasks that are part of Access Restrictions cannot be hidden";
+const DELETE_CHAIN_REASON = "Tasks that are part of Access Restrictions cannot be deleted";
+
+/** The Skills that link to this Task (their `taskIds` include it). */
+function linkedSkills(task: Task, skills: Skill[]): Skill[] {
+  return skills.filter((s) => s.taskIds.includes(task.id));
+}
+/** Why a linked Task can't be hidden or deleted, naming the Skills — the
+ *  wording the Skills page uses for its own blocked Archive/Delete. */
+function skillLinkReason(linked: Skill[]): string {
+  const names = linked.map((s) => `“${s.name}”`);
+  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return `Currently linked to ${linked.length === 1 ? "the Skill" : "the Skills"} ${list}. Remove ${linked.length === 1 ? "it" : "them"} to proceed.`;
+}
+/** Why Hide / Delete is disabled, or undefined when it isn't: an Access
+ *  Restriction first, then linked Skills. */
+function removeBlockedReason(task: Task, skills: Skill[], action: "hide" | "delete" = "hide"): string | undefined {
+  if (task.accessRestricted) return action === "hide" ? HIDE_CHAIN_REASON : DELETE_CHAIN_REASON;
+  const linked = linkedSkills(task, skills);
+  return linked.length ? skillLinkReason(linked) : undefined;
+}
+
+function canEditHere(task: Task): boolean {
+  return !editBlockedReason(task);
+}
+
 /* ─────────────── Three-dot row actions menu ─────────────── */
 /* Fixed-positioned so it escapes the table's scroll container. */
 
 function TaskActionsMenu({
   task,
+  skills,
   rect,
   onClose,
   onEdit,
@@ -1067,6 +1062,7 @@ function TaskActionsMenu({
   onDelete,
 }: {
   task: Task;
+  skills: Skill[];
   rect: DOMRect;
   onClose: () => void;
   onEdit: () => void;
@@ -1145,13 +1141,12 @@ function TaskActionsMenu({
       )}
     </button>
   );
-  /* The ID Upload Task: no edits, and — as the gate of the exam chains — never
-     hidden or deleted. */
-  const idUpload = isIdUpload(task);
-  const editReason = idUpload
-    ? "This Task is used for accepting ID Uploads. Edits are not allowed."
-    : undefined;
-  const chainReason = idUpload ? ACCESS_CHAIN_REASON : undefined;
+  const editReason = editBlockedReason(task);
+  // A Task in an Access Restriction — the condition or the restricted Task —
+  // or linked to a Skill can't be hidden or deleted (Figma 735:1375 /
+  // 668:942); the Access Restriction reason wins. Unhiding is never blocked.
+  const hideReason = removeBlockedReason(task, skills, "hide");
+  const deleteReason = removeBlockedReason(task, skills, "delete");
 
   return (
     <div
@@ -1165,18 +1160,21 @@ function TaskActionsMenu({
       onClick={(e) => e.stopPropagation()}
     >
       {item(<RowEditIcon />, "Edit Task", onEdit, false, editReason)}
-      {item(
-        task.hidden ? <RowEyeIcon /> : <RowEyeOffIcon />,
-        task.hidden ? "Make Visible" : "Make Hidden",
-        onToggleVisibility,
-        false,
-        chainReason,
+      {/* The ID Upload Task's menu is that one disabled row (Figma 1629:1420). */}
+      {!isIdUpload(task) && (
+        <>
+          {task.hidden
+            ? item(<RowEyeIcon />, "Make Visible", onToggleVisibility)
+            : hideReason
+              ? item(<RowEyeOffIcon />, "Hide Task", onToggleVisibility, false, hideReason)
+              : item(<RowEyeOffIcon />, "Make Hidden", onToggleVisibility)}
+          {/* Only paid Tasks have payers to view. */}
+          {isPaid(task) && item(<MenuPaidIcon />, "View Who Paid", onViewPayers)}
+          {showAttempts && item(<MenuAttemptsIcon />, "View All Attempts", onViewAttempts)}
+          {item(<MenuProgressIcon />, "Manage User Progress", onManageProgress)}
+          {item(<RowDeleteIcon />, "Delete Task", onDelete, true, deleteReason)}
+        </>
       )}
-      {/* Only paid Tasks have payers to view. */}
-      {isPaid(task) && item(<MenuPaidIcon />, "View Who Paid", onViewPayers)}
-      {showAttempts && item(<MenuAttemptsIcon />, "View All Attempts", onViewAttempts)}
-      {item(<MenuProgressIcon />, "Manage User Progress", onManageProgress)}
-      {item(<RowDeleteIcon />, "Delete Task", onDelete, true, chainReason)}
     </div>
   );
 }

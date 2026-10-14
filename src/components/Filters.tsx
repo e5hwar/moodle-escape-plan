@@ -18,6 +18,7 @@ import {
 } from "../data/filters";
 import { DateRangePanel, defaultDateRange, type DateRangeState } from "./DateRangeFilter";
 import { FILTER_TIPS, CREATED_BY_TIP } from "../data/filterTips";
+import { useLiveCompanies } from "../data/companies";
 
 export type FilterState = {
   creators: string[];
@@ -220,7 +221,15 @@ export function CreatedByPill({
   /** Overridable, but every page so far wants the shared line. */
   tip?: string;
 }) {
-  const all = [...CREATED_BY_IN_HOUSE, ...CREATED_BY_B2B];
+  /* The complete source (spec review 2026-10-09): every company on record
+     (live, so one created this session is listed) plus the B2B creators the
+     content carries — not just the names the current rows happen to hold. */
+  const companies = useLiveCompanies();
+  const b2b = useMemo(
+    () => [...new Set([...CREATED_BY_B2B, ...companies.map((c) => c.name)])].sort((a, b) => a.localeCompare(b)),
+    [companies],
+  );
+  const all = [...CREATED_BY_IN_HOUSE, ...b2b];
   const summary = summarize(value, all);
 
   return (
@@ -241,7 +250,7 @@ export function CreatedByPill({
         <SectionedMultiSelect
           sections={[
             { label: "Made in house", items: CREATED_BY_IN_HOUSE },
-            { label: "B2B customers", items: [...CREATED_BY_B2B].sort() },
+            { label: "B2B customers", items: b2b },
           ]}
           subsectionStyle
           value={value}
@@ -1060,8 +1069,13 @@ export function ColumnsBody<C extends Record<string, boolean>>({
     setAll(true);
   };
 
-  const setOne = (key: keyof C & string, on: boolean) =>
+  /* A column switched ON lands LAST in the table (spec review 2026-10-09) —
+     never back in its old or default slot. Switching one off leaves the order
+     alone; dragging afterwards still moves it anywhere. */
+  const setOne = (key: keyof C & string, on: boolean) => {
+    if (on && canReorder) onOrderChange!([...inOrder.map((c) => c.key).filter((k) => k !== key), key]);
     onApply({ ...value, [key]: on as C[keyof C & string] });
+  };
 
   return (
     <div className="dropdown-list cols-menu">

@@ -278,7 +278,6 @@ export function ManageIdsSearch({
                   >
                     <span className="usearch-chip">Status:</span>
                     <span className="usearch-row-ex">{name}</span>
-                    <span className="usearch-row-desc">{userCount(allStatuses.counts.get(name))}</span>
                   </OptionRow>
                 ))
               )}

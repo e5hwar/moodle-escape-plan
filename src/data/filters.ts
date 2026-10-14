@@ -81,8 +81,8 @@ export const TAG_GROUPS: { label: string; tags: string[] }[] = [
  * A Trade or Partnership tag excludes B2C users just as the explicit tag does
  * (the Audience step's own copy: "B2C is still excluded if you set a Trade or
  * Partnership"), so either one also reads "B2B Companies Only". The Audience
- * columns, the Audience filter and the Feedback Form trigger picker
- * (`allUsersOnly`) all resolve through this one rule. */
+ * columns, the Audience filter and the Skill wizard's Task picker
+ * (SelectTasksModal `allUsersOnly`) all resolve through this one rule. */
 export function audienceOf(tags: string[] | undefined): string {
   const list = tags ?? [];
   return list.some(

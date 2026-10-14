@@ -29,11 +29,11 @@ export function idCardOf(record: IdRecord): IdCardData {
 }
 
 /* What the drop zone's hint promises — enforced, not just printed. */
-const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/heic", "image/heif", "image/webp"];
-const ACCEPTED_EXT = /\.(png|jpe?g|heic|heif|webp)$/i;
+const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/heic", "image/heif"];
+const ACCEPTED_EXT = /\.(png|jpe?g|heic|heif)$/i;
 const MAX_BYTES = 100 * 1024 * 1024;
 /** Browsers can't draw HEIC / HEIF, so those preview as the stand-in card. */
-const PREVIEWABLE = ["image/png", "image/jpeg", "image/webp"];
+const PREVIEWABLE = ["image/png", "image/jpeg"];
 
 const UploadIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -65,9 +65,6 @@ export function IdModal({
      it, its ✕ drops back to the ID, and either upload action decides the record
      and closes both. */
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
-  const [fileUrl, setFileUrl] = useState<string | null>(null);
-  const [fileError, setFileError] = useState<string | null>(null);
   const hasDoc = hasIdDocument(record);
   /* The card's full-view overlay owns Escape while it's open — without this the
      same keypress would also close the modal underneath. */
@@ -75,39 +72,16 @@ export function IdModal({
 
   const timeline = idTimelineOf(record);
 
-  // The preview's object URL lives as long as the file it shows.
-  useEffect(() => () => {
-    if (fileUrl) URL.revokeObjectURL(fileUrl);
-  }, [fileUrl]);
-
-  function pickFile(f: File | undefined) {
-    if (!f) return;
-    if (!(ACCEPTED_TYPES.includes(f.type) || ACCEPTED_EXT.test(f.name))) {
-      setFileError("Upload a PNG, JPG, HEIC, HEIF or WebP file");
-      return;
-    }
-    if (f.size > MAX_BYTES) {
-      setFileError("File is larger than 100MB");
-      return;
-    }
-    setFileError(null);
-    setFile(f);
-    setFileUrl(PREVIEWABLE.includes(f.type) ? URL.createObjectURL(f) : null);
-  }
-
   function closeUpload() {
     setUploadOpen(false);
-    setFile(null);
-    setFileUrl(null);
-    setFileError(null);
   }
 
+  /* Escape closes the top of the stack: the upload dialog owns it while open
+     (see UploadIdModal), so this only runs for the ID view itself. */
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (idFullView) return;
-      if (e.key !== "Escape") return;
-      if (uploadOpen) closeUpload();
-      else onClose();
+      if (idFullView || uploadOpen) return;
+      if (e.key === "Escape") onClose();
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -156,17 +130,17 @@ export function IdModal({
             {hasDoc ? "Replace ID" : "Upload ID"}
           </button>
         }
-        /* Only a document waiting on a decision offers Approve — never an
-           approved one, and never while a re-upload is awaited (there is
-           nothing on file to approve). */
-        confirmLabel={record.status === "in-review" ? "Approve" : undefined}
+        /* A document waiting on a decision offers Approve — In Review, and a
+           Re-Upload Requested one too (the user, 2026-10-13: the document it
+           was raised against stays on screen); never an approved one. */
+        confirmLabel={record.status === "approved" ? undefined : "Approve"}
         onConfirm={onApprove}
         onCancel={onClose}
       >
         {/* The design shows the document alone — no full-view/rotate row under
             it and no hover magnifier (the card still opens full view on click).
-            A re-upload request removed the rejected document, so until the new
-            one arrives there is nothing to show. */}
+            A Re-Upload Requested ID keeps the document it was raised against on
+            screen (the user, 2026-10-13). */}
         {hasDoc ? (
           <ZoomableIdCard
             data={idCardOf(record)}
@@ -177,75 +151,140 @@ export function IdModal({
           />
         ) : (
           <NoteCard
-            title="Waiting for a new ID"
-            body={`${record.name} was asked to upload their ID again. The rejected document has been removed.`}
+            title="No ID uploaded"
+            body={`${record.name} has not uploaded an ID yet.`}
           />
         )}
       </PrmModal>
 
       {uploadOpen && (
-        /* Figma 467:673 / 467:950 — a narrower dialog (its document is 420px
-           where the ID view's is 640), stacked over the ID rather than
-           replacing it. The drop zone fills the body until a file is chosen,
-           then the document itself takes its place. */
-        <PrmModal
-          className="mid-modal--upload"
-          title="Upload ID"
-          ariaLabel={`Upload a new ID for ${record.name}`}
-          hideCancel
-          /* An approved ID is replaced by another approved one — leaving it
-             unapproved would take an already-verified user back to review. */
-          footerExtra={
-            record.status === "approved" ? undefined : (
-              <button className="prm-quiet" disabled={!file} onClick={() => decide("in-review")}>
-                Upload Without Approval
-              </button>
-            )
-          }
-          confirmLabel="Upload & Approve"
-          confirmDisabled={!file}
-          onConfirm={() => decide("approved")}
-          onCancel={closeUpload}
-        >
-          {file ? (
-            fileUrl ? (
-              /* The file just chosen, at the document's own size. */
-              <img className="mid-upload-preview" src={fileUrl} alt={file.name} />
-            ) : (
-              /* HEIC / HEIF can't be drawn by the browser — the document
-                 stand-in takes its place. */
-              <ZoomableIdCard
-                data={{ ...idCardOf(record), name: record.name }}
-                onFullViewChange={setIdFullView}
-                hideTools
-                noMagnify
-              />
-            )
-          ) : (
-            <label className={`mid-drop${fileError ? " has-error" : ""}`}>
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/heic,image/heif,image/webp,.heic,.heif"
-                className="mid-drop-input"
-                onChange={(e) => {
-                  pickFile(e.target.files?.[0]);
-                  e.target.value = "";
-                }}
-              />
-              <span className="mid-drop-icon">
-                <UploadIcon />
-              </span>
-              <span className="mid-drop-title">Drag and drop, or click to upload</span>
-              <span className="mid-drop-hint">
-                Accepted File Types: PNG, JPG, HEIC, HEIF, WebP
-                <br />
-                Maximum File Size: 100MB
-              </span>
-              {fileError && <span className="mid-drop-error">{fileError}</span>}
-            </label>
-          )}
-        </PrmModal>
+        <UploadIdModal
+          record={record}
+          onFullViewChange={setIdFullView}
+          onDecide={decide}
+          onClose={closeUpload}
+        />
       )}
     </>
+  );
+}
+
+/* ── Upload ID (Figma 467:673 empty → 467:950 file added) ──
+   Stacked over the ID view by IdModal (Replace ID / Upload ID in its footer),
+   and opened on its own by the Full Profile's "Upload ID" menu item for a user
+   with nothing on file yet (the user, 2026-10-13). The drop zone fills the
+   body until a file is chosen, then the document itself takes its place, and
+   either footer action decides the record. Accepted: PNG, JPG, HEIC, HEIF —
+   not WebP, not ZIP — up to 100MB. */
+export function UploadIdModal({
+  record,
+  onDecide,
+  onClose,
+  onFullViewChange = () => {},
+}: {
+  record: IdRecord;
+  onDecide: (status: "approved" | "in-review") => void;
+  onClose: () => void;
+  /** The HEIC stand-in card's full view owns Escape while open. */
+  onFullViewChange?: (open: boolean) => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [fullView, setFullView] = useState(false);
+
+  // The preview's object URL lives as long as the file it shows.
+  useEffect(() => () => {
+    if (fileUrl) URL.revokeObjectURL(fileUrl);
+  }, [fileUrl]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (fullView || e.key !== "Escape") return;
+      e.stopImmediatePropagation();
+      onClose();
+    }
+    // Capture, ahead of whatever is stacked underneath (the ID view, the page).
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [onClose, fullView]);
+
+  function pickFile(f: File | undefined) {
+    if (!f) return;
+    if (!(ACCEPTED_TYPES.includes(f.type) || ACCEPTED_EXT.test(f.name))) {
+      setFileError("Upload a PNG, JPG, HEIC or HEIF file");
+      return;
+    }
+    if (f.size > MAX_BYTES) {
+      setFileError("File is larger than 100MB");
+      return;
+    }
+    setFileError(null);
+    setFile(f);
+    setFileUrl(PREVIEWABLE.includes(f.type) ? URL.createObjectURL(f) : null);
+  }
+
+  return (
+      /* Figma 467:673 / 467:950 — a narrower dialog (its document is 420px
+         where the ID view's is 640), stacked over the ID rather than
+         replacing it. The drop zone fills the body until a file is chosen,
+         then the document itself takes its place. */
+      <PrmModal
+        className="mid-modal--upload"
+        title="Upload ID"
+        ariaLabel={`Upload a new ID for ${record.name}`}
+        hideCancel
+        /* An approved ID is replaced by another approved one — leaving it
+           unapproved would take an already-verified user back to review. */
+        footerExtra={
+          record.status === "approved" ? undefined : (
+            <button className="prm-quiet" disabled={!file} onClick={() => onDecide("in-review")}>
+              Upload Without Approval
+            </button>
+          )
+        }
+        confirmLabel="Upload & Approve"
+        confirmDisabled={!file}
+        onConfirm={() => onDecide("approved")}
+        onCancel={onClose}
+      >
+        {file ? (
+          fileUrl ? (
+            /* The file just chosen, at the document's own size. */
+            <img className="mid-upload-preview" src={fileUrl} alt={file.name} />
+          ) : (
+            /* HEIC / HEIF can't be drawn by the browser — the document
+               stand-in takes its place. */
+            <ZoomableIdCard
+              data={{ ...idCardOf(record), name: record.name }}
+              onFullViewChange={(v) => { setFullView(v); onFullViewChange(v); }}
+              hideTools
+              noMagnify
+            />
+          )
+        ) : (
+          <label className={`mid-drop${fileError ? " has-error" : ""}`}>
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/heic,image/heif,.heic,.heif"
+              className="mid-drop-input"
+              onChange={(e) => {
+                pickFile(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+            <span className="mid-drop-icon">
+              <UploadIcon />
+            </span>
+            <span className="mid-drop-title">Drag and drop, or click to upload</span>
+            <span className="mid-drop-hint">
+              Accepted File Types: PNG, JPG, HEIC, HEIF
+              <br />
+              Maximum File Size: 100MB
+            </span>
+            {fileError && <span className="mid-drop-error">{fileError}</span>}
+          </label>
+        )}
+      </PrmModal>
   );
 }

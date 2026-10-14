@@ -8,7 +8,7 @@ import {
   SUBSCRIPTION_STATUSES,
   industryFilterOptions,
   partnershipFilterOptions,
-  UNASSIGNED,
+  NO_ASSIGNEE,
   COMPANY_OPTIONAL_COLUMNS,
   COMPANY_FIXED_COLUMNS,
   SIGN_UP_CHANNELS,
@@ -205,7 +205,7 @@ function IndustryPill({
       width={260}
       trigger={({ open, toggle }) => (
         <PillTrigger
-          label="Industries"
+          label="Trade"
           value={summary}
           open={open}
           toggle={toggle}
@@ -223,7 +223,7 @@ function IndustryPill({
             close();
           }}
           searchable
-          searchPlaceholder="Search Industries..."
+          searchPlaceholder="Search Trade..."
         />
       )}
     </Dropdown>
@@ -323,9 +323,9 @@ function MoreFiltersBody({
         { key: "signUps", label: "Sign-Up Method", groups: [{ items: [...SIGN_UP_CHANNELS] }] },
         { key: "billingCycles", label: "Billing Cycle", groups: [{ items: [...BILLING_CYCLES] }] },
         { key: "paymentMethods", label: "Payment Method", groups: [{ items: [...PAYMENT_COLLECTIONS] }] },
-        // The staff lists, plus "Unassigned" for accounts nobody owns yet.
-        { key: "csms", label: "Assigned CSM", groups: [{ items: [UNASSIGNED, ...CSM_OPTIONS] }] },
-        { key: "salesReps", label: "Assigned Sales Rep", groups: [{ items: [UNASSIGNED, ...SALES_REP_OPTIONS] }] },
+        // The staff lists, plus "None" for accounts nobody owns yet.
+        { key: "csms", label: "Assigned CSM", groups: [{ items: [NO_ASSIGNEE, ...CSM_OPTIONS] }] },
+        { key: "salesReps", label: "Assigned Sales Rep", groups: [{ items: [NO_ASSIGNEE, ...SALES_REP_OPTIONS] }] },
       ]}
       value={value}
       onApply={(v) =>

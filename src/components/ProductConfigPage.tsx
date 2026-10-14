@@ -1,21 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SYSTEM_DEEP_LINKS, type SystemDeepLink } from "../data/deepLinks";
-import type { Award, AwardDesignTemplate } from "../data/awards";
+import type { AwardDesignTemplate } from "../data/awards";
 import {
   DEFAULT_B2B_TRIAL_DAYS,
   DEFAULT_CANCELLATION_REASONS,
   DEFAULT_PARTNERSHIPS,
   DEFAULT_TRADES,
 } from "../data/productConfig";
+import {
+  DEFAULT_PRIVACY_POLICY_EN,
+  DEFAULT_PRIVACY_POLICY_ES,
+  DEFAULT_TERMS_OF_SERVICE_EN,
+  DEFAULT_TERMS_OF_SERVICE_ES,
+} from "../data/legal";
 import { formatShortDate } from "../formatDate";
+import { richTextContent } from "../richText";
 import { AddIcon, PlusThinIcon, RowCloseIcon, RowEditIcon, RowExternalLinkIcon, InfoIcon12 } from "./icons";
-import { PrmModal } from "./PrmModal";
+import { NO_CHANGES_TIP, PrmModal } from "./PrmModal";
+import { ChangesFooter, ChangesReviewList, type StagedChange } from "./ChangesFooter";
 import { ImageUploadField, type PickedImage } from "./ImageUploadField";
-import { RichTextField } from "./RichTextField";
+import { RichDocField } from "./RichDocField";
 import { Stepper } from "./Stepper";
 import { PermissionsSection } from "./PermissionsPage";
 import { AwardTemplatesSection } from "./AwardTemplatesSection";
-import { NewDesignTemplateWizard } from "./NewDesignTemplateWizard";
+import { PlaceholderPage } from "./PlaceholderPage";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { useLeaveGuard } from "./LeaveGuard";
 import { useToast } from "./useToast";
@@ -31,9 +39,10 @@ import { NAME_MAX, isOver, limitClass, limitLabel } from "../data/fieldLimits";
    - per tab, the one flat form every wizard step uses — label → control →
      subtext, 32px apart, fields filling the page width;
    - every list is the Quiz wizard's boxed `.qsec` table (1097:1205): a muted
-     header row, a row per entry and an orange "+ Add" row closing the card;
+     header row, a row per entry and an orange "+ Add" row closing the card —
+     in its PROPORTIONAL variant (`.ct-prop`): the columns grow together;
    - numbers are the `Stepper` (618:1264), Price IDs the paywall matrix
-     (752:2816), bilingual copy `LangField` / `RichTextField`;
+     (752:2816), bilingual copy `LangField`, the legal documents `RichDocField`;
    - forcing and removing an app version confirm through `PrmModal` (483:588);
    - nothing is saved until the Content Links save footer's Save Changes
      (561:2236), which only appears once something has changed.
@@ -92,8 +101,13 @@ const B2B_PRICE_ROWS: PriceRow<Tier>[] = [
   { key: "Professional", name: "Stripe Price ID" },
 ];
 
-const emptyPrices = <K extends string>(rows: PriceRow<K>[]): PriceTable<K> =>
-  Object.fromEntries(rows.map((r) => [r.key, { Monthly: "", Annual: "" }])) as PriceTable<K>;
+/* The default B2C IDs: a sample store Product ID / Stripe Price ID in every
+   platform × cycle. Every Price ID is required, so none starts blank. */
+const DEFAULT_B2C_PRICES: PriceTable<Platform> = {
+  Apple: { Monthly: "com.skillcat.subscription.monthly", Annual: "com.skillcat.subscription.annual" },
+  Google: { Monthly: "skillcat_subscription_monthly", Annual: "skillcat_subscription_annual" },
+  Stripe: { Monthly: "price_1QB2cMo4Tn7HwLp3ZxR8kVdA", Annual: "price_1QB2cAn6Pq2JsMv9YtE5nWcF" },
+};
 
 /* The default B2B rates: a sample Stripe Price ID in every tier × cycle, so
    none starts blank. */
@@ -109,8 +123,21 @@ type ForceUpdate = { id: string; version: string; date: string };
 type BilingualDoc = { en: string; es: string };
 
 
-const tabRow = (id: string, nameEn: string, nameEs = ""): TabRow => ({
-  id, nameEn, nameEs, visible: true, url: "", icon: null,
+/* A seeded tab's icon: every tab needs one, so the defaults carry a plain
+   lettered tile, saved earlier (no byte size on record). */
+const seedIcon = (slug: string, letter: string): PickedImage => ({
+  name: `${slug}-icon.png`,
+  size: 0,
+  ext: "PNG",
+  url:
+    "data:image/svg+xml;utf8," +
+    encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><rect width="96" height="96" rx="20" fill="#f05523"/><text x="48" y="62" font-family="Arial,sans-serif" font-size="44" font-weight="700" fill="#fff" text-anchor="middle">${letter}</text></svg>`,
+    ),
+});
+
+const tabRow = (id: string, nameEn: string, nameEs: string, url: string): TabRow => ({
+  id, nameEn, nameEs, visible: true, url, icon: seedIcon(id, nameEn[0]),
 });
 
 /* Every value the page's Save Changes covers. One object, so "is anything
@@ -153,33 +180,33 @@ export const DEFAULT_PRODUCT_SETTINGS: Settings = {
   webcamFrequency: "20",
   initialTaskCount: "5",
   appTabs: [
-    tabRow("app-lab", "Lab"),
-    tabRow("app-resources", "Resources"),
+    tabRow("app-lab", "Lab", "Laboratorio", "https://skillcat.app/lab"),
+    tabRow("app-resources", "Resources", "Recursos", "https://skillcat.app/resources"),
   ],
   dashboardTabs: [
-    tabRow("dash-assessments", "Assessments"),
-    tabRow("dash-troubleshooting", "Troubleshooting"),
-    tabRow("dash-manuals", "Manuals"),
-    tabRow("dash-error-codes", "Error Codes"),
-    tabRow("dash-analytics", "Analytics"),
+    tabRow("dash-assessments", "Assessments", "Evaluaciones", "https://dashboard.skillcat.app/assessments"),
+    tabRow("dash-troubleshooting", "Troubleshooting", "Solución de Problemas", "https://dashboard.skillcat.app/troubleshooting"),
+    tabRow("dash-manuals", "Manuals", "Manuales", "https://dashboard.skillcat.app/manuals"),
+    tabRow("dash-error-codes", "Error Codes", "Códigos de Error", "https://dashboard.skillcat.app/error-codes"),
+    tabRow("dash-analytics", "Analytics", "Analíticas", "https://dashboard.skillcat.app/analytics"),
   ],
   supportLinks: [
-    { id: "sup-b2b-dashboard", label: "B2B Dashboard", url: "" },
-    { id: "sup-guides", label: "Guides", url: "" },
-    { id: "sup-message", label: "Send Us A Message", url: "" },
-    { id: "sup-news", label: "News", url: "" },
+    { id: "sup-b2b-dashboard", label: "B2B Dashboard", url: "https://dashboard.skillcat.app" },
+    { id: "sup-guides", label: "Guides", url: "https://skillcat.app/guides" },
+    { id: "sup-message", label: "Send Us A Message", url: "https://skillcat.app/contact" },
+    { id: "sup-news", label: "News", url: "https://skillcat.app/news" },
   ],
-  b2cPrices: emptyPrices(B2C_PRICE_ROWS),
+  b2cPrices: DEFAULT_B2C_PRICES,
   b2cTrialDays: "3",
-  b2cEpaCard: "",
+  b2cEpaCard: "prod_QEpaApp7Lx2Nc9RvTb",
   b2bPrices: DEFAULT_B2B_PRICES,
   b2bTrialDays: String(DEFAULT_B2B_TRIAL_DAYS),
   partnerships: DEFAULT_PARTNERSHIPS,
   trades: DEFAULT_TRADES,
-  b2bEpaCard: "",
+  b2bEpaCard: "prod_QEpaDash4Kt8Wm3BzHs",
   cancelReasons: DEFAULT_CANCELLATION_REASONS,
-  termsOfService: { en: "", es: "" },
-  privacyPolicy: { en: "", es: "" },
+  termsOfService: { en: DEFAULT_TERMS_OF_SERVICE_EN, es: DEFAULT_TERMS_OF_SERVICE_ES },
+  privacyPolicy: { en: DEFAULT_PRIVACY_POLICY_EN, es: DEFAULT_PRIVACY_POLICY_ES },
 };
 
 const SETTING_KEYS = Object.keys(DEFAULT_PRODUCT_SETTINGS) as (keyof Settings)[];
@@ -199,9 +226,10 @@ const NUMBER_LABELS: Record<NumberKey, string> = {
   b2cTrialDays: "B2C Free Trial Duration",
   b2bTrialDays: "B2B Free Trial Duration",
 };
+const EMPTY_ERROR = "Cannot be left empty";
 /** Why a number setting can't be saved, or null when it can. */
 function numberProblem(key: NumberKey, value: string): string | null {
-  if (!value.trim()) return "Cannot be left empty";
+  if (!value.trim()) return EMPTY_ERROR;
   const n = parseInt(value, 10);
   if (!Number.isFinite(n) || n < NUMBER_MINS[key]) return `Must be at least ${NUMBER_MINS[key]}`;
   return null;
@@ -229,6 +257,20 @@ function useEscape(onClose: () => void) {
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 }
+
+/* ─── Column widths ───
+   Product Config's lists are the PROPORTIONAL card table (`.ct-prop`): each
+   data column's starting width is its content's (longest typical value or
+   header label, measured at 16px Fira Sans), and the card's spare width is
+   shared across the data columns in proportion to it. The glyph columns
+   (✕, edit, open, actions) stay fixed. */
+const cw = (px: number) => ({ "--cw": px }) as React.CSSProperties;
+// Equal thirds (user): the version, its date and its status read as peers.
+const FU_COLS = { version: cw(120), date: cw(120), status: cw(120) };
+const DL_COLS = { dest: cw(160), link: cw(280), login: cw(120) };
+const TAB_COLS = { name: cw(160), url: cw(360), visible: cw(64) };
+const SUP_COLS = { page: cw(160), url: cw(400) };
+const OPTION_COLS = { name: cw(240) };
 
 /* ─── Shared field parts ─── */
 
@@ -290,6 +332,51 @@ function LangField({
   );
 }
 
+/* A URL, on the Spotlight Button Destination's shell (Figma 699:1071 without
+   its host prefix): the address and a "Test It Out" link that opens it in a
+   new tab, both inside the one cell. The link only shows once there is an
+   address (1675:1438 is the empty field, link-free). Every URL on the page is
+   required, so a blank one goes red. */
+function UrlField({
+  value,
+  onChange,
+  ariaLabel,
+  autoFocus,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  ariaLabel?: string;
+  autoFocus?: boolean;
+}) {
+  const blank = !value.trim();
+  return (
+    <div className={`deeplink-input${blank ? " invalid" : ""}`}>
+      <div className="deeplink-cell">
+        <input
+          className="deeplink-slug"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="URL..."
+          aria-label={ariaLabel}
+          aria-invalid={blank || undefined}
+          autoFocus={autoFocus}
+          spellCheck={false}
+        />
+        {/* Empty (Figma 1675:1438): the field alone — no link to follow. */}
+        {!blank && (
+          <button
+            type="button"
+            className="deeplink-copy"
+            onClick={() => window.open(value.trim(), "_blank", "noopener,noreferrer")}
+          >
+            Test It Out
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* A whole number, on the shared +/− Stepper. The unit rides in the label, the
    way the Quiz wizard's "Set Time in Minutes" does. */
 function NumberField({
@@ -313,6 +400,7 @@ function NumberField({
     <div className="form-group">
       <label className="form-label">
         {label}
+        <span className="req">*</span>
         {error && <span className="form-label-error">{error}</span>}
       </label>
       <Stepper
@@ -330,7 +418,8 @@ function NumberField({
 /* Price IDs per row × billing cycle, on the paywall matrix (Figma 752:2816):
    the row labels on the left, one column of inputs per cycle. There is no Add
    tile — the tiers and cycles are fixed. The label column repeats the heading
-   row as invisible text so its rows stay level with the inputs. */
+   row as invisible text so its rows stay level with the inputs. Every ID is
+   required: a blank one goes red and blocks Save. */
 function PriceIdGrid<K extends string>({
   rows,
   ghost,
@@ -362,7 +451,7 @@ function PriceIdGrid<K extends string>({
             {rows.map((r) => (
               <input
                 key={r.key}
-                className="form-input"
+                className={`form-input${value[r.key][cycle].trim() ? "" : " has-error"}`}
                 placeholder={`${r.name}...`}
                 aria-label={`${r.key} ${r.name}, ${cycle}`}
                 value={value[r.key][cycle]}
@@ -406,11 +495,11 @@ function ForceAppUpdateField({
       <label className="form-label">Force App Update</label>
       {/* History is newest-first, and the newest entry is the version being
           forced — so the log IS the current state: its first row is Active. */}
-      <div className="qsec">
+      <div className="qsec ct-prop">
         <div className="qsec-hd">
-          <span className="pc-col-grow">VERSION</span>
-          <span className="pc-col-date">ENABLED ON</span>
-          <span className="pc-col-status">STATUS</span>
+          <span className="ct-col" style={FU_COLS.version}>VERSION</span>
+          <span className="ct-col" style={FU_COLS.date}>ENABLED ON</span>
+          <span className="ct-col pc-col-status" style={FU_COLS.status}>STATUS</span>
           <span className="qsec-x" aria-hidden />
         </div>
 
@@ -422,22 +511,29 @@ function ForceAppUpdateField({
 
         {history.map((h, i) => (
           <div className="qsec-row" key={h.id}>
-            <span className="pc-col-grow pc-strong">{h.version}</span>
-            <span className="pc-col-date pc-muted">{formatShortDate(h.date)}</span>
-            <span className="pc-col-status">
+            <span className="ct-col pc-strong" style={FU_COLS.version}>{h.version}</span>
+            <span className="ct-col pc-muted" style={FU_COLS.date}>{formatShortDate(h.date)}</span>
+            <span className="ct-col pc-col-status" style={FU_COLS.status}>
               {i === 0 ? (
                 <span className="co-status-pill co-status-pill--green">Active</span>
               ) : (
                 <span className="pc-muted">—</span>
               )}
             </span>
-            <button
-              className="qsec-x"
-              aria-label={`Remove force update ${h.version}`}
-              onClick={() => setRemoving(h)}
-            >
-              <RowCloseIcon />
-            </button>
+            {/* Only the Active version can be removed (the one before it then
+                takes over); older entries are history, so their ✕ cell is an
+                empty spacer that keeps the columns aligned. */}
+            {i === 0 ? (
+              <button
+                className="qsec-x"
+                aria-label={`Remove force update ${h.version}`}
+                onClick={() => setRemoving(h)}
+              >
+                <RowCloseIcon />
+              </button>
+            ) : (
+              <span className="qsec-x" aria-hidden />
+            )}
           </div>
         ))}
 
@@ -562,8 +658,8 @@ function RemoveForceUpdateModal({
 }) {
   useEscape(onCancel);
 
-  const i = history.findIndex((h) => h.id === entry.id);
-  const fallback = history[i + 1];
+  // Only the Active (newest) entry is removable; the next one takes over.
+  const fallback = history[history.findIndex((h) => h.id === entry.id) + 1];
 
   return (
     <PrmModal
@@ -575,17 +671,13 @@ function RemoveForceUpdateModal({
     >
       <p className="prm-content">
         Remove force update <strong>{entry.version}</strong>?{" "}
-        {i === 0 ? (
-          fallback ? (
-            <>
-              Users will fall back to the previous forced version{" "}
-              <strong>{fallback.version}</strong>.
-            </>
-          ) : (
-            <>No version will be forced after this.</>
-          )
+        {fallback ? (
+          <>
+            Users will fall back to the previous forced version{" "}
+            <strong>{fallback.version}</strong>.
+          </>
         ) : (
-          <>This removes it from the log.</>
+          <>No version will be forced after this.</>
         )}
       </p>
     </PrmModal>
@@ -598,18 +690,18 @@ function DeepLinksField({ links }: { links: SystemDeepLink[] }) {
   return (
     <div className="form-group">
       <label className="form-label">App Deep Links</label>
-      <div className="qsec">
+      <div className="qsec ct-prop">
         <div className="qsec-hd">
-          <span className="pc-col-name">DESTINATION</span>
-          <span className="pc-col-grow">DEEP LINK</span>
-          <span className="pc-col-login">LOGIN REQUIRED?</span>
+          <span className="ct-col" style={DL_COLS.dest}>DESTINATION</span>
+          <span className="ct-col" style={DL_COLS.link}>DEEP LINK</span>
+          <span className="ct-col pc-nowrap" style={DL_COLS.login}>LOGIN REQUIRED?</span>
           <span className="qsec-x" aria-hidden />
         </div>
         {links.map((link) => (
           <div className="qsec-row" key={link.id}>
-            <span className="pc-col-name pc-strong">{link.label}</span>
-            <span className="pc-col-grow pc-muted">{link.url}</span>
-            <span className="pc-col-login pc-muted">{link.requiresLogin ? "Yes" : "No"}</span>
+            <span className="ct-col pc-strong" style={DL_COLS.dest}>{link.label}</span>
+            <span className="ct-col pc-muted" style={DL_COLS.link}>{link.url}</span>
+            <span className="ct-col pc-muted" style={DL_COLS.login}>{link.requiresLogin ? "Yes" : "No"}</span>
             <a
               className="pc-open"
               href={link.url}
@@ -658,20 +750,20 @@ function TabsField({
   return (
     <div className="form-group">
       <label className="form-label">{label}</label>
-      <div className="qsec">
+      <div className="qsec ct-prop">
         <div className="qsec-hd">
-          <span className="pc-col-grow">TAB NAME</span>
-          <span className="pc-col-grow">URL</span>
-          <span className="pc-col-toggle">VISIBLE?</span>
+          <span className="ct-col" style={TAB_COLS.name}>TAB NAME</span>
+          <span className="ct-col" style={TAB_COLS.url}>URL</span>
+          <span className="ct-col pc-col-toggle" style={TAB_COLS.visible}>VISIBLE?</span>
           <span className="pc-col-edit" aria-hidden />
         </div>
         {rows.map((row) => {
           const name = row.nameEn.trim() || "this tab";
           return (
             <div className="qsec-row" key={row.id}>
-              <span className="pc-col-grow pc-strong">{row.nameEn}</span>
-              <span className="pc-col-grow pc-muted">{row.url.trim() || "—"}</span>
-              <span className="pc-col-toggle">
+              <span className="ct-col pc-strong" style={TAB_COLS.name}>{row.nameEn}</span>
+              <span className="ct-col pc-muted" style={TAB_COLS.url}>{row.url.trim() || "—"}</span>
+              <span className="ct-col pc-col-toggle" style={TAB_COLS.visible}>
                 <button
                   type="button"
                   className={`toggle${row.visible ? " on" : ""}`}
@@ -729,7 +821,12 @@ function TabEditModal({
   const [nameEs, setNameEs] = useState(row.nameEs);
   const [url, setUrl] = useState(row.url);
   const [icon, setIcon] = useState<PickedImage | null>(row.icon);
-  const isValid = !!nameEn.trim() && !isOver(NAME_MAX, nameEn, nameEs);
+  // Every field but the Spanish name is required, and Save Tab waits for an
+  // actual change (the app's Save Changes gate).
+  const unchanged =
+    nameEn.trim() === row.nameEn && nameEs.trim() === row.nameEs && url.trim() === row.url && icon === row.icon;
+  const isValid =
+    !!nameEn.trim() && !!url.trim() && !!icon && !isOver(NAME_MAX, nameEn, nameEs) && !unchanged;
 
   useEscape(onCancel);
 
@@ -738,6 +835,7 @@ function TabEditModal({
       title="Edit Tab"
       confirmLabel="Save Tab"
       confirmDisabled={!isValid}
+      confirmTip={unchanged ? NO_CHANGES_TIP : undefined}
       onCancel={onCancel}
       onConfirm={() =>
         isValid && onSave({ nameEn: nameEn.trim(), nameEs: nameEs.trim(), url: url.trim(), icon })
@@ -760,17 +858,17 @@ function TabEditModal({
           />
         </div>
         <div className="prm-field">
-          <span className="prm-label">URL</span>
-          <input
-            className="form-input"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="URL..."
-            spellCheck={false}
-          />
+          <span className="prm-label">
+            URL<span className="prm-req">*</span>
+            {!url.trim() && <span className="form-label-error">{EMPTY_ERROR}</span>}
+          </span>
+          <UrlField value={url} onChange={setUrl} ariaLabel="URL" />
         </div>
         <div className="prm-field">
-          <span className="prm-label">Icon</span>
+          <span className="prm-label">
+            Icon<span className="prm-req">*</span>
+            {!icon && <span className="form-label-error">{EMPTY_ERROR}</span>}
+          </span>
           <ImageUploadField value={icon} onChange={setIcon} />
         </div>
       </div>
@@ -787,25 +885,28 @@ function SupportPagesField({
 }) {
   return (
     <div className="form-group">
-      <label className="form-label">Support Pages</label>
-      <div className="qsec">
+      <label className="form-label">
+        Support Pages
+        <span className="req">*</span>
+        {links.some((l) => !l.url.trim()) && (
+          <span className="form-label-error">{EMPTY_ERROR}</span>
+        )}
+      </label>
+      <div className="qsec ct-prop">
         <div className="qsec-hd">
-          <span className="pc-col-name">PAGE</span>
-          <span className="pc-col-grow">URL</span>
+          <span className="ct-col" style={SUP_COLS.page}>PAGE</span>
+          <span className="ct-col" style={SUP_COLS.url}>URL</span>
         </div>
         {links.map((link) => (
           <div className="qsec-row" key={link.id}>
-            <span className="pc-col-name pc-strong">{link.label}</span>
-            <div className="pc-col-grow">
-              <input
-                className="form-input"
+            <span className="ct-col pc-strong" style={SUP_COLS.page}>{link.label}</span>
+            <div className="ct-col" style={SUP_COLS.url}>
+              <UrlField
                 value={link.url}
-                onChange={(e) =>
-                  onChange(links.map((x) => (x.id === link.id ? { ...x, url: e.target.value } : x)))
+                onChange={(url) =>
+                  onChange(links.map((x) => (x.id === link.id ? { ...x, url } : x)))
                 }
-                placeholder="URL..."
-                aria-label={`URL for ${link.label}`}
-                spellCheck={false}
+                ariaLabel={`URL for ${link.label}`}
               />
             </div>
           </div>
@@ -828,11 +929,17 @@ function EpaCardField({
   /** Which surface this ID covers — the other tab holds the other one. */
   note: string;
 }) {
+  // Required, like every Price ID: blank goes red and blocks Save.
+  const blank = !value.trim();
   return (
     <div className="form-group">
-      <label className="form-label">EPA Card</label>
+      <label className="form-label">
+        EPA Card
+        <span className="req">*</span>
+        {blank && <span className="form-label-error">{EMPTY_ERROR}</span>}
+      </label>
       <input
-        className="form-input"
+        className={`form-input${blank ? " has-error" : ""}`}
         placeholder="Stripe Product ID..."
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -892,9 +999,9 @@ function OptionListField({
   return (
     <div className="form-group">
       <label className="form-label">{label}</label>
-      <div className="qsec">
+      <div className="qsec ct-prop">
         <div className="qsec-hd">
-          <span className="pc-col-grow">{column}</span>
+          <span className="ct-col" style={OPTION_COLS.name}>{column}</span>
           <span className="pc-col-actions" aria-hidden />
         </div>
 
@@ -906,7 +1013,7 @@ function OptionListField({
 
         {options.map((opt, i) => (
           <div className="qsec-row" key={opt}>
-            <span className="pc-col-grow pc-strong">{opt}</span>
+            <span className="ct-col pc-strong" style={OPTION_COLS.name}>{opt}</span>
             <span className="pc-col-actions">
               <button
                 className="qsec-x"
@@ -1047,7 +1154,9 @@ function OptionNameModal({
   const trimmed = value.trim();
   const isDuplicate =
     !!trimmed && others.some((o) => o.toLowerCase() === trimmed.toLowerCase());
-  const isValid = !!trimmed && !isDuplicate && !isOver(NAME_MAX, value);
+  // Editing: nothing to save until the name actually changes.
+  const unchanged = !!defaultValue && trimmed === defaultValue;
+  const isValid = !!trimmed && !isDuplicate && !isOver(NAME_MAX, value) && !unchanged;
 
   useEscape(onCancel);
 
@@ -1061,6 +1170,7 @@ function OptionNameModal({
       description={description}
       confirmLabel={confirmLabel}
       confirmDisabled={!isValid}
+      confirmTip={unchanged ? NO_CHANGES_TIP : undefined}
       onCancel={onCancel}
       onConfirm={submit}
     >
@@ -1092,6 +1202,9 @@ function OptionNameModal({
 
 /* ─── Legal ─── */
 
+/** A legal document is required in English; Spanish is optional. */
+const docBlank = (doc: BilingualDoc) => !richTextContent(doc.en);
+
 function LegalDocField({
   title,
   titleEs,
@@ -1106,10 +1219,18 @@ function LegalDocField({
   doc: BilingualDoc;
   onChange: (d: BilingualDoc) => void;
 }) {
+  // Required in English (the copy learners agree to); Spanish is optional.
+  const blank = docBlank(doc);
   return (
     <div className="form-group">
-      <label className="form-label">{title}</label>
-      <RichTextField
+      <label className="form-label">
+        {title}
+        <span className="req">*</span>
+        {blank && <span className="form-label-error">{EMPTY_ERROR}</span>}
+      </label>
+      <RichDocField
+        error={blank}
+        label={title}
         en={doc.en}
         es={doc.es}
         onChangeEn={(v) => onChange({ ...doc, en: v })}
@@ -1117,10 +1238,174 @@ function LegalDocField({
         placeholderEn={`${title}...`}
         placeholderEs={`${titleEs}...`}
         minRows={4}
-        maxRows={12}
+        maxRows={16}
       />
       <p className="form-help">{desc}</p>
     </div>
+  );
+}
+
+/* ─── Unsaved changes ─── */
+
+/* The draft against the saved copy, one entry per thing an admin would call a
+   change — a row, a cell, a document — for the save bar's "N Changes Made"
+   card and the Review & Save confirm. Each entry's drop puts back the saved
+   value for just that piece, leaving the rest of the draft alone. */
+const LIST_NAMES: Record<B2BListKey, string> = {
+  partnerships: "Partnerships",
+  trades: "Trade",
+  cancelReasons: "Cancellation Reasons",
+};
+
+function describeChanges(
+  draft: Settings,
+  saved: Settings,
+  setSettings: React.Dispatch<React.SetStateAction<Settings>>,
+): StagedChange[] {
+  const out: StagedChange[] = [];
+  const revert = <K extends keyof Settings>(key: K, fn: (d: Settings[K], s: Settings[K]) => Settings[K]) =>
+    () => setSettings((d) => ({ ...d, [key]: fn(d[key], saved[key]) }));
+  const edited = (v: string) => (v.trim() ? "Changed" : "Cleared");
+
+  // Force App Update — entries added or removed, by id.
+  const savedIds = new Set(saved.forceUpdates.map((h) => h.id));
+  const draftIds = new Set(draft.forceUpdates.map((h) => h.id));
+  for (const h of draft.forceUpdates)
+    if (!savedIds.has(h.id))
+      out.push({
+        key: `fu-${h.id}`, subject: `Force App Update · ${h.version}`, action: "Added",
+        onDrop: revert("forceUpdates", (d) => d.filter((x) => x.id !== h.id)),
+      });
+  for (const h of saved.forceUpdates)
+    if (!draftIds.has(h.id))
+      out.push({
+        key: `fu-${h.id}`, subject: `Force App Update · ${h.version}`, action: "Removed",
+        onDrop: revert("forceUpdates", (d, sv) => {
+          const keep = new Set([...d.map((x) => x.id), h.id]);
+          return [...d.filter((x) => !savedIds.has(x.id)), ...sv.filter((x) => keep.has(x.id))];
+        }),
+      });
+
+  // Whole numbers.
+  for (const k of Object.keys(NUMBER_MINS) as NumberKey[])
+    if (draft[k] !== saved[k])
+      out.push({
+        key: k, subject: NUMBER_LABELS[k],
+        action: draft[k].trim() ? `Changed from ${saved[k]} to ${draft[k]}` : "Cleared",
+        onDrop: revert(k, (_, sv) => sv),
+      });
+
+  // App / Dashboard Tabs — per tab, what about it moved.
+  for (const [key, label] of [["appTabs", "App Tabs"], ["dashboardTabs", "Dashboard Tabs"]] as const)
+    for (const row of draft[key]) {
+      const was = saved[key].find((r) => r.id === row.id);
+      if (!was || sameValue(row, was)) continue;
+      const what = [
+        (row.nameEn !== was.nameEn || row.nameEs !== was.nameEs) && "Renamed",
+        row.url !== was.url && "URL Changed",
+        row.icon !== was.icon && "Icon Changed",
+        row.visible !== was.visible && (row.visible ? "Shown" : "Hidden"),
+      ].filter((x): x is string => !!x);
+      out.push({
+        key: `${key}-${row.id}`, subject: `${label} · ${was.nameEn}`, action: what.join(", "),
+        onDrop: revert(key, (d) => d.map((r) => (r.id === row.id ? was : r))),
+      });
+    }
+
+  // Support Pages.
+  for (const link of draft.supportLinks) {
+    const was = saved.supportLinks.find((l) => l.id === link.id);
+    if (!was || link.url === was.url) continue;
+    out.push({
+      key: `sup-${link.id}`, subject: `Support Pages · ${link.label}`, action: `URL ${edited(link.url)}`,
+      onDrop: revert("supportLinks", (d) => d.map((l) => (l.id === link.id ? was : l))),
+    });
+  }
+
+  // Paywall Pricing — per platform / tier × cycle.
+  const prices = <K extends string>(
+    key: "b2cPrices" | "b2bPrices", label: string, rows: PriceRow<K>[],
+  ) => {
+    const d = draft[key] as PriceTable<K>;
+    const sv = saved[key] as PriceTable<K>;
+    for (const r of rows)
+      for (const c of CYCLES)
+        if (d[r.key][c] !== sv[r.key][c])
+          out.push({
+            key: `${key}-${r.key}-${c}`, subject: `${label} · ${r.key} ${c}`,
+            action: `${r.name} ${edited(d[r.key][c])}`,
+            onDrop: () =>
+              setSettings((x) => {
+                const t = x[key] as PriceTable<K>;
+                return { ...x, [key]: { ...t, [r.key]: { ...t[r.key], [c]: sv[r.key][c] } } };
+              }),
+          });
+  };
+  prices("b2cPrices", "B2C Paywall Pricing", B2C_PRICE_ROWS);
+  prices("b2bPrices", "B2B Paywall Pricing", B2B_PRICE_ROWS);
+
+  // EPA Cards.
+  for (const [key, label] of [["b2cEpaCard", "B2C EPA Card"], ["b2bEpaCard", "B2B EPA Card"]] as const)
+    if (draft[key] !== saved[key])
+      out.push({
+        key, subject: label, action: `Product ID ${edited(draft[key])}`,
+        onDrop: revert(key, (_, sv) => sv),
+      });
+
+  // Partnerships / Trade / Cancellation Reasons. Edits rename in place and adds
+  // append, so the lists line up by position.
+  for (const key of Object.keys(LIST_NAMES) as B2BListKey[]) {
+    const d = draft[key];
+    const sv = saved[key];
+    d.forEach((v, i) => {
+      if (i < sv.length && v === sv[i]) return;
+      const added = i >= sv.length;
+      out.push({
+        key: `${key}-${i}`,
+        subject: `${LIST_NAMES[key]} · ${added ? v : sv[i]}`,
+        action: added ? "Added" : `Renamed to ${v}`,
+        onDrop: revert(key, (cur, s0) =>
+          added ? cur.filter((_, j) => j !== i) : cur.map((x, j) => (j === i ? s0[i] : x)),
+        ),
+      });
+    });
+  }
+
+  // Legal documents.
+  for (const [key, label] of [["termsOfService", "Terms of Service"], ["privacyPolicy", "Privacy Policy"]] as const) {
+    const d = draft[key];
+    const sv = saved[key];
+    if (sameValue(d, sv)) continue;
+    const langs = [d.en !== sv.en && "English", d.es !== sv.es && "Spanish"].filter(Boolean);
+    out.push({
+      key, subject: label, action: `${langs.join(" and ")} Edited`,
+      onDrop: revert(key, (_, s0) => s0),
+    });
+  }
+
+  return out;
+}
+
+/* Review & Save: a plain confirmation listing every change, as on Industries. */
+function SaveReviewModal({
+  changes,
+  onCancel,
+  onConfirm,
+}: {
+  changes: StagedChange[];
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  useEscape(onCancel);
+  return (
+    <PrmModal
+      title={`Save ${changes.length} ${changes.length === 1 ? "Change" : "Changes"}?`}
+      confirmLabel="Save Changes"
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+    >
+      <ChangesReviewList changes={changes} />
+    </PrmModal>
   );
 }
 
@@ -1132,7 +1417,6 @@ export function ProductConfigPage({
   onSave,
   templates,
   setTemplates,
-  onEditAward,
   usageOf,
   onRemoveValue,
 }: {
@@ -1153,9 +1437,6 @@ export function ProductConfigPage({
   /** Award Design Templates — App state, shared with the Award wizard. */
   templates: AwardDesignTemplate[];
   setTemplates: React.Dispatch<React.SetStateAction<AwardDesignTemplate[]>>;
-  /** Leaves for the Awards page, on one Award — the Award Templates tab uses
-   *  it to reach an Award that still holds a template you tried to delete. */
-  onEditAward?: (award: Award) => void;
 }) {
   const [tab, setTab] = useState<Tab>(initialTab ?? "general");
   // A tab link followed while already here: go to that tab. (Not on mount —
@@ -1174,17 +1455,16 @@ export function ProductConfigPage({
   const [removing, setRemoving] = useState<{ list: B2BListKey; noun: string; value: string } | null>(null);
   const requestRemove = (list: B2BListKey, noun: string) => (value: string) =>
     setRemoving({ list, noun, value });
-  /* One toast for the page: the save footer's "Settings Saved", and the
-     template wizard's create/edit (raised here because the wizard closes back
-     to this page as it saves) and the Award Templates delete. */
+  /* One toast for the page: the save footer's "Settings Saved" and the Award
+     Templates delete. */
   const [toast, toastNode] = useToast();
   const dirty = useMemo(
     () => SETTING_KEYS.some((k) => !sameValue(settings[k], saved[k])),
     [settings, saved],
   );
   // Unsaved settings ask before any way off the page throws them away. Tabs
-  // and the template wizard don't: the settings live up here and survive both.
-  const guard = useLeaveGuard(dirty);
+  // and the template pages don’t: the settings live up here and survive both.
+  useLeaveGuard(dirty);
   // Tab names carry a SOFT limit: typing past it is allowed, saving isn't.
   // (Option names are gated in their own modal, so they never land here long.)
   const tabsOver = (rows: TabRow[]) => rows.some((r) => isOver(NAME_MAX, r.nameEn, r.nameEs));
@@ -1199,13 +1479,33 @@ export function ProductConfigPage({
   const badNumbers = (Object.keys(NUMBER_MINS) as NumberKey[])
     .filter((k) => numberErr[k])
     .map((k) => `${NUMBER_LABELS[k]} (at least ${NUMBER_MINS[k]})`);
-  const canSave = overLimit.length === 0 && badNumbers.length === 0;
+  // Required IDs and URLs left blank — every Price ID, both EPA cards, every
+  // Support Page and tab URL.
+  const pricesBlank = (t: PriceTable<string>) =>
+    Object.values(t).some((c) => !c.Monthly.trim() || !c.Annual.trim());
+  const b2cPricesBlank = pricesBlank(settings.b2cPrices);
+  const b2bPricesBlank = pricesBlank(settings.b2bPrices);
+  const blanks = [
+    settings.appTabs.some((r) => !r.url.trim()) && "App Tabs URL",
+    settings.dashboardTabs.some((r) => !r.url.trim()) && "Dashboard Tabs URL",
+    settings.supportLinks.some((l) => !l.url.trim()) && "Support Pages URL",
+    b2cPricesBlank && "B2C Paywall Pricing",
+    !settings.b2cEpaCard.trim() && "B2C EPA Card",
+    b2bPricesBlank && "B2B Paywall Pricing",
+    !settings.b2bEpaCard.trim() && "B2B EPA Card",
+    docBlank(settings.termsOfService) && "Terms of Service",
+    docBlank(settings.privacyPolicy) && "Privacy Policy",
+  ].filter((x): x is string => !!x);
+  const canSave = overLimit.length === 0 && badNumbers.length === 0 && blanks.length === 0;
   const blockedTip = canSave
     ? undefined
     : [
         ...(overLimit.length ? ["Shorten these to save:", ...overLimit.map((l) => `• ${l}`)] : []),
         ...(badNumbers.length ? ["Fill in a valid number to save:", ...badNumbers.map((l) => `• ${l}`)] : []),
+        ...(blanks.length ? ["Fill these in to save:", ...blanks.map((l) => `• ${l}`)] : []),
       ].join("\n");
+  const changes = dirty ? describeChanges(settings, saved, setSettings) : [];
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   const set =
     <K extends keyof Settings>(key: K) =>
@@ -1217,13 +1517,13 @@ export function ProductConfigPage({
       setSettings((s) => ({ ...s, [key]: fn(s[key]) }));
 
   /* Award Templates is a record list, not a settings form: it saves through its
-     own wizard and modals, so it keeps its state (and its Create CTA) here
+     own pages and modals, so it keeps its state (and its Create CTA) here
      rather than under the page's Save Changes. */
   const [templateWizard, setTemplateWizard] = useState<
     { kind: "new" } | { kind: "edit"; template: AwardDesignTemplate } | null
   >(null);
   const onTemplatesTab = tab === "award-templates";
-  /* Award Templates' own confirms (delete, "still in use") report up, so C
+  /* Award Templates' own delete confirm and row menu report up, so C
      stands down while one is open — on top of the hook's own overlay check. */
   const [templatesModalOpen, setTemplatesModalOpen] = useState(false);
   useCreateShortcut(
@@ -1231,22 +1531,18 @@ export function ProductConfigPage({
     onTemplatesTab && !templateWizard && !templatesModalOpen,
   );
 
+  /* Create / Edit Design Template aren't designed yet (user, 2026-10-13), so
+     both open a placeholder page; the crumb returns to this tab. */
   if (templateWizard) {
     return (
-      <NewDesignTemplateWizard
-        editingTemplate={templateWizard.kind === "edit" ? templateWizard.template : undefined}
-        allTemplates={templates}
-        onClose={() => setTemplateWizard(null)}
-        onSave={(t) => {
-          const existed = templates.some((x) => x.id === t.id);
-          setTemplates((prev) => {
-            const i = prev.findIndex((x) => x.id === t.id);
-            if (i < 0) return [t, ...prev];
-            const next = [...prev]; next[i] = t; return next;
-          });
-          toast(existed ? "Template Updated" : "Template Created");
-        }}
-      />
+      <div className="main">
+        <div className="workspace">
+          <PlaceholderPage
+            name={templateWizard.kind === "edit" ? "Edit Design Template" : "Create Design Template"}
+            crumb={{ label: "Product Config", onClick: () => setTemplateWizard(null) }}
+          />
+        </div>
+      </div>
     );
   }
 
@@ -1294,7 +1590,6 @@ export function ProductConfigPage({
                 setTemplates((prev) => prev.filter((t) => t.id !== id));
                 toast("Template Deleted");
               }}
-              onEditLinkedAward={onEditAward && ((award) => guard(() => onEditAward(award)))}
               onModalChange={setTemplatesModalOpen}
             />
           ) : (
@@ -1353,7 +1648,11 @@ export function ProductConfigPage({
                   {tab === "b2c" && (
                     <>
                       <div className="form-group">
-                        <label className="form-label">Paywall Pricing</label>
+                        <label className="form-label">
+                          Paywall Pricing
+                          <span className="req">*</span>
+                          {b2cPricesBlank && <span className="form-label-error">{EMPTY_ERROR}</span>}
+                        </label>
                         <PriceIdGrid
                           rows={B2C_PRICE_ROWS}
                           ghost="Platform"
@@ -1385,7 +1684,11 @@ export function ProductConfigPage({
                   {tab === "b2b" && (
                     <>
                       <div className="form-group">
-                        <label className="form-label">Paywall Pricing</label>
+                        <label className="form-label">
+                          Paywall Pricing
+                          <span className="req">*</span>
+                          {b2bPricesBlank && <span className="form-label-error">{EMPTY_ERROR}</span>}
+                        </label>
                         <PriceIdGrid
                           rows={B2B_PRICE_ROWS}
                           ghost="Tier"
@@ -1397,6 +1700,11 @@ export function ProductConfigPage({
                           to create subscriptions and checkout sessions for B2B companies.
                         </p>
                       </div>
+                      <EpaCardField
+                        value={settings.b2bEpaCard}
+                        onChange={set("b2bEpaCard")}
+                        note="This ID applies to the dashboard only. For the user app EPA card, set it under the B2C Management tab."
+                      />
                       <NumberField
                         label="Free Trial Duration in Days"
                         help="The trial length in days for new companies. The trial needs no payment method."
@@ -1428,11 +1736,6 @@ export function ProductConfigPage({
                         options={settings.trades}
                         onChange={set("trades")}
                         onRequestRemove={onRemoveValue && requestRemove("trades", "Trade")}
-                      />
-                      <EpaCardField
-                        value={settings.b2bEpaCard}
-                        onChange={set("b2bEpaCard")}
-                        note="This ID applies to the dashboard only. For the user app EPA card, set it under the B2C Management tab."
                       />
                       <OptionListField
                         label="Cancellation Reasons"
@@ -1472,35 +1775,31 @@ export function ProductConfigPage({
             </div>
           )}
 
-          {/* Content Links' save bar: in-flow as the column's last child, so it
-              spans the content area and stops at the left nav. It stays up on
-              every tab while anything is unsaved, Award Templates included. */}
-          {dirty && (
-            <footer className="sp-save-footer">
-              <div className="sp-save-footer-text">Unsaved Changes</div>
-              <div className="sp-save-footer-actions">
-                <button className="btn-save-draft" onClick={() => setSettings(saved)}>
-                  Discard
-                </button>
-                {/* `aria-disabled` rather than `disabled`, so the tooltip naming
-                    what is over its limit still shows on hover. */}
-                <button
-                  className={`btn-publish${canSave ? "" : " is-disabled"}`}
-                  aria-disabled={!canSave}
-                  data-tip={blockedTip}
-                  onClick={() => {
-                    if (!canSave) return;
-                    onSave(settings);
-                    toast("Settings Saved");
-                  }}
-                >
-                  Save Changes
-                </button>
-              </div>
-            </footer>
-          )}
+          {/* The staged-changes save bar (Manage User Progress, Industries):
+              "N Changes Made" lists every change on hover, each droppable on
+              its own; Discard; Review & Save (⌘↵) → the confirm below. In-flow
+              as the column's last child, so it stops at the left nav, and up
+              on every tab while anything is unsaved, Award Templates included. */}
+          <ChangesFooter
+            changes={changes}
+            onDiscard={() => setSettings(saved)}
+            onReview={() => setReviewOpen(true)}
+            shortcutEnabled={!reviewOpen && !removing && !templatesModalOpen}
+            blockedTip={blockedTip}
+          />
         </div>
       </div>
+      {reviewOpen && changes.length > 0 && (
+        <SaveReviewModal
+          changes={changes}
+          onCancel={() => setReviewOpen(false)}
+          onConfirm={() => {
+            onSave(settings);
+            setReviewOpen(false);
+            toast("Settings Saved");
+          }}
+        />
+      )}
       {removing && (
         <RemoveValueModal
           noun={removing.noun}

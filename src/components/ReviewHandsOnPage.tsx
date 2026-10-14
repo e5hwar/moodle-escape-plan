@@ -16,7 +16,6 @@ import { ReviewRunsStrip, ReviewRunCard } from "./ReviewRuns";
 import { ReviewConsole } from "./ReviewConsole";
 import { MultiPill, UsersEditColumns } from "./UsersFilters";
 import {
-  useColumnOrder,
   orderedColumns,
   CreatedByPill,
   CascadingMultiSelect,
@@ -28,6 +27,9 @@ import { SortIcon, RowChevronIcon, PagePrevIcon, PageNextIcon } from "./icons";
 import { TableCols } from "./TableCols";
 import { TableEmpty } from "./TableEmpty";
 import { useToast } from "./useToast";
+import { useListState, useResetPageOnChange } from "../hooks/useListState";
+import { useCertificationOptions } from "../data/filters";
+import { useLiveCompanies } from "../data/companies";
 
 const PAGE_SIZE = 50;
 
@@ -122,12 +124,12 @@ const RUN_SUBTITLE: Record<RunKind, string | null> = {
   company: "B2B Company Employees",
 };
 
-/* Recents keep up to 5, suggested up to 5, and the strip never holds more than
-   7 — recents take their slots first and the suggested list backfills what is
-   left (user, 2026-09-30). */
+/* Recents keep up to 5 and the strip never holds more than 7 — recents take
+   their slots first, then the fixed Suggested set (user, 2026-10-09). */
 const MAX_RECENT = 5;
-const MAX_SUGGESTED = 5;
 const MAX_RUNS = 7;
+/* Suggested = All Tasks + this many top Certifications + this many top Tasks. */
+const SUGGESTED_PER_KIND = 3;
 
 /* Recents outlive the page: App unmounts it on every navigation, and this
    prototype has no storage layer, so they live at module scope for the
@@ -215,7 +217,13 @@ const FIXED_COLUMNS = [{ label: "Task" }];
 type SortKey = "name" | "task" | ColKey;
 type SortDir = "asc" | "desc";
 
-export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmissions }: {
+export function ReviewHandsOnPage({
+  initialTaskFilter,
+  initialQuery,
+  extraSubmissions,
+  openSubmissionId,
+  onOpenSubmission,
+}: {
   /* Deep link from a Hands-On Task's "View All Attempts" in the Tasks table:
      the page opens with just that Task selected. The defaults that scope the
      reviewer's own queue — Review Pending, Created By SkillCat — are cleared
@@ -229,8 +237,16 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
    *  them — see `submissionForLearner`. Prepended, so the deep-linked row is
    *  the first thing under the filters. */
   extraSubmissions?: TaskSubmission[];
+  /** The submission whose console is open — App's, so each one has its own
+   *  URL (spec review 2026-10-09: `/review-hands-on/<id>`) that can be
+   *  reopened or shared. Loaded straight from the URL it opens on the page's
+   *  default queue. */
+  openSubmissionId?: string | null;
+  /** Open (`id`) or close (`null`) the console. `replace`: the console moved
+   *  on to another submission — the URL follows without a new history entry. */
+  onOpenSubmission?: (id: string | null, replace?: boolean) => void;
 } = {}) {
-  const [rows, setList] = useState<TaskSubmission[]>(() =>
+  const [rows] = useState<TaskSubmission[]>(() =>
     extraSubmissions?.length ? [...extraSubmissions, ...seed] : seed,
   );
   /* Reviews submitted in the console land in the shared store, not here: a
@@ -245,43 +261,50 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
     () => rows.map((s) => withSubmittedReview(withLiveTask(s, liveTasks), reviews)),
     [rows, reviews, liveTasks],
   );
-  const [columns, setColumns] = useState<ColState>(DEFAULT_COLUMNS);
+  /* Kept for the session (spec review 2026-10-09). A deep link with its own
+     filters (a Task's View All Attempts, Manage Completions) starts fresh. */
+  const fresh = !!initialTaskFilter || !!initialQuery;
+  const [columns, setColumns] = useListState<ColState>("hands-on:columns", DEFAULT_COLUMNS);
   const [toast, toastNode] = useToast();
-  const [statuses, setStatuses] = useState<string[]>(initialTaskFilter ? [] : ["Review Pending"]);
-  const [types, setTypes] = useState<string[]>([]);
-  const [companies, setCompanies] = useState<string[]>([]);
-  const [tasks, setTasks] = useState<string[]>(initialTaskFilter ? [initialTaskFilter] : []);
-  const [certs, setCerts] = useState<string[]>([]);
+  const [statuses, setStatuses] = useListState<string[]>("hands-on:statuses", initialTaskFilter ? [] : ["Review Pending"], fresh);
+  const [types, setTypes] = useListState<string[]>("hands-on:types", [], fresh);
+  const [companies, setCompanies] = useListState<string[]>("hands-on:companies", [], fresh);
+  const [tasks, setTasks] = useListState<string[]>("hands-on:tasks", initialTaskFilter ? [initialTaskFilter] : [], fresh);
+  const [certs, setCerts] = useListState<string[]>("hands-on:certs", [], fresh);
   // Created By defaults to SkillCat on load, matching the Tasks/Certifications pages.
-  const [creators, setCreators] = useState<string[]>(initialTaskFilter ? [] : ["SkillCat"]);
-  const [committedQuery, setCommittedQuery] = useState(initialQuery ?? "");
+  const [creators, setCreators] = useListState<string[]>("hands-on:creators", initialTaskFilter ? [] : ["SkillCat"], fresh);
+  const [committedQuery, setCommittedQuery] = useListState("hands-on:query", initialQuery ?? "", fresh);
   // Longest waiting first — the default review-run order, so the table reads
   // in the same order as the console's queue.
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "submittedOn", dir: "asc" });
-  const [page, setPage] = useState(1);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [sort, setSort] = useListState<{ key: SortKey; dir: SortDir }>("hands-on:sort", { key: "submittedOn", dir: "asc" }, fresh);
+  const [page, setPage] = useListState("hands-on:page", 1, fresh);
+  /* Routed when App hands the open submission down; local otherwise. */
+  const [localOpenId, setLocalOpenId] = useState<string | null>(null);
+  const openId = onOpenSubmission ? openSubmissionId ?? null : localOpenId;
+  const setOpenId = (id: string | null) =>
+    onOpenSubmission ? onOpenSubmission(id) : setLocalOpenId(id);
   // Recent runs, newest first — seeded from, and mirrored to, the module store.
   const [recents, setRecents] = useState<RunKey[]>(() => recentRunsStore);
 
-  const companyNames = useMemo(() => {
-    const set = new Set<string>();
-    list.forEach((s) => s.companyName && set.add(s.companyName));
-    return [...set].sort();
-  }, [list]);
+  /* Pill options are the COMPLETE sources (spec review 2026-10-09), not the
+     values the current rows hold: every company on record, every Hands-On
+     Task, every Certification. A value with no submissions shows the
+     no-matches state. */
+  const liveCompanies = useLiveCompanies();
+  const companyNames = useMemo(
+    () => [...new Set(liveCompanies.map((c) => c.name))].sort((a, b) => a.localeCompare(b)),
+    [liveCompanies],
+  );
 
-  const taskNames = useMemo(() => {
-    const set = new Set<string>();
-    list.forEach((s) => set.add(s.taskName));
-    return [...set].sort();
-  }, [list]);
+  const taskNames = useMemo(
+    () =>
+      [...new Set(liveTasks.filter((t) => t.type === "Hands-On Task").map((t) => t.name))].sort(
+        (a, b) => a.localeCompare(b),
+      ),
+    [liveTasks],
+  );
 
-  // Only the certifications that actually contain one of the submitted Tasks —
-  // filtering by anything else would always come back empty.
-  const certNames = useMemo(() => {
-    const set = new Set<string>();
-    list.forEach((s) => s.certifications.forEach((c) => set.add(c)));
-    return [...set].sort();
-  }, [list]);
+  const certNames = useCertificationOptions();
 
   /* ── Review Runs: computed from the full list, not the filtered one — the
      cards describe the whole pending queue whatever the filter row is set
@@ -300,23 +323,20 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
     [recents, pending],
   );
 
-  /* Suggested = the ranked sequence All Tasks → the 2 Certifications with the
-     most pending → the 2 Tasks with the most pending → the next Certification
-     → the next Task → …, skipping anything already in Recent, cut to what the
-     7 slots leave after the recents (never more than 5). By default that is
-     exactly All + 2 + 2; as suggested cards are clicked they move to Recent
-     and the sequence backfills behind them. */
+  /* Suggested is a fixed set (spec review 2026-10-09): All Tasks + the 3
+     Certifications with the most pending + the 3 Tasks with the most pending.
+     The strip drops anything already in Recent and cuts to the 7 slots left
+     after the recents — nothing backfills, so clicking a suggested card just
+     moves it to Recent. Fewer than 3 pending of a kind means fewer cards. */
   const suggested = useMemo(() => {
-    const certs = certRanked.map(([name]): RunKey => ({ kind: "cert", values: [name] }));
-    const tasks = taskRanked.map(([name]): RunKey => ({ kind: "task", values: [name] }));
-    const seq: RunKey[] = [ALL_RUN, ...certs.slice(0, 2), ...tasks.slice(0, 2)];
-    for (let i = 2; i < Math.max(certs.length, tasks.length); i++) {
-      if (certs[i]) seq.push(certs[i]);
-      if (tasks[i]) seq.push(tasks[i]);
-    }
+    const set: RunKey[] = [
+      ALL_RUN,
+      ...certRanked.slice(0, SUGGESTED_PER_KIND).map(([name]): RunKey => ({ kind: "cert", values: [name] })),
+      ...taskRanked.slice(0, SUGGESTED_PER_KIND).map(([name]): RunKey => ({ kind: "task", values: [name] })),
+    ];
     const taken = new Set(liveRecents.map(runId));
-    const room = Math.max(0, Math.min(MAX_SUGGESTED, MAX_RUNS - liveRecents.length));
-    return seq.filter((k) => !taken.has(runId(k))).slice(0, room);
+    const room = Math.max(0, MAX_RUNS - liveRecents.length);
+    return set.filter((k) => !taken.has(runId(k))).slice(0, room);
   }, [certRanked, taskRanked, liveRecents]);
 
   /** Push a run to the front of Recent (a repeat just moves it up); cleared
@@ -400,13 +420,13 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
   }, [filtered, sort]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  useEffect(() => setPage(1), [committedQuery, statuses, types, creators, companies, tasks, certs, sort]);
+  useResetPageOnChange(setPage, [committedQuery, statuses, types, creators, companies, tasks, certs, sort]);
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);
 
   // Column display order — reordered by dragging in the Edit Columns menu.
-  const [order, setOrder] = useColumnOrder(COLS);
+  const [order, setOrder] = useListState<ColKey[]>("hands-on:order", () => COLS.map((c) => c.key));
   const visibleCols = useMemo(() => orderedColumns(COLS, order, columns), [columns, order]);
   // Natural table width (task col + optional cols + actions) so the table
   // scrolls horizontally rather than crushing columns on a narrow page.
@@ -432,18 +452,25 @@ export function ReviewHandsOnPage({ initialTaskFilter, initialQuery, extraSubmis
   // filtered+sorted list as the queue. A submitted review updates the shared
   // store at once, so a reviewed row leaves the Review Pending queue (and the
   // run cards' counts) while the console is still open.
-  if (openId) {
+  /* A submission's own URL can name one the queue's filters leave out (or
+     one that doesn't exist): it leads the queue when it exists, and an id
+     that matches nothing just shows the list. */
+  const openSub = openId ? list.find((x) => x.id === openId) : undefined;
+  const staleId = !!openId && !openSub;
+  useEffect(() => {
+    if (staleId) onOpenSubmission?.(null, true);
+  }, [staleId]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (openId && openSub) {
+    const queue = sorted.some((x) => x.id === openId) ? sorted : [openSub, ...sorted];
     return (
       <ReviewConsole
-        queue={sorted}
+        queue={queue}
         initialId={openId}
+        onNavigate={(id) => onOpenSubmission?.(id, true)}
         onExit={(verdict) => {
           setOpenId(null);
           if (verdict) toast(verdict);
         }}
-        onRenameUser={(userId, userName) =>
-          setList((prev) => prev.map((s) => (s.userId === userId ? { ...s, userName } : s)))
-        }
       />
     );
   }

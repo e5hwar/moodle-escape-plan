@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   useReviewedQuizNames,
   useSubmissions,
@@ -20,13 +20,14 @@ import {
 import { TableCols } from "./TableCols";
 import { TableEmpty } from "./TableEmpty";
 import { useToast } from "./useToast";
+import { useListState, useResetPageOnChange } from "../hooks/useListState";
 
 const PAGE_SIZE = 50;
 
 /* Content-sized base widths: their sum is the width floor and the slack is
-   shared in proportion (see the TableCols below). Both date columns hold the same long form —
-   "November 11th, 2025, 9:05 AM" — so they share one width. */
-const COL_WIDTHS = { name: 205, email: 296, phone: 160, quiz: 250, date: 242 };
+   shared in proportion (see the TableCols below). Both date columns hold the same stamp —
+   "Nov 11, 2025, 9:05 AM" — so they share one width. */
+const COL_WIDTHS = { name: 205, email: 296, phone: 160, quiz: 250, date: 200 };
 /** The row-end chevron column, the same 40px reserve the Exam Reviews table uses. */
 const ACTIONS_WIDTH = 40;
 const TABLE_MIN =
@@ -104,21 +105,24 @@ export function PendingIdReuploadsPage({
      shows up here, and a row decided from here leaves. */
   const all = useSubmissions();
   const rows = useMemo(() => all.filter(isPendingIdReupload), [all]);
-  const [query, setQuery] = useState(restore?.query ?? "");
+  const [query, setQuery] = useListState("pending-id:query", restore?.query ?? "");
   // The search bar's Quiz scope, applied the same way Exam Reviews applies it.
-  const [examFilter, setExamFilter] = useState<string[]>(restore?.examFilter ?? []);
+  const [examFilter, setExamFilter] = useListState<string[]>("pending-id:quiz", restore?.examFilter ?? []);
   // Oldest request first — the longest chase leads, the date this page is
   // measured from (user, 2026-10-02).
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>(
+  const [sort, setSort] = useListState<{ key: SortKey; dir: SortDir }>(
+    "pending-id:sort",
     restore?.sort ?? { key: "requestedAt", dir: "asc" },
   );
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useListState("pending-id:page", 1);
   /* One range per date column, both the Exam Reviews pill: All Time is the
      unapplied, dashed state, so neither narrows anything until it's set. */
-  const [submittedRange, setSubmittedRange] = useState<DateRangeState>(
+  const [submittedRange, setSubmittedRange] = useListState<DateRangeState>(
+    "pending-id:submitted",
     () => restore?.submittedRange ?? allTimeDateRange(),
   );
-  const [requestedRange, setRequestedRange] = useState<DateRangeState>(
+  const [requestedRange, setRequestedRange] = useListState<DateRangeState>(
+    "pending-id:requested",
     () => restore?.requestedRange ?? allTimeDateRange(),
   );
 
@@ -142,7 +146,7 @@ export function PendingIdReuploadsPage({
   }, [filtered, sort]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  useEffect(() => setPage(1), [query, sort, examFilter, submittedRange, requestedRange]);
+  useResetPageOnChange(setPage, [query, sort, examFilter, submittedRange, requestedRange]);
   const visiblePage = Math.min(page, totalPages);
   const start = (visiblePage - 1) * PAGE_SIZE;
   const paged = sorted.slice(start, start + PAGE_SIZE);

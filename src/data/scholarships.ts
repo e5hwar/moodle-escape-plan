@@ -18,7 +18,7 @@ export type Scholarship = {
    the active ones; the rest are lapsed history on other B2C accounts. */
 const SEED: Scholarship[] = [
   { id: "SC-1031", userId: "U-10376", assignedOn: isoDaysFromToday(-120), expiresOn: isoDaysFromToday(62), assignedBy: "Akash Patel" },
-  { id: "SC-1028", userId: "U-10903", assignedOn: isoDaysFromToday(-75), expiresOn: isoDaysFromToday(9), assignedBy: "Maya Chen" },
+  { id: "SC-1028", userId: "U-10903", assignedOn: isoDaysFromToday(-75), expiresOn: isoDaysFromToday(5), assignedBy: "Maya Chen" },
   { id: "SC-1026", userId: "U-11224", assignedOn: isoDaysFromToday(-30), expiresOn: isoDaysFromToday(150), assignedBy: "Priya Iyer" },
   { id: "SC-1025", userId: "U-11461", assignedOn: isoDaysFromToday(-12), expiresOn: isoDaysFromToday(170), assignedBy: "Akash Patel" },
   { id: "SC-1024", userId: "U-10044", assignedOn: isoDaysFromToday(-420), expiresOn: isoDaysFromToday(-240), assignedBy: "Akash Patel" },

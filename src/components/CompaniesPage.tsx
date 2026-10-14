@@ -28,7 +28,8 @@ import {
   freshPaymentLink,
   changeAccountHolder,
   canDeleteCompany,
-  UNASSIGNED,
+  hasSubscriptionHistory,
+  NO_ASSIGNEE,
   CURRENCY_SYMBOL,
   type Company,
   type CompanyBilling,
@@ -349,7 +350,7 @@ export function CompaniesPage({ companies, initialQuery = "", pinnedIds = [], re
   /* Bumped on every copy so a second click restarts the toast rather than
      being swallowed while the first one is still up. */
   const [copiedAt, setCopiedAt] = useState(0);
-  /* A success raised on this page itself ("Subscription Canceled"), shown with
+  /* A success raised on this page itself ("Subscription Cancelled"), shown with
      the same toast a flow's `flash` uses on arrival. */
   const [toast, setToast] = useState<string | null>(null);
 
@@ -366,13 +367,9 @@ export function CompaniesPage({ companies, initialQuery = "", pinnedIds = [], re
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return companies.filter((c) => {
-      if (q && !(
-        c.name.toLowerCase().includes(q) ||
-        c.email.toLowerCase().includes(q) ||
-        c.industry.some((v) => v.toLowerCase().includes(q)) ||
-        c.partnership.some((v) => v.toLowerCase().includes(q)) ||
-        (c.tier?.toLowerCase().includes(q) ?? false)
-      )) return false;
+      // Free text matches the company name only; Tier, Status, Trade and
+      // Partnership are reached through the bar's prefixes and the pills.
+      if (q && !c.name.toLowerCase().includes(q)) return false;
       if (filters.tiers.length && !(c.tier && filters.tiers.includes(c.tier))) return false;
       // Multi-value: a company matches when ANY of its values is picked.
       if (filters.industries.length && !matchesTags(c.industry, filters.industries, NO_INDUSTRY)) return false;
@@ -392,9 +389,9 @@ export function CompaniesPage({ companies, initialQuery = "", pinnedIds = [], re
         const shown = paymentLabel(getCompanyBilling(c));
         if (!filters.paymentMethods.includes(shown)) return false;
       }
-      // Nobody assigned matches the filters' "Unassigned" option.
-      if (filters.csms.length && !filters.csms.includes(getAssignedCsm(c) || UNASSIGNED)) return false;
-      if (filters.salesReps.length && !filters.salesReps.includes(getAssignedSalesRep(c) || UNASSIGNED)) {
+      // Nobody assigned matches the filters' "None" option.
+      if (filters.csms.length && !filters.csms.includes(getAssignedCsm(c) || NO_ASSIGNEE)) return false;
+      if (filters.salesReps.length && !filters.salesReps.includes(getAssignedSalesRep(c) || NO_ASSIGNEE)) {
         return false;
       }
       return true;
@@ -527,7 +524,6 @@ export function CompaniesPage({ companies, initialQuery = "", pinnedIds = [], re
 
                   <div className="toolbar">
                     <CompaniesSearch
-                      companies={companies}
                       tiers={filters.tiers}
                       onTiersChange={(v) => setFilters((prev) => ({ ...prev, tiers: v }))}
                       statuses={filters.statuses}
@@ -711,12 +707,12 @@ export function CompaniesPage({ companies, initialQuery = "", pinnedIds = [], re
           onConfirm={(reason) => {
             onUpdateCompany({
               ...cancelModal,
-              status: "Canceled",
+              status: "Cancelled",
               cancelsOn: getCancelEffectiveDate(getCompanyBilling(cancelModal)),
               cancellationReason: reason || undefined,
             });
             setCancelModal(null);
-            setToast("Subscription Canceled");
+            setToast("Subscription Cancelled");
           }}
         />
       )}
@@ -980,8 +976,13 @@ function CompanyActionsMenu({
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
-  const status = getCompanyBilling(company).status;
+  const billing = getCompanyBilling(company);
+  const status = billing.status;
   const pendingSetup = status === "Pending Payment Setup";
+  /* A cancellation scheduled for cycle end freezes the plan until it takes
+     effect — changing it would quietly undo the cancellation — so Manage
+     Subscription leaves the menu until then. */
+  const cancelScheduled = status === "Cancelled" && billing.cancelScheduled;
   /* A paid subscription can be cancelled whether or not its last invoice was
      paid. Past Due is the case that most often ends in cancellation, and the
      unpaid invoice does not go away with it — the modal's Outstanding Balance
@@ -995,11 +996,12 @@ function CompanyActionsMenu({
     status === "Trial Expired" ||
     status === "Free Access" ||
     status === "Free Access Ended" ||
-    status === "Canceled"
+    status === "Cancelled"
   );
-  // A trial never raised an invoice, so there is nothing to look at. Free
-  // Access and cancelled accounts keep the item: their past invoices stand.
-  const showInvoices = !(status === "Free Trial" || status === "Trial Expired");
+  // Invoices exist once the company has EVER subscribed, whatever it is on
+  // now: a grant or reactivation after a paid plan keeps its past invoices,
+  // while a trial or grant from the start never raised one.
+  const showInvoices = hasSubscriptionHistory(company);
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -1052,14 +1054,16 @@ function CompanyActionsMenu({
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      {/* An account waiting on its payment method has no subscription, no
-          invoices and no employees yet, so the full list would be a page of
-          dead ends. It gets the three things that do apply: fix the details,
-          re-send the link, or drop the record. */}
+      {/* An account waiting on its payment method has no running
+          subscription and no employees yet, so the full list would be a page
+          of dead ends. It gets the things that do apply: fix the details,
+          re-send the link, drop the record — and its past invoices, when a
+          reactivation brought it here. */}
       {pendingSetup ? (
         <>
           {item(<RowEditIcon />, "Edit Company Details", onEditCompany)}
           {item(<CopyIcon />, "Copy Payment Link", onCopyPaymentLink)}
+          {showInvoices && item(<MenuInvoiceIcon />, "View Invoices", onViewInvoices)}
           {/* Only a company created as Pending with nobody in it yet — not a
               trial, grant or cancelled account that moved here. */}
           {canDeleteCompany(company) && item(<RowDeleteIcon />, "Delete Company", onDeleteCompany, true)}
@@ -1069,7 +1073,7 @@ function CompanyActionsMenu({
       {/* Figma 670:1323 — items only, no company header. Cancel Subscription
           is the design-system danger red (#ff1f31, text and icon). */}
       {item(<RowEditIcon />, "Edit Company Details", onEditCompany)}
-      {item(<RowCardIcon />, "Manage Subscription", onManageSubscription)}
+      {!cancelScheduled && item(<RowCardIcon />, "Manage Subscription", onManageSubscription)}
       {item(<MenuUserVipIcon />, "Change Account Holder", onEditAccountHolder)}
       {showBillingEmails && item(<MenuMailIcon />, "Manage Billing Emails", onAddBillingEmails)}
       {showInvoices && item(<MenuInvoiceIcon />, "View Invoices", onViewInvoices)}
@@ -1086,7 +1090,7 @@ function CompanyActionsMenu({
 // it is specced (Figma list item 85; App.tsx `?companyDashboard=`).
 function viewDashboard(company: Company) {
   window.open(
-    `${window.location.origin}${window.location.pathname}?companyDashboard=${encodeURIComponent(company.id)}`,
+    `${window.location.origin}${window.location.pathname}?companyDashboard=${encodeURIComponent(company.id)}&name=${encodeURIComponent(company.name)}`,
     "_blank",
     "noopener",
   );
@@ -1235,9 +1239,10 @@ function EditAccountHolderModal({
 /* ─────────────── Manage Billing Emails modal ─────────────── */
 
 function AddBillingEmailsModal({ company, onClose }: { company: Company; onClose: () => void }) {
-  // Deep-links to the customer's page in the Stripe dashboard, searched by the
-  // account holder's billing email.
-  const stripeUrl = `https://dashboard.stripe.com/search?query=${encodeURIComponent(company.email)}`;
+  const customerId = getStripeCustomerId(company);
+  // Placeholder for the Stripe customer page, opened the same way as View
+  // Invoices' — its own tab, the Stripe customer id as a URL parameter.
+  const stripeUrl = `${window.location.origin}${window.location.pathname}?stripeBillingEmails=${encodeURIComponent(customerId)}`;
 
   const steps = [
     "Click on the “Open Stripe” button",

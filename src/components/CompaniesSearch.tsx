@@ -1,13 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  getCompanyBilling,
   TIERS,
   SUBSCRIPTION_STATUSES,
   industryFilterOptions,
   partnershipFilterOptions,
-  NO_INDUSTRY,
-  NO_PARTNERSHIP,
-  type Company,
 } from "../data/companies";
 import { useB2BConfig } from "../data/productConfig";
 import { KeyCommandIcon, SearchClearIcon, SearchIcon } from "./icons";
@@ -23,7 +19,7 @@ const MAX_RESULTS = 6;
 type Facet = {
   /** Label on the chip, the panel heading, and the "<label>:" typed prefix. */
   label: string;
-  /** What one value is, on a typed suggestion's right ("Industry"). */
+  /** What one value is, on a typed suggestion's right ("Trade"). */
   kind: string;
   /** Sample value shown on the suggested-filter row ("Tier: Growth"). */
   example: string;
@@ -35,7 +31,6 @@ type Facet = {
   values: readonly string[];
   applied: string[];
   onChange: (next: string[]) => void;
-  counts: Map<string, number>;
 };
 
 type Opt =
@@ -43,7 +38,6 @@ type Opt =
   | { kind: "value"; facet: Facet; name: string };
 
 export function CompaniesSearch({
-  companies,
   tiers: appliedTiers,
   onTiersChange,
   statuses: appliedStatuses,
@@ -55,7 +49,6 @@ export function CompaniesSearch({
   query,
   onCommit,
 }: {
-  companies: Company[];
   /** Filters currently applied to the table (shared with the Filters row). */
   tiers: string[];
   onTiersChange: (next: string[]) => void;
@@ -75,39 +68,9 @@ export function CompaniesSearch({
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => setText(query), [query]);
-  // The Industries / Partnership facets offer Product Config's lists, live.
+  // The Trade / Partnership facets offer Product Config's lists, live.
   const b2b = useB2BConfig();
 
-  // "N companies" per value, on the rows. Status comes from derived billing, so
-  // it is counted the same way the table renders it.
-  const counts = useMemo(() => {
-    const tally = (pick: (c: Company) => string) => {
-      const m = new Map<string, number>();
-      companies.forEach((c) => {
-        const v = pick(c);
-        if (v) m.set(v, (m.get(v) ?? 0) + 1);
-      });
-      return m;
-    };
-    /* Multi-value fields (Industry, Partnership) count a company under EVERY
-       value it carries, which is what the facet filter matches on — so the
-       counts can total more than the company count, and a company with none
-       is counted under the "None" option. */
-    const tallyAll = (pick: (c: Company) => string[], none: string) => {
-      const m = new Map<string, number>();
-      companies.forEach((c) => {
-        const vs = pick(c).filter(Boolean);
-        (vs.length ? vs : [none]).forEach((v) => m.set(v, (m.get(v) ?? 0) + 1));
-      });
-      return m;
-    };
-    return {
-      tier: tally((c) => c.tier ?? ""),
-      status: tally((c) => getCompanyBilling(c).status),
-      industry: tallyAll((c) => c.industry, NO_INDUSTRY),
-      partnership: tallyAll((c) => c.partnership, NO_PARTNERSHIP),
-    };
-  }, [companies]);
 
   const facets: Facet[] = [
     {
@@ -120,7 +83,6 @@ export function CompaniesSearch({
       values: TIERS,
       applied: appliedTiers,
       onChange: onTiersChange,
-      counts: counts.tier,
     },
     {
       label: "Status",
@@ -132,19 +94,17 @@ export function CompaniesSearch({
       values: SUBSCRIPTION_STATUSES,
       applied: appliedStatuses,
       onChange: onStatusesChange,
-      counts: counts.status,
     },
     {
-      label: "Industries",
-      kind: "Industry",
+      label: "Trade",
+      kind: "Trade",
       example: b2b.trades[0] ?? "Commercial HVAC",
-      desc: "Filter by Industries",
-      plural: "industries",
-      emptyHint: "Start typing an industry name…",
+      desc: "Filter by Trade",
+      plural: "trades",
+      emptyHint: "Start typing a trade name…",
       values: industryFilterOptions(b2b.trades),
       applied: appliedIndustries,
       onChange: onIndustriesChange,
-      counts: counts.industry,
     },
     {
       label: "Partnership",
@@ -156,7 +116,6 @@ export function CompaniesSearch({
       values: partnershipFilterOptions(b2b.partnerships),
       applied: appliedPartnerships,
       onChange: onPartnershipsChange,
-      counts: counts.partnership,
     },
   ];
 
@@ -372,9 +331,6 @@ export function CompaniesSearch({
                   >
                     <span className="usearch-chip">{mode.facet.label}:</span>
                     <span className="usearch-row-ex">{name}</span>
-                    <span className="usearch-row-desc">
-                      {mode.facet.counts.get(name) ?? 0} companies
-                    </span>
                   </OptionRow>
                 ))
               )}

@@ -717,6 +717,20 @@ a {
   min-height: 100vh;
   box-sizing: border-box;
 }
+/* …unless it stands in for a page inside the app (Create / Edit Design
+   Template), where the shell already fills the window. */
+.workspace .placeholder-page {
+  min-height: 0;
+}
+/* Login As tab (spec review 2026-10-09): "Viewing as <Name> — close this tab
+   to return" pinned to the top of the tab while it scrolls. */
+.login-as-banner {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  margin-bottom: 24px;
+  background: var(--bg, #0d0d0d);
+}
 
 .tasks-title {
   font-family: var(--font-sans);
@@ -2627,7 +2641,9 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 /* Menu open → the bar collapses to its kebab. Every quick action is repeated
    in the row's menu, so showing both would list the same action twice. The
    bar is right-anchored, so the kebab stays on the same pixel. Keep this rule
-   true: a quick action must ALSO be a menu item, or it vanishes here. */
+   true: a quick action must ALSO be a menu item, or it vanishes here. The
+   converse rule: a menu item that is DISABLED has no quick action at all —
+   never a greyed cell in the bar; the menu row carries the reason. */
 .table tbody tr.menu-open .row-action-bar > .row-action-btn:not(:last-child),
 .mct-row.is-menu .row-action-bar > .row-action-btn:not(:last-child) {
   display: none;
@@ -5431,6 +5447,88 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   padding: 12px 0;
 }
 
+/* ── Rich-text document (`RichDocField`, Product Config's Legal tab) ──
+   The same row, but a live editor: the formatting renders as it reads. It
+   scrolls inside its row past `maxRows` (set inline). One rhythm spaces every
+   block — 12px under a paragraph or list, 24px above a section heading — so
+   the copy never needs blank lines for spacing (the sanitiser drops them).
+   Sizes stay on the type scale: 20 for the title, 16 for everything else. */
+.rte-lang-row .rte-doc {
+  overflow-y: auto;
+  cursor: text;
+  overflow-wrap: anywhere;
+}
+.rte-doc.is-empty::before {
+  content: attr(data-placeholder);
+  color: #404040;
+  pointer-events: none;
+}
+.rte-doc > :first-child {
+  margin-top: 0;
+}
+.rte-doc > :last-child {
+  margin-bottom: 0;
+}
+.rte-doc p,
+.rte-doc ul,
+.rte-doc ol,
+.rte-doc pre {
+  margin: 0 0 12px;
+}
+.rte-doc ul,
+.rte-doc ol {
+  padding-left: 24px;
+}
+.rte-doc li + li {
+  margin-top: 4px;
+}
+.rte-doc h1,
+.rte-doc h2,
+.rte-doc h3 {
+  font-weight: 600;
+  color: #fff;
+}
+.rte-doc h1 {
+  margin: 0 0 12px;
+  font-size: 20px;
+  line-height: 24px;
+}
+.rte-doc h2 {
+  margin: 24px 0 8px;
+  font-size: 16px;
+  line-height: 19px;
+}
+.rte-doc h3 {
+  margin: 16px 0 8px;
+  font-size: 16px;
+  line-height: 19px;
+  font-weight: 500;
+  color: #e7e7e8;
+}
+.rte-doc :is(strong, b) {
+  font-weight: 600;
+}
+.rte-doc a {
+  color: #f05523;
+  text-decoration: underline;
+  text-underline-position: from-font;
+}
+.rte-doc img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 0 12px;
+  border-radius: 4px;
+}
+.rte-doc pre {
+  padding: 8px 12px;
+  border-radius: 4px;
+  background: rgba(122, 122, 122, 0.1);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  white-space: pre-wrap;
+}
+
 /* ===== Radio cards ===== */
 /* Radio button cards (Figma 134:1790 Selected / 136:294 Unselected): each card
    is an individually bordered pill; the group just stacks them with a gap. */
@@ -5461,6 +5559,23 @@ tbody td[data-copyable][data-copy][data-copied]::after {
   margin: 0;
   padding: 0;
   border: 0;
+}
+
+/* A Hands-On Task's Audience fields under one Skill lock: the fieldset holds
+   three whole form-groups, so their own 32px margins set the rhythm — the
+   8px stack gap is only for banner → first field. */
+.ct-skill-lock .crit-lock {
+  gap: 0;
+}
+/* Locked controls stay drawn as they are (1360:1883) — only the pointer says
+   no. The Audience select's own :disabled fade is a different state (a Trade
+   or Partnership forcing B2B), so the lock restores it here. */
+.ct-skill-lock .crit-lock[disabled] .select-field:disabled {
+  opacity: 1;
+}
+.multiselect-field.is-disabled,
+.ct-skill-lock .crit-lock[disabled] .multiselect-tag-remove {
+  cursor: not-allowed;
 }
 
 .radio-card {
@@ -6597,6 +6712,40 @@ button.rr-card.ctb-start-card--accent:hover {
   font-size: 14px;
   color: var(--text-faint);
   text-align: center;
+}
+
+/* Publish gaps (spec review 2026-10-09: nothing blank). An empty Course or
+   Lesson is flagged where it sits once the gaps show (the wizard's
+   `missing`): the Courses-panel row names what's wrong under its name, an
+   empty Course's placeholder turns red, and an empty Lesson takes the card
+   error pattern — the message in its label row (the eyebrow) and a red
+   outline on the block. */
+.ctb-item-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ctb-item-error {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 17px;
+  color: var(--field-error);
+}
+.ctb-item.has-error:not(.selected) {
+  border-color: var(--field-error);
+}
+.ctb-empty.has-error {
+  border-color: var(--field-error);
+  color: var(--field-error);
+}
+.ctb-lesson.has-error {
+  box-shadow: inset 0 0 0 1px var(--field-error);
+}
+.ctb-lesson-eyebrow .form-label-error {
+  text-transform: none;
 }
 
 /* ── Drag to reorder: the drop line ──
@@ -11692,6 +11841,20 @@ body:has(.pp-overlay) .u-menu {
 body:has(.pp-overlay) .pl-copied-toast {
   z-index: 460;
 }
+/* A row-menu item that opens a MODAL keeps the panel open behind it (spec
+   review 2026-10-09): the confirm stacks above the panel (both 400). */
+body:has(.pp-overlay) .pr-confirm-overlay {
+  z-index: 420;
+}
+/* The other way round — a panel opened over a modal (the Certification
+   builder's Add Existing Tasks › Preview) — DOM order says which is on top:
+   the later one wins. */
+.pr-confirm-overlay ~ .pp-overlay {
+  z-index: 430;
+}
+.pr-confirm-overlay ~ .pp-overlay ~ .pr-confirm-overlay {
+  z-index: 440;
+}
 /* A toast raised while a PrmModal (400) or the ID popup (200) is open
    ("Template Downloaded", "ID Approved") sits above its overlay, not under it. */
 body:has(.pr-confirm-overlay) .pl-copied-toast,
@@ -14260,18 +14423,47 @@ body:has(.pm-overlay) .pl-copied-toast {
   margin-bottom: 24px;
 }
 
-/* Assign Industries' destination row above the picker's search: the label
-   12px before a select sized to its widest option. */
-.stm-dest {
+/* Assign Industries (Figma 1650:1669): a Card Table of the untagged
+   Certifications, each row with its own Industries multi-select. The node's
+   857px card + the modal's 24px insets. Two equal columns, like the node —
+   the Pairs-table exception to "one fluid column". Paddings follow the
+   minus-border rule: header 8/9 → 8/8, rows 12/13 → 12/12 (70px with the
+   45px field). */
+.prm.ind-assign-modal {
+  max-width: 905px;
+}
+.ind-assign {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex: none;
+}
+.ind-assign-hd,
+.ind-assign-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 24px;
+  padding: 8px 16px;
 }
-.stm-dest-label {
-  flex: none;
+.ind-assign-row {
+  padding: 12px 16px;
+}
+.ind-assign-hd > *,
+.ind-assign-row > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.ind-assign-cert {
+  display: flex;
+  flex-direction: column;
+  line-height: normal;
+}
+.ind-assign-name {
+  color: #fff;
+  font-size: 16px;
+  font-weight: 500;
+}
+.ind-assign-meta {
   color: #a8a8a8;
-  font-family: var(--font-sans);
   font-size: 14px;
 }
 
@@ -14748,9 +14940,8 @@ body:has(.pm-overlay) .pl-copied-toast {
   font-weight: 500;
 }
 
-/* Add Certifications / Assign Industries run the shared Select Requirement
-   picker (Certifications only) since 2026-10-06 — no table rules of their own.
-   Assign Industries' "Add to" row is `.stm-dest`. */
+/* Add Certifications runs the shared Select Requirement picker
+   (Certifications only) since 2026-10-06 — no table rules of its own. */
 
 /* ============== Companies page ============== */
 /* Companies-specific column widths/colors — follow the shared .table system. */
@@ -15676,17 +15867,17 @@ body:has(.pm-overlay) .pl-copied-toast {
  *
  * `:where()` keeps this at zero specificity: a family rule overrides any of it
  * without an ordering fight. A new boxed table on a form joins these lists. */
-:where(.qz, .qsec, .qed-tbl, .cc-panel, .lc-panel) {
+:where(.qz, .qsec, .qed-tbl, .cc-panel, .lc-panel, .ind-assign) {
   background: rgba(122, 122, 122, 0.1);
   border-radius: 12px;
   font-family: var(--font-sans);
 }
 
-:where(.qz-hd, .qz-row, .qz-empty, .qz-pool-main, .qz-pool-q, .qsec-hd, .qsec-row, .qed-tbl-hd, .qed-tbl-row, .cc-row, .lc-row, .lc-row-imp) {
+:where(.qz-hd, .qz-row, .qz-empty, .qz-pool-main, .qz-pool-q, .qsec-hd, .qsec-row, .qed-tbl-hd, .qed-tbl-row, .cc-row, .lc-row, .lc-row-imp, .ind-assign-hd, .ind-assign-row) {
   gap: var(--card-table-gap);
 }
 
-:where(.qz-hd, .qz-row, .qz-empty, .qsec-hd, .qsec-row, .qsec-foot, .qed-tbl-hd, .qed-tbl-row, .qed-tbl-foot, .cc-row, .lc-row) {
+:where(.qz-hd, .qz-row, .qz-empty, .qsec-hd, .qsec-row, .qsec-foot, .qed-tbl-hd, .qed-tbl-row, .qed-tbl-foot, .cc-row, .lc-row, .ind-assign-hd, .ind-assign-row) {
   border-bottom: 1px solid rgba(64, 64, 64, 0.5);
 }
 
@@ -15698,14 +15889,33 @@ body:has(.pm-overlay) .pl-copied-toast {
   height: 37px;
   padding: 8px 12px;
 }
+/* The URL field (`.deeplink-input`, Product Config's Support Pages) at the
+   same row scale: 8px / 12px inside its 1px shell = 37px. */
+:where(.qz, .qsec, .qed-tbl, .cc-panel, .lc-panel) .deeplink-cell {
+  padding: 8px 12px;
+}
 
 /* Header row type, every card: 14px Fira Sans Medium on the node's 17px auto
    leading (34px row = 8 + 17 + 8 + hairline), #a8a8a8. */
-:where(.qz-hd, .qsec-hd, .qed-tbl-hd, .cc-row-head, .lc-row-head) {
+:where(.qz-hd, .qsec-hd, .qed-tbl-hd, .cc-row-head, .lc-row-head, .ind-assign-hd) {
   font-size: 14px;
   font-weight: 500;
   line-height: 17px;
   color: #a8a8a8;
+}
+
+/* ── Card Table — Proportional variant (`.ct-prop`) ──
+   The second kind of card table (user, 2026-10-14; Product Config's lists).
+   No single fluid column: every DATA column (`.ct-col`) starts at its
+   content-sized width — `--cw`, unitless px, set beside the table's markup —
+   and the card's spare width is shared across them in proportion to it, the
+   data-table rule (`TableCols`). Squeezed below the summed widths, they give
+   width back in the same proportion. Glyph columns (✕, edit, open, actions)
+   stay fixed, like a data table's gutters. Shape, gap, header and hairlines
+   are the base's. Every other card table keeps the one-fluid-column rule. */
+.ct-prop .ct-col {
+  flex: var(--cw) 1 calc(var(--cw) * 1px);
+  min-width: 0;
 }
 
 /* ============== Quiz wizard — structure, questions, grading ============== */
@@ -16827,6 +17037,20 @@ body:has(.pm-overlay) .pl-copied-toast {
   vertical-align: middle;
 }
 
+/* A card-table cell that wraps instead of truncating — the EPA order's
+   shipping address (1668:1554 shows its second line). */
+.sch-table td.pr-col--wrap {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* The grey variant — "Refunded" after a refunded purchase's name (Figma
+   1290:2943): the disabled grey on its own 10% wash, same geometry. */
+.pr-name-flag--grey {
+  color: #7a7a7a;
+  background: rgba(122, 122, 122, 0.1);
+}
+
 /* The landing's minimal list is Name + wait only, so the flag has no place on
    it. It fades in with the rest of the table chrome (`--lmt`, the same ramp the
    pagination uses) rather than being dropped outright: the landing list IS the
@@ -17650,6 +17874,21 @@ body:has(.pm-overlay) .pl-copied-toast {
   flex: 1;
   min-width: 0;
 }
+/* A listed-but-locked option (MultiSelect `locked`): solid grey name, no
+   checkbox (an empty slot keeps the names aligned), the reason as the 668:943
+   row's right-aligned muted detail, and no hover wash — it can't be picked. */
+.ms-menu .dropdown-list .dropdown-item.ms-menu-item--locked {
+  color: #7a7a7a;
+  cursor: default;
+}
+.ms-menu .dropdown-list .dropdown-item.ms-menu-item--locked:hover {
+  background: transparent;
+}
+.ms-menu-check-slot {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
 .ms-menu-empty {
   /* Sits on the rows' own 8px inset — 35px, like a row (934:1116). */
   padding: 8px;
@@ -17783,14 +18022,16 @@ body:has(.pm-overlay) .pl-copied-toast {
 /* Figma 668:943 — an option row's right-aligned muted detail (e.g. an
    employee's Admin/Manager role). Weight pinned so the current row's SemiBold
    stays on the name alone. */
-.ss-menu .dropdown-item-name {
+.ss-menu .dropdown-item-name,
+.ms-menu .dropdown-item-name {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ss-menu .dropdown-item-detail {
+.ss-menu .dropdown-item-detail,
+.ms-menu .dropdown-item-detail {
   flex-shrink: 0;
   font-size: 14px;
   font-weight: 400;
@@ -18959,6 +19200,12 @@ body:has(.pm-overlay) .pl-copied-toast {
   /* No own bottom gap: the .tasks shell's 20px is the page's. */
   padding: 32px 32px 0;
 }
+/* With the save bar up, the bar is the page's bottom (PageEnd stops at a
+   framed box), so the scroll ends on the body's own 32px instead of running
+   flush into the bar. */
+.pc-body:has(+ .sp-save-footer) {
+  padding-bottom: 32px;
+}
 
 /* Award Templates' body: a record table, not a settings form, so it takes the
    Tasks-page shell instead — search on top, the table scrolling between it
@@ -18972,31 +19219,19 @@ body:has(.pm-overlay) .pl-copied-toast {
   padding-top: 24px;
 }
 
-/* Columns of the page's `.qsec` tables. The same class sits on a header cell
-   and on the row cells under it, so both share one width; the header keeps
+/* Columns of the page's `.qsec` tables: the proportional card table
+   (`.ct-prop` / `.ct-col`, widths in ProductConfigPage's `*_COLS`). The same
+   width sits on a header cell and the row cells under it; the header keeps
    `.qsec-hd`'s 14px type, and rows take theirs from .pc-strong / .pc-muted. */
-.pc-col-grow {
-  flex: 1;
-  min-width: 0;
-}
-.pc-col-name {
-  width: 240px;
-  flex: none;
-}
-.pc-col-date {
-  width: 160px;
-  flex: none;
-}
-.pc-col-login {
-  width: 160px;
-  flex: none;
+/* Header text that must stay on one line ("LOGIN REQUIRED?"). */
+.pc-nowrap {
   white-space: nowrap;
 }
 /* Holds a status pill, or a dash on the rows that have none — the pill's own
-   29px is the cell's height either way, so every row stands the same. */
+   29px is the cell's height either way, so every row stands the same. Its
+   width is the proportional column's (`.ct-col`); it never squeezes the pill. */
 .pc-col-status {
-  width: 120px;
-  flex: none;
+  min-width: 72px;
   display: inline-flex;
   align-items: center;
   min-height: 29px;
@@ -19004,17 +19239,15 @@ body:has(.pm-overlay) .pl-copied-toast {
 .qsec-hd .pc-col-status {
   min-height: 0;
 }
-/* The switch column — wider than the 41px switch it centres, like the
-   Post-Submission Review table's SHOWN? (`.qsec-shown`), to fit its label. */
+/* The switch column: a proportional column (`.ct-col`), so the switch sits
+   at its start, under the VISIBLE? label, however wide the column grows. */
 .pc-col-toggle {
-  width: 64px;
-  flex: none;
+  min-width: 54px;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
 }
 .qsec-hd .pc-col-toggle {
-  justify-content: flex-start;
   white-space: nowrap;
 }
 /* A tab row's edit pencil alone (the tabs are a fixed set — no remove). */
@@ -19926,17 +20159,29 @@ body:has(.pm-overlay) .pl-copied-toast {
   text-align: center;
 }
 /* The Award Templates thumbnail. Table cells strip background/border/radius
-   with !important (the plain-text cell rule), so the box restates them. */
-.aw-col-thumb { width: 72px; padding-left: 16px; }
+   with !important (the plain-text cell rule), so the box restates them.
+   Spotlight-sized (2026-10-13): a 144×76 tile on a 100px row, 12px above and
+   below, like the Spotlight table's Preview column (558:2046). */
+.aw-tpl-table tbody td {
+  height: 100px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
 .table tbody td.aw-col-thumb:not(.col-actions) .aw-row-thumb {
   display: flex !important;
-  width: 44px;
-  height: 30px;
+  width: 144px;
+  height: 76px;
   padding: 0;
   border: 1px solid #404040 !important;
-  border-radius: 5px !important;
+  border-radius: 8px !important;
   background: #000 !important;
-  font-size: 10px;
+}
+/* The disabled Delete's reason ("Templates currently used cannot be deleted")
+   in a box that breaks it into two balanced lines, like the other row menus'
+   reason lines (see `.fb-row-menu`). */
+.u-menu.aw-tpl-menu .u-menu-item:disabled .u-menu-item-sub {
+  width: 170px;
+  max-width: none;
 }
 /* Card / Certificate Design picker (TemplatePickerModal) — the 682:2321
    node's 1050px width, not the full-screen picker shell. The height is fixed
@@ -20083,7 +20328,9 @@ body:has(.pm-overlay) .pl-copied-toast {
    679:2039). Styled like the name link: plain until hovered, so the line still
    reads as a subtitle rather than a control. */
 .mid-head-status {
-  color: #fff;
+  /* The whole "ID Status: …" line is one #A8A8A8 (the user, 2026-10-13); the
+     value keeps its Medium weight. */
+  color: #a8a8a8;
   font-weight: 500;
 }
 .udh-anchor:hover > .mid-head-status {
@@ -22112,7 +22359,8 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
 }
 
 /* ── Review footer (Figma 445:878, re-checked 2026-10-02) ──
-   Skip on the left, the CTAs on the right, 12px apart. The shell (space-
+   Laid out like Hands-On (2026-10-13): Back on the left; Skip and the CTAs
+   together on the right, 12px apart. The shell (space-
    between, 20px padding, the app's 32px side gutter) comes from .wizard-footer
    + .rvc-footer. The 2px top rule is drawn INSIDE the node's 72px (20 + 32 +
    20), so it's an inset shadow — as a border it stood the footer at 74. */
@@ -22120,7 +22368,6 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   border-top: 0;
   box-shadow: inset 0 2px 0 rgba(122, 122, 122, 0.5);
 }
-.prc-footer-left,
 .prc-footer-right {
   display: flex;
   align-items: center;
@@ -22262,6 +22509,12 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
 
 .prc-mismatch-use:hover {
   color: #f5875f;
+}
+/* The same line under Review Name Change's Requested Name field, which
+   carries the form's 8px subtext gap (`.form-help`) instead of the card's own
+   8px column gap. */
+.ncr-fields .prc-mismatch-detected {
+  margin-top: 8px;
 }
 /* Empty state inside a review section ("no flagged frames"). Lost its rule when
    the old `.pr-table` block was deleted, so it was rendering on inherited
@@ -24201,7 +24454,6 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   }
   .tasks.clh.clh--banner .lm-banner-count::after,
   .tasks.clh.clh--banner .lm-banner .nc-shared,
-  .tasks.clh.clh--banner .lm-banner .nc-rest,
   .tasks.clh.clh--banner .lm-banner .note-card-body {
     animation: clh-fade-out linear both;
   }
@@ -24212,8 +24464,7 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   .tasks.clh.clh--banner .tasks-note > .tasks-note-text {
     animation: clh-nc-in linear both;
   }
-  .tasks.clh.clh--banner .tasks-note-text > .nc-shared,
-  .tasks.clh.clh--banner .tasks-note-text > .nc-rest {
+  .tasks.clh.clh--banner .tasks-note-text > .nc-shared {
     animation: clh-fade-in linear both;
   }
   /* The timeline and ranges after the shorthands (they reset both). Every
@@ -24223,27 +24474,23 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
      — the user, 2026-10-04: a translucent box squashing onto the note line
      (corners flattened, CTA a tiny pill) "looks horrible" — so the second
      half is only the words gliding into the note. The count and "Name
-     Change" — the words the title and the label share — crossfade in place,
-     orange in over 45–65% just ahead of white out over 50–70%, so they never
-     thin out;
-     the words that differ hand over instead of overlapping (the title's
-     "Requests Pending" out over 30–50%, the label's "s Pending Review" in
-     over 50–70%). The chevron, at its own size, fades in over 70–100%, once
-     it has nearly closed on the label — earlier it reads as trailing behind. The
+     Changes Pending Review" — the title IS the label, bar the count — crossfade
+     in place, orange in over 45–65% just ahead of white out over 50–70%, so
+     they never thin out (`.nc-rest`, the hand-over for words that differed,
+     went with the copy change on 2026-10-13). The chevron, at its own size,
+     fades in over 70–100%, once it has nearly closed on the label — earlier it reads as trailing behind. The
      summary is gone by 48% here — the moment the box's top edge reaches it. */
   .tasks.clh.clh--banner .clh-banner > .lm-banner::before,
   .tasks.clh.clh--banner .lm-banner-count,
   .tasks.clh.clh--banner .lm-banner-count::after,
   .tasks.clh.clh--banner .lm-banner .note-card-text,
   .tasks.clh.clh--banner .lm-banner .nc-shared,
-  .tasks.clh.clh--banner .lm-banner .nc-rest,
   .tasks.clh.clh--banner .lm-banner .note-card-body,
   .tasks.clh.clh--banner .lm-banner > .cta-quiet,
   .tasks.clh.clh--banner .tasks-note > .tasks-note-count,
   .tasks.clh.clh--banner .tasks-note > .tasks-note-text,
   .tasks.clh.clh--banner .tasks-note > svg,
-  .tasks.clh.clh--banner .tasks-note-text > .nc-shared,
-  .tasks.clh.clh--banner .tasks-note-text > .nc-rest {
+  .tasks.clh.clh--banner .tasks-note-text > .nc-shared {
     animation-timeline: --clh;
     animation-range: 0 var(--clh-d);
   }
@@ -24262,9 +24509,6 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   .tasks.clh.clh--banner .lm-banner .nc-shared {
     animation-range: calc(var(--clh-d) * 0.5) calc(var(--clh-d) * 0.7);
   }
-  .tasks.clh.clh--banner .lm-banner .nc-rest {
-    animation-range: calc(var(--clh-d) * 0.3) calc(var(--clh-d) * 0.5);
-  }
   .tasks.clh.clh--banner .lm-banner .note-card-body {
     animation-range: 0 calc(var(--clh-d) * 0.35);
   }
@@ -24273,9 +24517,6 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   }
   .tasks.clh.clh--banner .tasks-note-text > .nc-shared {
     animation-range: calc(var(--clh-d) * 0.45) calc(var(--clh-d) * 0.65);
-  }
-  .tasks.clh.clh--banner .tasks-note-text > .nc-rest {
-    animation-range: calc(var(--clh-d) * 0.5) calc(var(--clh-d) * 0.7);
   }
   .tasks.clh.clh--banner .tasks-note > svg {
     animation-range: 0 var(--clh-d), calc(var(--clh-d) * 0.7) var(--clh-d);
@@ -24313,9 +24554,6 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   .tasks.clh.clh--banner .lm-banner .nc-shared {
     opacity: clamp(0, (0.7 - var(--clh-p)) / 0.2, 1);
   }
-  .tasks.clh.clh--banner .lm-banner .nc-rest {
-    opacity: clamp(0, (0.5 - var(--clh-p)) / 0.2, 1);
-  }
   .tasks.clh.clh--banner .lm-banner-count::after {
     opacity: clamp(0, 1 - var(--clh-p) / 0.3, 1);
   }
@@ -24328,9 +24566,6 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   .tasks.clh.clh--banner .tasks-note > .tasks-note-count,
   .tasks.clh.clh--banner .tasks-note-text > .nc-shared {
     opacity: clamp(0, (var(--clh-p) - 0.45) / 0.2, 1);
-  }
-  .tasks.clh.clh--banner .tasks-note-text > .nc-rest {
-    opacity: clamp(0, (var(--clh-p) - 0.5) / 0.2, 1);
   }
   .tasks.clh.clh--banner .tasks-note > svg {
     opacity: clamp(0, (var(--clh-p) - 0.7) / 0.3, 1);
@@ -25441,9 +25676,17 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   text-overflow: ellipsis;
 }
 
-/* Static questions already on the Quiz stay visible as the shared locked row
-   (`.stm-table tr.is-locked`, Figma 682:2593) — "Already in Quiz" — so the
-   admin can see what's taken without being able to double-add it. */
+/* Questions already on the Quiz (any Section, static or pooled) stay visible
+   as the shared locked row (`.stm-table tr.is-locked`, Figma 682:2593) with a
+   grey "Added to Quiz" pill after the text — the Select Tasks locked-row
+   pattern — so the admin can see what's taken without double-adding it.
+   Unlike a Task name, a question runs long and the pill is short: the TEXT
+   ellipsizes and the pill stays whole. */
+.stm-table.sqm-table tbody tr.is-locked td.col-name > .tsk-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: none;
+}
 
 /* ── The old Select Certifications picker's table rules went with it
    (2026-10-05: Content Links and Import Courses run the Select Requirement

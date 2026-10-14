@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLiveTasks, subscriptionLabel, taskInCertifications, type Task } from "../data/tasks";
 import { useLiveCerts, CERT_VISIBILITIES, type Certification } from "../data/certifications";
-import { AUDIENCE_ALL_USERS, SUBSCRIPTION_OPTIONS, VISIBILITIES, audienceOf } from "../data/filters";
+import { SUBSCRIPTION_OPTIONS, VISIBILITIES } from "../data/filters";
 import { TableCols } from "./TableCols";
 import { TableEmpty } from "./TableEmpty";
 import { PrmModal } from "./PrmModal";
@@ -92,10 +92,6 @@ const NO_CERT_FILTERS: CertFilterState = {
 /** Only SkillCat's own content can gate a Certification — the same rule the
  *  Select Tasks node states in its subtitle. */
 const bySkillCat = (r: { createdBy: string }) => r.createdBy === "SkillCat";
-/** …and, where every learner must be able to reach it (a Feedback Form's
- *  trigger), no Audience/B2B tag — the All Users audience. */
-const forAllUsers = (r: { createdBy: string; tags?: string[] }) =>
-  bySkillCat(r) && audienceOf(r.tags) === AUDIENCE_ALL_USERS;
 
 const dateOf = (d?: string) => Date.parse(d ?? "") || 0;
 /** The Tasks table's Visibility value. */
@@ -138,7 +134,6 @@ export function SelectRequirementModal({
   description = "Pick what a learner must complete for this Condition Set. Everything added to one set is required.",
   confirmNoun = "Requirement",
   confirmVerb = "Add",
-  confirmBlocked = false,
   header,
   confirmLabel,
   allowEmpty = false,
@@ -146,7 +141,7 @@ export function SelectRequirementModal({
   lockedTip = "Already in this Condition Set",
   lockedFlag,
   allCreators,
-  allUsersOnly,
+  skillCatOnly,
   certFirst,
   onPreviewTask,
   onCancel,
@@ -171,15 +166,13 @@ export function SelectRequirementModal({
    *  catalog is listed. */
   only?: Tab;
   title?: string;
-  description?: string;
+  /** One line under the title — or one per tab, read off the open tab. */
+  description?: string | ((tab: Tab) => string);
   /** Singular noun in the confirm button — "Add Requirement" / "Add 3 Tasks". */
   confirmNoun?: string;
-  /** The confirm button's verb — "Assign 3 Certifications" (Industries). */
+  /** The confirm button's verb — "Add 3 Certifications". */
   confirmVerb?: string;
-  /** Holds the confirm back for a reason of the caller's (Assign Industries:
-   *  no destination chosen yet). */
-  confirmBlocked?: boolean;
-  /** A row above the search bar — Assign Industries' "Add to" destination. */
+  /** A row above the search bar — Content Links' links-left note. */
   header?: ReactNode;
   /** A fixed confirm label instead of the counted "Add N …" one. */
   confirmLabel?: string;
@@ -199,9 +192,10 @@ export function SelectRequirementModal({
   /** List every library Task, company-created ones included, instead of only
    *  SkillCat's (the Certification builder's Add Existing Tasks). */
   allCreators?: boolean;
-  /** List only SkillCat-made, All Users (no Audience/B2B tag) Tasks AND
-   *  Certifications — what a Feedback Form may trigger on. */
-  allUsersOnly?: boolean;
+  /** What a Feedback Form may trigger on: SkillCat-made Tasks and
+   *  Certifications of either audience (App `canHaveFeedbackForm`) — never
+   *  company-created ones. */
+  skillCatOnly?: boolean;
   /** Certifications tab first (and open on it) — Add Triggers. */
   certFirst?: boolean;
   /** Adds a row-end "Preview ›" to every Task row — the Select Questions
@@ -241,6 +235,8 @@ export function SelectRequirementModal({
       /* An open search-suggestion panel takes the first Escape (the page
          search closes it itself); only the next one closes the modal. */
       if (document.querySelector(".usearch-panel")) return;
+      // A Task's preview panel opened over the modal closes first.
+      if (document.querySelector(".pp-overlay")) return;
       onCancel();
     }
     document.addEventListener("keydown", onKey);
@@ -274,20 +270,16 @@ export function SelectRequirementModal({
 
   const taskPool = useMemo(
     () =>
-      allUsersOnly
-        ? taskLibrary.filter(forAllUsers)
-        : allCreators
-          ? taskLibrary
-          : taskLibrary.filter(bySkillCat),
-    [taskLibrary, allCreators, allUsersOnly],
+      allCreators && !skillCatOnly ? taskLibrary : taskLibrary.filter(bySkillCat),
+    [taskLibrary, allCreators, skillCatOnly],
   );
   const certPool = useMemo(() => {
     const listed = certPoolProp ?? certifications;
     const base = excludeCertIds?.length
       ? listed.filter((c) => !excludeCertIds.includes(c.id))
       : listed;
-    return allUsersOnly ? base.filter(forAllUsers) : base;
-  }, [certPoolProp, certifications, excludeCertIds, allUsersOnly]);
+    return skillCatOnly ? base.filter(bySkillCat) : base;
+  }, [certPoolProp, certifications, excludeCertIds, skillCatOnly]);
 
   const q = query.trim().toLowerCase();
 
@@ -370,14 +362,14 @@ export function SelectRequirementModal({
   return (
     <PrmModal
       title={title}
-      description={description}
+      description={typeof description === "function" ? description(tab) : description}
       confirmLabel={
         confirmLabel ??
         (pickedCount > 1
           ? `${confirmVerb} ${pickedCount} ${confirmNoun}s`
           : `${confirmVerb} ${confirmNoun}`)
       }
-      confirmDisabled={(!allowEmpty && pickedCount === 0) || confirmBlocked}
+      confirmDisabled={!allowEmpty && pickedCount === 0}
       pickFull
       className="srq"
       onCancel={onCancel}
@@ -410,7 +402,6 @@ export function SelectRequirementModal({
           <div className="toolbar">
             {tab === "task" ? (
               <TasksSearch
-                tasks={taskPool}
                 certifications={taskFilters.certifications}
                 onCertificationsChange={(v) => setTaskF({ certifications: v })}
                 types={taskFilters.types}

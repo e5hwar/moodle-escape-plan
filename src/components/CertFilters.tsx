@@ -14,6 +14,8 @@ import {
   CAREER_STAGES,
   CERT_TYPES,
   CERT_VISIBILITIES,
+  CERT_ARCHIVED_OPTIONS,
+  archivedLabel,
   NO_CAREER_STAGE,
   NO_TYPE,
   type CertColumn,
@@ -27,6 +29,10 @@ export type CertFilterState = {
   creators: string[];
   // Everything below lives under "More Filters".
   visibilities: string[];
+  /** "Archived" / "Not Archived" — its own filter, since an archived
+   *  Certification is still Visible or Hidden. Optional so a list state
+   *  restored from before it existed still reads. */
+  archived?: string[];
   tags: string[];
   /** "Incomplete" / "Complete": whether the Certification still has
    *  post-creation setup steps (Industries, Content Links, Award, Feedback
@@ -39,11 +45,15 @@ export type CertFilterState = {
 export const SETUP_FILTER_OPTIONS = ["Incomplete", "Complete"] as const;
 
 /** The Setup filter's half of `certMatches`, given whether the Certification
- *  still counts as pending (steps left, not marked done). Both options
- *  selected = everything. */
-export function setupMatches(pending: boolean, selected: string[]): boolean {
+ *  has Setup status at all (`eligible`) and still counts as pending (steps
+ *  left, not marked done). One without Setup status matches neither option. */
+export function setupMatches(
+  status: { eligible: boolean; pending: boolean },
+  selected: string[],
+): boolean {
   if (selected.length === 0) return true;
-  return selected.includes(pending ? "Incomplete" : "Complete");
+  if (!status.eligible) return false;
+  return selected.includes(status.pending ? "Incomplete" : "Complete");
 }
 
 export type CertColumnState = Record<CertColumn, boolean>;
@@ -79,6 +89,8 @@ export function certMatches(c: Certification, query: string, filters: CertFilter
   }
   if (filters.creators.length && !filters.creators.includes(c.createdBy)) return false;
   if (filters.visibilities.length && !filters.visibilities.includes(c.visibility ?? "Visible")) return false;
+  const archived = filters.archived ?? [];
+  if (archived.length && !archived.includes(archivedLabel(c))) return false;
   if (filters.tags.length && !matchesTagFilter(c.tags, filters.tags)) return false;
   return true;
 }
@@ -90,7 +102,11 @@ type Props = {
 
 export function CertFilters({ filters, setFilters }: Props) {
   // Setup lives under More Filters like Visibility and Tags, so it counts there.
-  const moreCount = filters.visibilities.length + filters.tags.length + filters.setup.length;
+  const moreCount =
+    filters.visibilities.length +
+    (filters.archived ?? []).length +
+    filters.tags.length +
+    filters.setup.length;
 
   const hasFilters =
     filters.industries.length +
@@ -108,6 +124,7 @@ export function CertFilters({ filters, setFilters }: Props) {
       types: [],
       creators: [],
       visibilities: [],
+      archived: [],
       tags: [],
       setup: [],
     });
@@ -133,6 +150,7 @@ export function CertFilters({ filters, setFilters }: Props) {
       />
       <MoreFiltersPill
         visibilities={filters.visibilities}
+        archived={filters.archived ?? []}
         tags={filters.tags}
         setup={filters.setup}
         count={moreCount}
@@ -282,12 +300,14 @@ export function TypePill({
 
 type MoreFilters = {
   visibilities: string[];
+  archived: string[];
   tags: string[];
   setup: string[];
 };
 
 function MoreFiltersPill({
   visibilities,
+  archived,
   tags,
   setup,
   count,
@@ -306,13 +326,14 @@ function MoreFiltersPill({
           value={summary}
           open={open}
           toggle={toggle}
-          onClear={() => onApply({ visibilities: [], tags: [], setup: [] })}
+          onClear={() => onApply({ visibilities: [], archived: [], tags: [], setup: [] })}
         />
       )}
     >
       {({ close }) => (
         <MoreFiltersBody
           visibilities={visibilities}
+          archived={archived}
           tags={tags}
           setup={setup}
           onApply={(v) => {
@@ -330,11 +351,15 @@ function MoreFiltersPill({
    wizard's keywords field are untouched, only the filters are gone. */
 function MoreFiltersBody({
   visibilities,
+  archived,
   tags,
   setup,
   onApply,
 }: MoreFilters & { onApply: (v: MoreFilters) => void }) {
-  const value = useMemo(() => ({ visibilities, tags, setup }), [visibilities, tags, setup]);
+  const value = useMemo(
+    () => ({ visibilities, archived, tags, setup }),
+    [visibilities, archived, tags, setup],
+  );
 
   return (
     <CascadingMultiSelect
@@ -343,6 +368,12 @@ function MoreFiltersBody({
           key: "visibilities",
           label: "Visibility",
           groups: [{ items: [...CERT_VISIBILITIES] }],
+        },
+        // Separate from Visibility: archiving leaves Visible / Hidden as is.
+        {
+          key: "archived",
+          label: "Archived",
+          groups: [{ items: [...CERT_ARCHIVED_OPTIONS] }],
         },
         {
           key: "tags",
@@ -358,7 +389,14 @@ function MoreFiltersBody({
         },
       ]}
       value={value}
-      onApply={(v) => onApply({ visibilities: v.visibilities, tags: v.tags, setup: v.setup ?? [] })}
+      onApply={(v) =>
+        onApply({
+          visibilities: v.visibilities,
+          archived: v.archived ?? [],
+          tags: v.tags,
+          setup: v.setup ?? [],
+        })
+      }
     />
   );
 }

@@ -1,14 +1,17 @@
 import { UserAvatar } from "./UserAvatar";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
+  APPLE_REFUND_NOTE,
+  EPA_CANCEL_BLOCK,
   buildUserProfile,
-  refundPurchase,
+  canCancelEpaOrder,
+  cancelEpaOrder,
+  purchaseRecordUrl,
+  useEpaCancels,
   useRefunds,
-  PROFILE_TODAY,
   ZIP_LOCATIONS,
   type AwardRecord,
   type EpaCardOrder,
-  type EpaStatus,
   type MeritTier,
   type NateDetail,
   type Purchase,
@@ -16,8 +19,10 @@ import {
   type SkillBadge,
 } from "../data/userProfile";
 import {
-  canCancelSubscription,
+  cancelSubscriptionBlock,
   cancelSubscription,
+  offersCancelSubscription,
+  subscriptionText,
   updateUserContact,
   useUser,
   type User,
@@ -30,7 +35,6 @@ import {
 } from "../data/manageIds";
 import { useCompletions } from "../data/completions";
 import { useScholarships } from "../data/scholarships";
-import { SubscriptionPill } from "./SubscriptionPill";
 import type { ConfirmField } from "./ConfirmCard";
 import { loginAs } from "./loginAs";
 import { leave, useTouchedKeys } from "./fieldFlags";
@@ -39,18 +43,18 @@ import { Dropdown } from "./Dropdown";
 import { PillTrigger, SectionedMultiSelect, summarize } from "./Filters";
 import { FILTER_TIPS } from "../data/filterTips";
 import type { SortDir } from "./AwardTableParts";
-import { PrmModal } from "./PrmModal";
+import { NO_CHANGES_TIP, PrmModal } from "./PrmModal";
 import { RowKebab, RowMenu, type RowMenuItem } from "./RowMenu";
-import { IdModal } from "./IdModal";
+import { IdModal, UploadIdModal } from "./IdModal";
 import { LimitError } from "./CharCount";
 import { LimitedInput } from "./LimitedInput";
 import { NAME_MAX, isOver } from "../data/fieldLimits";
 import {
   DownloadIcon,
   IdCardIcon,
-  MenuCancelSubIcon,
+  MenuCardOffIcon,
   MenuEnterIcon,
-  MenuInvoiceIcon,
+  MenuRefundIcon,
   RowEditIcon,
   RowKebabIcon,
   SortIcon,
@@ -133,17 +137,7 @@ function awardCertSvg(userName: string, award: AwardRecord): string {
 }
 
 
-type ModalKind = "edit-user" | "edit-nate" | "cancel-sub" | "cancel-epa" | null;
-
-// A physical-card order can be canceled while it's recent (within 30 days of
-// ordering) and hasn't shipped yet; canceled/refunded orders are already final.
-const EPA_CANCEL_WINDOW_DAYS = 30;
-function isEpaOrderCancelable(order: EpaCardOrder): boolean {
-  if (["Shipped", "Delivered", "Canceled", "Refunded"].includes(order.status)) return false;
-  const ageDays =
-    (PROFILE_TODAY.getTime() - new Date(`${order.orderedOn}T00:00:00`).getTime()) / 86400000;
-  return ageDays <= EPA_CANCEL_WINDOW_DAYS;
-}
+type ModalKind = "edit-user" | "edit-nate" | "cancel-sub" | "upload-id" | null;
 
 /* PrmModal (unlike the old pm- shell) has no key handling of its own, so the
    modal owner closes whatever is open on Escape. */
@@ -158,18 +152,6 @@ function useEscape(active: boolean, onClose: () => void) {
   }, [active, onClose]);
 }
 
-/* Companies-pill tone (Figma 109:1237) per physical-card status. */
-const EPA_TONE: Record<EpaStatus, string> = {
-  "Order received": "yellow",
-  Accepted: "yellow",
-  "In production": "yellow",
-  Shipped: "purple",
-  Delivered: "green",
-  "Action needed": "red",
-  Canceled: "grey",
-  Refunded: "secondary",
-};
-
 export function UserProfilePage({ user: seedUser }: { user: User }) {
   /* The live record (users.ts): this tab and the Users page read and write the
      same one, so an edit, a cancellation or a merge here shows there and back. */
@@ -177,12 +159,13 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
   // Manual awards (Manage Completions) and scholarships feed the profile too.
   const completions = useCompletions();
   const scholarships = useScholarships();
-  // Refunds revoke Awards, so they feed the profile build too.
+  // Refunds revoke Awards, and cancelled card orders change their rows, so
+  // both feed the profile build too.
   const refunds = useRefunds();
-  const base = useMemo(() => buildUserProfile(user), [user, completions, scholarships, refunds]);
+  const epaCancels = useEpaCancels();
+  const base = useMemo(() => buildUserProfile(user), [user, completions, scholarships, refunds, epaCancels]);
 
   const [nate, setNate] = useState<NateDetail | undefined>(base.nate);
-  const [epaCanceled, setEpaCanceled] = useState(false);
   const [modal, setModal] = useState<ModalKind>(null);
   /** The page's success toast — "Profile Updated" after an edit (the user,
    *  2026-10-04), and every other change this page applies. */
@@ -198,18 +181,16 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
   const idRecord = idRecordForUser(user, idDecisions);
   const hasId = idRecord.status !== "not-started";
 
-  useEscape(modal !== null, () => setModal(null));
+  // The Upload ID dialog owns Escape itself (UploadIdModal).
+  useEscape(modal !== null && modal !== "upload-id", () => setModal(null));
 
-  const epaCard: EpaCardOrder | undefined =
-    epaCanceled && base.epaCard ? { ...base.epaCard, status: "Canceled" } : base.epaCard;
-  const p = { ...base, nate, epaCard };
+  const p = { ...base, nate };
 
-  const canCancelEpa = !epaCanceled && !!base.epaCard && isEpaOrderCancelable(base.epaCard);
-  const epaPurchase = base.purchases.find((pu) => pu.kind === "EPA Card");
-
-  // Only a personal Stripe / Google plan that isn't already cancelling, never
-  // a company seat — the same rule the Users row menu applies.
-  const canCancelSub = canCancelSubscription(user);
+  /* Cancel Subscription lives in the page's ⋮ menu, on the Users row menu's
+     rule: anyone on a B2C Subscription not already cancelling sees it; an
+     Apple subscription keeps it disabled with the reason (users.ts). */
+  const offersCancelSub = offersCancelSubscription(user);
+  const cancelSubBlock = cancelSubscriptionBlock(user);
 
   /* Edit User writes to the shared roster — the Users table, the EPA card's
      recipient and everything else that names this user follow. */
@@ -234,15 +215,16 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
     toast("ID Approved");
   }
 
-  /* The Subscription card says what the Users pill says — the pill itself,
-     then the rows that plan has. */
+  /* The Subscription card says what the Users column says — as plain text,
+     not the pill (the user, 2026-10-13) — then the rows that plan has. A
+     Starter has none: the card reads "No Subscription" like an empty EPA
+     card. */
   const sub = p.subscription;
-  const subRows: ConfirmField[] = [["Status", <SubscriptionPill user={user} />]];
+  const subRows: ConfirmField[] = [["Status", subscriptionText(user)]];
   switch (sub.status) {
     case "Subscriber":
       subRows.push(
-        ["Plan", `Pro ${sub.cycle} · ${sub.price}`],
-        ["Platform", sub.platform],
+        ["Currency", sub.currency],
         ["Started", formatDate(sub.startedOn)],
         sub.cancelsOn ? ["Access Until", formatDate(sub.cancelsOn)] : ["Renews", formatDate(sub.renewsOn)],
         ["Offer Code", sub.offerCode ?? "None"],
@@ -252,10 +234,10 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
       subRows.push(["Started", formatDate(sub.startedOn)], ["Trial Ends", formatDate(sub.endsOn)]);
       break;
     case "Scholarship":
-      subRows.push(["Started", formatDate(sub.startedOn)], ["Expires", formatDate(sub.endsOn)]);
+      subRows.push(["Started", formatDate(sub.startedOn)], ["Ends", formatDate(sub.endsOn)]);
       break;
     case "Company Plan":
-      subRows.push(["Company", user.companyName], ["Billed To", "Company"]);
+      subRows.push(["Company", user.companyName]);
       break;
     case "Cancelled":
       subRows.push(["Ended", formatDate(sub.endsOn)], ["Offer Code", sub.offerCode ?? "None"]);
@@ -377,8 +359,9 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
                 </ConfirmCard>
               )}
 
-              {/* Awards — likewise hidden when there are none. */}
-              {p.awards.length > 0 && (
+              {/* Awards — a plain line when there are none, like an empty EPA
+                  card (the user, 2026-10-13). */}
+              {p.awards.length > 0 ? (
                 <ConfirmCard
                   title={`Awards · ${p.awards.length}`}
                   /* Figma 1278:1574 — the card head's own 24px "Button dialog",
@@ -396,69 +379,27 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
                 >
                   <AwardsTable userName={user.name} awards={p.awards} onToast={toast} />
                 </ConfirmCard>
+              ) : (
+                <ConfirmCard title="Awards">
+                  <p className="form-help">No Awards earned.</p>
+                </ConfirmCard>
               )}
 
-              {/* Subscription */}
+              {/* Subscription — Cancel Subscription is the page menu's, not the
+                  card's (the user, 2026-10-13). */}
               <ConfirmCard
                 title="Subscription"
-                trailing={
-                  canCancelSub && (
-                    <button className="btn-save-draft mc-btn-sm" onClick={() => setModal("cancel-sub")}>
-                      Cancel Subscription
-                    </button>
-                  )
-                }
                 fillBlanks
-                rows={subRows}
-              />
+                rows={sub.status === "Starter" ? undefined : subRows}
+              >
+                {sub.status === "Starter" && <p className="form-help">No Subscription</p>}
+              </ConfirmCard>
 
               {/* Purchases / bills */}
-              <PurchasesSection
-                purchases={p.purchases}
-                epaCancelable={canCancelEpa}
-                epaCanceled={epaCanceled}
-                onCancelEpa={() => setModal("cancel-epa")}
-                onToast={toast}
-              />
+              <PurchasesSection purchases={p.purchases} />
 
-              {/* EPA Card */}
-              <ConfirmCard
-                title="EPA Card Order"
-                trailing={
-                  canCancelEpa && (
-                    <button className="btn-save-draft mc-btn-sm" onClick={() => setModal("cancel-epa")}>
-                      Cancel Order
-                    </button>
-                  )
-                }
-                rows={
-                  p.epaCard
-                    ? [
-                        ["Card", p.epaCard.certification],
-                        [
-                          "Status",
-                          <span className={`co-status-pill co-status-pill--${EPA_TONE[p.epaCard.status]}`}>
-                            {p.epaCard.status}
-                          </span>,
-                        ],
-                        ["Ordered", formatDate(p.epaCard.orderedOn)],
-                        ["Recipient", p.epaCard.recipient],
-                        ["Shipping Address", p.epaCard.shippingAddress, true],
-                        p.epaCard.tracking
-                          ? [
-                              "Tracking",
-                              <a href={p.epaCard.tracking.url} target="_blank" rel="noreferrer" className="rvc-headlink">
-                                {p.epaCard.tracking.carrier} · {p.epaCard.tracking.number} (shipped {formatDate(p.epaCard.tracking.shippedOn)})
-                              </a>,
-                              true,
-                            ]
-                          : ["Tracking", undefined, true],
-                      ]
-                    : undefined
-                }
-              >
-                {!p.epaCard && <p className="form-help">No EPA card ordered.</p>}
-              </ConfirmCard>
+              {/* EPA Card Orders — every order, as a table (Figma 1668:1554). */}
+              <EpaOrdersSection orders={p.epaOrders} onToast={toast} />
 
               {/* NATE details */}
               <ConfirmCard
@@ -490,16 +431,31 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
           onClose={() => setPageMenu(null)}
           items={[
             /* The Manage IDs popup, opened on this user's own document — same
-               modal, same Replace / Approve flows. Nothing to view for a user
-               who has never uploaded one. */
-            ...(hasId
-              ? [{ label: "View ID", icon: <IdCardIcon />, onPick: () => setIdOpen(true) }]
-              : []),
+               modal, same Replace / Approve flows. A user with nothing
+               uploaded to the ID Upload Task gets "Upload ID" instead, which
+               opens the upload dialog (467:673) on its own. */
+            hasId
+              ? { label: "View ID", icon: <IdCardIcon />, onPick: () => setIdOpen(true) }
+              : { label: "Upload ID", icon: <IdCardIcon />, onPick: () => setModal("upload-id") },
             {
               label: "Edit User Details",
               icon: <RowEditIcon />,
               onPick: () => setModal("edit-user"),
             },
+            /* Red (673:1437); an Apple subscription keeps the row, disabled,
+               with the reason under the label. */
+            ...(offersCancelSub
+              ? [
+                  {
+                    label: "Cancel Subscription",
+                    icon: <MenuCardOffIcon />,
+                    danger: true,
+                    disabled: !!cancelSubBlock,
+                    sub: cancelSubBlock,
+                    onPick: () => setModal("cancel-sub"),
+                  },
+                ]
+              : []),
           ]}
         />
       )}
@@ -522,30 +478,16 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
           }}
         />
       )}
-      {modal === "cancel-epa" && base.epaCard && (
-        <PrmModal
-          title="Cancel EPA Card Order?"
-          cancelLabel="Keep Order"
-          confirmLabel="Cancel Order"
-          onCancel={() => setModal(null)}
-          onConfirm={() => {
-            setEpaCanceled(true);
+      {modal === "upload-id" && (
+        <UploadIdModal
+          record={idRecord}
+          onClose={() => setModal(null)}
+          onDecide={(status) => {
+            replaceIdRecord(idRecord, status);
             setModal(null);
-            toast("Order Canceled");
+            toast(status === "approved" ? "ID Uploaded & Approved" : "ID Uploaded");
           }}
-        >
-          <p className="prm-content">
-            This cancels the <strong>{base.epaCard.certification} Physical Card</strong> ordered on{" "}
-            <strong>{formatDate(base.epaCard.orderedOn)}</strong>. The card will not be produced or
-            shipped.
-          </p>
-          {epaPurchase && (
-            <p className="prm-content">
-              The <strong>{money(epaPurchase.amount)}</strong> charge ({epaPurchase.receiptId}) is
-              refunded to the original {epaPurchase.platform} payment method.
-            </p>
-          )}
-        </PrmModal>
+        />
       )}
       {modal === "cancel-sub" && (
         <CancelSubscriptionModal
@@ -554,7 +496,7 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
           onConfirm={() => {
             cancelSubscription(user.id);
             setModal(null);
-            toast("Subscription Canceled");
+            toast("Subscription Cancelled");
           }}
         />
       )}
@@ -899,6 +841,7 @@ export function EditUserModal({
       description="An email or a phone number is required. Changing either resets its verified status."
       confirmLabel="Save Changes"
       confirmDisabled={!dirty}
+      confirmTip={NO_CHANGES_TIP}
       onCancel={onClose}
       onConfirm={submit}
     >
@@ -996,6 +939,7 @@ function EditNateModal({
       description="These are the details the user registered with on the NATE form — they can differ from the SkillCat profile."
       confirmLabel={initial ? "Save Changes" : "Add Details"}
       confirmDisabled={!dirty}
+      confirmTip={NO_CHANGES_TIP}
       onCancel={onClose}
       onConfirm={submit}
     >
@@ -1077,11 +1021,13 @@ export function CancelSubscriptionModal({
 }
 
 /* ── Purchases & Bills — one list of every purchase, narrowed by the Purchase
- * Type filter pill (Figma 1288:2876). It was four tabs until 2026-09-22; a tab
- * bar forces a choice and hides the rest, where the pill starts unapplied and
- * shows everything. That means one column set for all four kinds: the kind
- * itself is now a column, and Status — which only a Certification or a Quiz
- * Attempt carries — prints an em-dash for the others. ── */
+ * Type filter pill (Figma 1288:2876): Subscription renewals, Certifications,
+ * Quiz attempts and Physical Products. No Status column (the user,
+ * 2026-10-13): a refunded charge is the row itself, greyed, with a "Refunded"
+ * pill after the item name (1290:2943). Every row's ⋮ (1666:1457) is Refund
+ * alone — it opens the charge's record on Stripe or Google in a new tab, where
+ * the refund is issued, and stays after one; an Apple purchase keeps it
+ * disabled with the reason. ── */
 const PURCHASE_TYPES: { label: string; kind: PurchaseKind }[] = [
   { label: "Subscription", kind: "Subscription" },
   { label: "Certifications", kind: "Certification" },
@@ -1093,26 +1039,14 @@ const KIND_LABEL: Record<PurchaseKind, string> = Object.fromEntries(
   PURCHASE_TYPES.map((t) => [t.kind, t.label]),
 ) as Record<PurchaseKind, string>;
 
-// Refunds are issued by us only for purchases we process directly (Stripe/Google);
-// Apple in-app purchases are refunded by Apple. Limited to certs & quiz attempts.
-const REFUNDABLE_PLATFORMS = ["Stripe", "Google"];
-function isRefundable(pu: Purchase): boolean {
-  return (
-    (pu.kind === "Certification" || pu.kind === "Quiz Attempt") &&
-    REFUNDABLE_PLATFORMS.includes(pu.platform) &&
-    !pu.refunded
-  );
-}
-
 /* Definite widths on EVERY column, the first one included: a fixed-layout table
    hands its slack to the auto column alone, so an unsized first column swallowed
    the whole card and left the rest bunched at the right. With all of them sized,
    the slack spreads in proportion and the columns stay evenly spaced. */
 const PURCHASE_COLS = {
   date: 130,
-  item: 280,
+  item: 320,
   type: 160,
-  status: 210,
   platform: 120,
   receipt: 160,
   amount: 100,
@@ -1120,28 +1054,13 @@ const PURCHASE_COLS = {
 };
 const PURCHASE_TABLE_MIN = Object.values(PURCHASE_COLS).reduce((a, b) => a + b, 0);
 
-function PurchasesSection({
-  purchases,
-  epaCancelable,
-  epaCanceled,
-  onCancelEpa,
-  onToast,
-}: {
-  purchases: Purchase[];
-  epaCancelable: boolean;
-  epaCanceled: boolean;
-  onCancelEpa: () => void;
-  onToast: (label: string) => void;
-}) {
+function PurchasesSection({ purchases }: { purchases: Purchase[] }) {
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
-  const [refundTarget, setRefundTarget] = useState<(Purchase & { idx: number }) | null>(null);
   const [rowMenu, setRowMenu] = useState<{ idx: number; rect: DOMRect } | null>(null);
-
-  useEscape(refundTarget !== null, () => setRefundTarget(null));
 
   // Tag each purchase with its stable index, narrow to the picked types, and
   // show the newest first — with every kind in one list, date is the only order
-  // that means anything. Refunds come in on the purchases themselves.
+  // that means anything.
   const rows = useMemo(
     () =>
       purchases
@@ -1151,48 +1070,22 @@ function PurchasesSection({
     [purchases, typeFilter],
   );
 
-  /* Status carries what the old per-tab action cell used to say in words — a
-     refunded charge, a canceled order — now that the action itself is a menu
-     item behind the row kebab. */
-  function statusCell(pu: Purchase) {
-    if (pu.kind === "EPA Card") return epaCanceled ? "Canceled · Refunded" : "—";
-    if (pu.refunded) return "Refunded";
-    if (pu.kind === "Certification") return certStatusPill(pu);
-    if (pu.kind === "Quiz Attempt") return attemptStatusPill(pu);
-    return "—";
-  }
-
-  /* A Subscription charge has nothing to do to it, so its row has no kebab. */
-  function menuItems(pu: Purchase & { idx: number }): RowMenuItem[] {
-    if (pu.kind === "Certification" || pu.kind === "Quiz Attempt") {
-      if (pu.refunded) return [];
-      return [
-        {
-          label: "Refund",
-          icon: <MenuInvoiceIcon />,
-          disabled: !isRefundable(pu),
-          title: isRefundable(pu)
-            ? undefined
-            : `${pu.platform} purchases are not refundable here`,
-          onPick: () => setRefundTarget(pu),
+  /* Refund only. Stripe and Google charges open their record in a new tab;
+     an Apple charge has no page of ours, so the item stays, disabled, with
+     the reason. Physical Products are always Stripe, so always refundable. */
+  function menuItems(pu: Purchase): RowMenuItem[] {
+    const url = purchaseRecordUrl(pu);
+    return [
+      {
+        label: "Refund",
+        icon: <MenuRefundIcon />,
+        disabled: !url,
+        sub: url ? undefined : APPLE_REFUND_NOTE,
+        onPick: () => {
+          if (url) window.open(url, "_blank", "noopener");
         },
-      ];
-    }
-    if (pu.kind === "EPA Card") {
-      if (epaCanceled) return [];
-      return [
-        {
-          label: "Cancel Order",
-          icon: <MenuCancelSubIcon />,
-          disabled: !epaCancelable,
-          title: epaCancelable
-            ? undefined
-            : `Orders can only be canceled within ${EPA_CANCEL_WINDOW_DAYS} days of ordering, before they ship`,
-          onPick: onCancelEpa,
-        },
-      ];
-    }
-    return [];
+      },
+    ];
   }
 
   /* The shared filter pill (Figma 1288:2876 "Filters - Unapplied"). It rides in
@@ -1238,6 +1131,17 @@ function PurchasesSection({
     </div>
   );
 
+  /* Nothing bought at all: a plain line in place of the table, and no filter
+     to narrow nothing with (the user, 2026-10-13). A filter that matches
+     nothing keeps the table, with No Results Found. */
+  if (purchases.length === 0) {
+    return (
+      <ConfirmCard title="Purchases & Bills">
+        <p className="form-help">No purchases made.</p>
+      </ConfirmCard>
+    );
+  }
+
   return (
     /* `tableBody`: the node (1290:2943) has no rule under this head either —
        the pill moved into the head, so the table is the whole body and its own
@@ -1262,7 +1166,6 @@ function PurchasesSection({
               PURCHASE_COLS.date,
               PURCHASE_COLS.item,
               PURCHASE_COLS.type,
-              PURCHASE_COLS.status,
               PURCHASE_COLS.platform,
               PURCHASE_COLS.receipt,
               PURCHASE_COLS.amount,
@@ -1274,7 +1177,6 @@ function PurchasesSection({
               <th className="no-sort">Date</th>
               <th className="no-sort">Item</th>
               <th className="no-sort">Purchase Type</th>
-              <th className="no-sort">Status</th>
               <th className="no-sort">Platform</th>
               <th className="no-sort">Receipt</th>
               <th className="no-sort">Amount</th>
@@ -1283,23 +1185,22 @@ function PurchasesSection({
           </thead>
           <tbody>
             {rows.map((pu) => (
-              <tr key={pu.key || pu.idx}>
+              /* A refunded charge wears the shared `.task-dim` (name #7a7a7a,
+                 every other cell #404040) — every cell carries a class, which
+                 that rule keys on. */
+              <tr key={pu.key || pu.idx} className={pu.refunded ? "task-dim" : undefined}>
                 <td className="col-date">{formatDate(pu.date)}</td>
-                {/* The flag stays whole; the item name truncates before it. */}
-                <td className={`col-name${pu.companyPaid ? " has-flag" : ""}`} data-tip={pu.item}>
+                {/* The flags stay whole; the item name truncates before them. */}
+                <td className={`col-name${pu.companyPaid || pu.refunded ? " has-flag" : ""}`} data-tip={pu.item}>
                   <span className="tsk-name">{pu.item}</span>
                   {pu.companyPaid && <span className="pr-name-flag">Company Paid</span>}
+                  {pu.refunded && <span className="pr-name-flag pr-name-flag--grey">Refunded</span>}
                 </td>
-                <td>{KIND_LABEL[pu.kind]}</td>
-                <td className="col-status">{statusCell(pu)}</td>
-                <td>{pu.platform}</td>
-                <td>{pu.receiptId}</td>
-                <td>{money(pu.amount)}</td>
-                {menuItems(pu).length > 0 ? (
-                  <RowKebab onOpen={(rect) => setRowMenu({ idx: pu.idx, rect })} />
-                ) : (
-                  <td className="col-actions" />
-                )}
+                <td className="pr-col">{KIND_LABEL[pu.kind]}</td>
+                <td className="pr-col">{pu.platform}</td>
+                <td className="pr-col">{pu.receiptId}</td>
+                <td className="pr-col">{money(pu.amount)}</td>
+                <RowKebab onOpen={(rect) => setRowMenu({ idx: pu.idx, rect })} />
               </tr>
             ))}
           </tbody>
@@ -1314,61 +1215,151 @@ function PurchasesSection({
             <RowMenu rect={rowMenu.rect} items={menuItems(pu)} onClose={() => setRowMenu(null)} />
           ) : null;
         })()}
+    </ConfirmCard>
+  );
+}
 
-      {refundTarget && (
+/* ── EPA Card Orders — every physical-card order as a table (Figma 1668:1554):
+ * Certification (with the Company Paid flag), Shipping Address, Status as plain
+ * text, Ordered On, ⋮. A cancelled order is greyed and has no ⋮. The row menu
+ * (1668:1642) is a red Cancel Order while the order is received or accepted;
+ * from In production on it stays, disabled, with the reason. Cancelling never
+ * refunds: the charge is refunded from Purchases & Bills. ── */
+/* The node's columns (1668:1554 metadata: 322 / 301 / 108 / 90 of text plus
+   the 24px insets), the kebab gutter fixed. */
+const EPA_COLS = {
+  cert: 346,
+  address: 325,
+  status: 132,
+  ordered: 114,
+  actions: 40,
+};
+const EPA_TABLE_MIN = Object.values(EPA_COLS).reduce((a, b) => a + b, 0);
+
+function EpaOrdersSection({
+  orders,
+  onToast,
+}: {
+  orders: EpaCardOrder[];
+  onToast: (label: string) => void;
+}) {
+  const [rowMenu, setRowMenu] = useState<{ id: string; rect: DOMRect } | null>(null);
+  const [cancelling, setCancelling] = useState<EpaCardOrder | null>(null);
+
+  const rows = useMemo(() => [...orders].sort((a, b) => b.orderedOn.localeCompare(a.orderedOn)), [orders]);
+
+  function menuItems(o: EpaCardOrder): RowMenuItem[] {
+    const can = canCancelEpaOrder(o);
+    return [
+      {
+        label: "Cancel Order",
+        // The crossed card — the same glyph Cancel Subscription carries
+        // (1668:1642 draws Cancel Order with it).
+        icon: <MenuCardOffIcon />,
+        danger: true,
+        disabled: !can,
+        sub: can ? undefined : EPA_CANCEL_BLOCK,
+        onPick: () => setCancelling(o),
+      },
+    ];
+  }
+
+  if (orders.length === 0) {
+    return (
+      <ConfirmCard title="EPA Card Orders">
+        <p className="form-help">No EPA card ordered.</p>
+      </ConfirmCard>
+    );
+  }
+
+  return (
+    /* No count in the title — 1668:1554 reads "EPA Card Orders" alone. */
+    <ConfirmCard title="EPA Card Orders" tableBody>
+      <div
+        className="confirm-card-xscroll"
+        style={{ "--table-min": `${EPA_TABLE_MIN}px` } as CSSProperties}
+      >
+        <table className="table sch-table">
+          <TableCols
+            data={[EPA_COLS.cert, EPA_COLS.address, EPA_COLS.status, EPA_COLS.ordered]}
+            trail={[EPA_COLS.actions]}
+          />
+          <thead>
+            <tr>
+              <th className="no-sort">Certification</th>
+              <th className="no-sort">Shipping Address</th>
+              <th className="no-sort">Status</th>
+              <th className="no-sort">Ordered On</th>
+              <th className="no-sort col-actions" aria-label="Actions" />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((o) => {
+              const cancelled = o.status === "Cancelled";
+              return (
+                <tr key={o.id} className={cancelled ? "task-dim" : undefined}>
+                  <td className={`col-name${o.companyPaid ? " has-flag" : ""}`} data-tip={o.certification}>
+                    <span className="tsk-name">{o.certification}</span>
+                    {o.companyPaid && <span className="pr-name-flag">Company Paid</span>}
+                  </td>
+                  {/* The address wraps onto a second line rather than
+                      truncating (1668:1554's canceled row). */}
+                  <td className="pr-col pr-col--wrap">{o.shippingAddress}</td>
+                  <td className="pr-col">{o.status}</td>
+                  <td className="col-date">{formatDate(o.orderedOn)}</td>
+                  {cancelled ? (
+                    <td className="col-actions" />
+                  ) : (
+                    <RowKebab onOpen={(rect) => setRowMenu({ id: o.id, rect })} />
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {rowMenu &&
+        (() => {
+          const o = rows.find((r) => r.id === rowMenu.id);
+          return o ? (
+            <RowMenu rect={rowMenu.rect} items={menuItems(o)} onClose={() => setRowMenu(null)} />
+          ) : null;
+        })()}
+
+      {/* The stacked double confirm every destructive action gets. Its copy
+          says what cancelling does NOT do: refund. */}
+      {cancelling && (
         <PrmModal
-          title="Refund Purchase?"
-          cancelLabel="Keep Charge"
-          confirmLabel={`Refund ${money(refundTarget.amount)}`}
-          onCancel={() => setRefundTarget(null)}
+          title="Cancel EPA Card Order?"
+          cancelLabel="Keep Order"
+          confirmLabel="Cancel Order"
+          danger
+          doubleConfirm={
+            <>
+              The <strong>{cancelling.certification}</strong> card ordered on{" "}
+              <strong>{formatDate(cancelling.orderedOn)}</strong> will not be produced or shipped.
+              The user is not refunded by this — issue the refund from Purchases &amp; Bills.
+            </>
+          }
+          onCancel={() => setCancelling(null)}
           onConfirm={() => {
-            // Shared with every tab; a refunded Certification takes its Award.
-            refundPurchase(refundTarget.key);
-            setRefundTarget(null);
-            onToast("Purchase Refunded");
+            cancelEpaOrder(cancelling.id);
+            setCancelling(null);
+            onToast("Order Cancelled");
           }}
         >
           <p className="prm-content">
-            This refunds <strong>{money(refundTarget.amount)}</strong> for{" "}
-            <strong>{refundTarget.item}</strong>.
+            This cancels the <strong>{cancelling.certification} Physical Card</strong> ordered on{" "}
+            <strong>{formatDate(cancelling.orderedOn)}</strong>. The card will not be produced or
+            shipped.
           </p>
           <p className="prm-content">
-            The {refundTarget.receiptId} charge is returned to the original {refundTarget.platform}{" "}
-            payment method.
+            Cancelling does not refund the user. The charge stays in Purchases &amp; Bills, where the
+            refund is issued.
           </p>
         </PrmModal>
       )}
     </ConfirmCard>
   );
-}
-
-/* Status cells use the shared table pill set (Figma 109:1237) — the td's
-   .col-status class is what re-enables their chrome past the plain-text rule. */
-function certStatusPill(pu: Purchase) {
-  if (!pu.consumable)
-    return <span className="co-status-pill co-status-pill--green">Lifetime Access</span>;
-  // Consumables never expire: access is Active until an admin revokes it.
-  const when = pu.revokedOn ? formatDate(pu.revokedOn) : "";
-  if (pu.certAccess === "Active")
-    return <span className="co-status-pill co-status-pill--green">Active</span>;
-  if (pu.certAccess === "Revoked")
-    return (
-      <span className="co-status-pill co-status-pill--red">
-        {when ? `Revoked · ${when}` : "Revoked"}
-      </span>
-    );
-  return null;
-}
-
-function attemptStatusPill(pu: Purchase) {
-  switch (pu.attemptState) {
-    case "Available":
-      return <span className="co-status-pill co-status-pill--green">Available</span>;
-    case "In Progress":
-      return <span className="co-status-pill co-status-pill--yellow">In Progress</span>;
-    case "Completed":
-      return <span className="co-status-pill co-status-pill--grey">Used · Completed</span>;
-    default:
-      return null;
-  }
 }

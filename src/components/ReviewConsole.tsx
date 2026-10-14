@@ -78,23 +78,12 @@ function shortDate(iso: string): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-/** "22nd July 2025" — the queue table's submitted-on format (Figma 263:1926). */
+/** The queue table's submitted-on stamp — "Jul 22, 2025", the app's one date
+ *  shape (the user, 2026-10-13; 263:1926 drew "22nd July 2025"). */
 function longDate(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
   if (Number.isNaN(d.getTime())) return iso;
-  const day = d.getDate();
-  const tens = day % 100;
-  const suffix =
-    tens >= 11 && tens <= 13
-      ? "th"
-      : day % 10 === 1
-      ? "st"
-      : day % 10 === 2
-      ? "nd"
-      : day % 10 === 3
-      ? "rd"
-      : "th";
-  return `${day}${suffix} ${d.toLocaleDateString("en-US", { month: "long" })} ${d.getFullYear()}`;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 
@@ -151,7 +140,7 @@ export function ReviewConsole({
   queue,
   initialId,
   onExit,
-  onRenameUser,
+  onNavigate,
 }: {
   /** The table's filtered + sorted submissions — becomes the review queue. */
   queue: TaskSubmission[];
@@ -160,9 +149,9 @@ export function ReviewConsole({
    * `toast` is the verdict toast when the exit IS the last submit, for the
    * table to show on arrival. */
   onExit: (toast?: string) => void;
-  /** Renamed from the submitter's user-details card — the queue owns the list,
-   * so the new name comes back down through `queue`. */
-  onRenameUser?: (userId: string, name: string) => void;
+  /** Told each time the console moves to another submission (Skip, Submit &
+   *  Next) — the page keeps the URL on the open submission. */
+  onNavigate?: (id: string) => void;
 }) {
   const [currentId, setCurrentId] = useState(initialId);
   const [viewAttempt, setViewAttempt] = useState<number | null>(null); // 0-based chip; null = current
@@ -280,13 +269,15 @@ export function ReviewConsole({
     setCurrentId(id);
     setViewAttempt(null);
     setMediaIndex(0);
+    onNavigate?.(id);
   }
 
   /* NEXT vs PENDING — the console's general rule (user, 2026-10-08):
      - Next (Skip, and Submit & Next) steps to the very next row of the queue,
        whatever its status — read-only, already graded, no grading needed. On
-       the queue's last row Skip becomes Back (to the table); it is never
-       hidden or disabled.
+       the queue's last row Skip is hidden (spec review 2026-10-09): the
+       footer's Back is the only way out, and a grade there still returns to
+       the table.
      - The "· n Pending" count only counts the rows after this one that still
        wait on a review — the same `isPendingReview` test the sidebar badge and
        run cards use, read through the shared review store. So "Skip to Next ·
@@ -336,11 +327,10 @@ export function ReviewConsole({
   }
 
   /* No toast (user, 2026-10-07) — the screen changing is the feedback. On the
-     last row there is nothing to skip to, so the same button (and N) goes
-     back to the table. */
+     last row there is nothing to skip to: the button is hidden and N does
+     nothing. */
   function doSkip() {
     if (nextId) goto(nextId);
-    else onExit();
   }
 
   /* ── keyboard shortcuts (latest-state via ref so the listener binds once) ── */
@@ -442,7 +432,7 @@ export function ReviewConsole({
               <div className="rvc-pagehead-id">
                 {/* Page Header + Button (Figma 1441:1859): the title is plain
                     text; only the 16px open-in-new-tab icon 8px after it opens
-                    the Task's brief, and only the icon hovers (#a8a8a8 → #fff). */}
+                    the Task's Pre-Submission Screen, and only the icon hovers (#a8a8a8 → #fff). */}
                 <h1 className="tasks-title rvc-headtitle">
                   Task: {sub.taskName}
                   {taskRecord && (
@@ -450,8 +440,8 @@ export function ReviewConsole({
                       type="button"
                       className="rvc-headicon"
                       onClick={() => openInNewTab(`taskBrief=${taskRecord.id}`)}
-                      aria-label="Open this Task's brief in a new tab"
-                      title="View this Task's Instructions, Materials Required and the Reference Files uploaded"
+                      aria-label="Open this Task's Pre-Submission Screen in a new tab"
+                      title="View the Pre-Submission Screen a user sees before attempting this Task"
                     >
                       <RowExternalLinkIcon />
                     </button>
@@ -459,19 +449,11 @@ export function ReviewConsole({
                 </h1>
                 <div className="tasks-subtitle">
                   {/* Hovering the name peeks at the learner's details (Figma
-                      436:572); clicking still opens their full profile. */}
+                      436:572) — read-only here, no rename (spec review
+                      2026-10-09); clicking still opens their full profile. */}
                   <UserDetailsHover
                     user={sub}
                     onOpenProfile={(id) => openInNewTab(`profile=${id}`)}
-                    // Left undefined when the queue can't rename — that's what
-                    // hides the card's pencil.
-                    onRenameUser={
-                      onRenameUser &&
-                      ((userId, name) => {
-                        onRenameUser(userId, name);
-                        showToast("Name Updated");
-                      })
-                    }
                   >
                     <button
                       className="rvc-headlink"
@@ -797,24 +779,18 @@ export function ReviewConsole({
               Back
             </button>
             <div className="rvc-foot-actions">
-              {/* Skip prints its own N keycap now (756:3836), so it no longer
-                  needs the hover hint that used to name the shortcut. It walks
-                  every row, even at "0 Pending" (NEXT vs PENDING, above), and
-                  reads "Back" on the queue's last one. On a read-only screen
-                  it is the footer's only button. */}
-              <button className="btn-save-draft rvc-skip" onClick={doSkip}>
-                <span className="rvc-skip-label">
-                  {nextId ? (
-                    <>
-                      Skip to Next{" "}
-                      <span className="rvc-skip-count">· {pendingCount} Pending</span>
-                    </>
-                  ) : (
-                    "Back"
-                  )}
-                </span>
-                <span className="cta-kbd">N</span>
-              </button>
+              {/* Skip prints its own N keycap (756:3836). It walks every row,
+                  even at "0 Pending" (NEXT vs PENDING, above), and is hidden
+                  on the queue's last one. */}
+              {nextId && (
+                <button className="btn-save-draft rvc-skip" onClick={doSkip}>
+                  <span className="rvc-skip-label">
+                    Skip to Next{" "}
+                    <span className="rvc-skip-count">· {pendingCount} Pending</span>
+                  </span>
+                  <span className="cta-kbd">N</span>
+                </button>
+              )}
               {isPast ? (
                 <button
                   className="btn-save-draft rvc-back-current"

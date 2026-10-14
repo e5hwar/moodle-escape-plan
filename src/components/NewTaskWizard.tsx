@@ -24,10 +24,11 @@ import { MultiSelect } from "./NewCompanyWizard";
 import { questions as QUESTION_BANK, supportsGrading, type Question } from "../data/questionBank";
 import { SelectQuestionsModal } from "./SelectQuestionsModal";
 import { NewQuestionWizard, type Crumb } from "./NewQuestionWizard";
-import { PrmModal } from "./PrmModal";
+import { NO_CHANGES_TIP, PrmModal } from "./PrmModal";
 import { draftKey, useLeaveGuard } from "./LeaveGuard";
 import { CheckRow } from "./Filters";
 import { CompletionCriteriaGate, LockedField, sampleCompletionCount } from "./CriteriaLock";
+import { skills as seedSkills, type Skill } from "../data/skills";
 
 const TYPE_LABEL: Record<TaskTypeKey, string> = {
   xapi: "xAPI",
@@ -334,7 +335,7 @@ const INITIAL_DATA: WizardData = {
   hoReviewerChecklistEs: "",
   hoProjectDescLimit: "1000",
   hoMediaMax: "3",
-  hoMediaTypes: { images: true, videos: true, audio: false },
+  hoMediaTypes: { images: true, videos: true, audio: true },
   hoCompletion: "reviewer_grade",
   hoPassingGrade: "5",
   /* Discoverable is a Hands-On setting; every other type is never
@@ -450,12 +451,21 @@ function stepsForType(type: TaskTypeKey): StepDef[] {
    Certification) and the auto-unlock trigger picker (not the Quiz itself). */
 const EditingTaskContext = createContext<Task | null>(null);
 
+/* The Skills that link the edited Task (empty while creating). The Skills
+   picker only offers All-User Tasks, so while any Skill links a Hands-On Task
+   its Audience, Trade and Partnership are locked — it can't turn B2B-only
+   under a Skill. */
+const LinkedSkillsContext = createContext<Skill[]>([]);
+
 type Props = {
   taskType: TaskTypeKey;
   onClose: () => void;
   /** When set, the wizard opens in editing mode with this Task's details
    * prefilled instead of starting blank. */
   editingTask?: Task;
+  /** Every Skill on record — the live list from App; the standalone editor tab
+   *  falls back to the seed. Only read to find the Skills linking `editingTask`. */
+  skills?: Skill[];
   /** Embedding hooks — used when the Task creation UI is shown inside the
    * Certification split-screen editor. When `onPrimary` is provided, the footer's
    * create action calls it (with the Task's current name, its Requires
@@ -753,8 +763,12 @@ function poolProblem(pools: RandomPool[], statics: StaticQuestion[] = []): strin
   return null;
 }
 
-export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, onPrimary, onCreate, onSave, onQuestionCreated }: Props) {
+export function NewTaskWizard({ taskType, onClose, editingTask, skills = seedSkills, primaryLabel, onPrimary, onCreate, onSave, onQuestionCreated }: Props) {
   const isEditing = !!editingTask;
+  const linkedSkills = useMemo(
+    () => (editingTask ? skills.filter((s) => s.taskIds.includes(editingTask.id)) : []),
+    [skills, editingTask],
+  );
   const [step, setStep] = useState(0);
   const [data, setData] = useState<WizardData>(() => buildInitialData(taskType, editingTask));
   // Completion criteria (passing grades, completion criterion) start locked when
@@ -991,7 +1005,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
   const blockedTip = canSave
     ? undefined
     : canPublish
-    ? "No changes to save"
+    ? NO_CHANGES_TIP
     : [
         "Fill in every required field to publish:",
         ...gaps.map(
@@ -1113,6 +1127,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
 
   return (
     <EditingTaskContext.Provider value={editingTask ?? null}>
+    <LinkedSkillsContext.Provider value={linkedSkills}>
     <div className="wizard">
       <div className="wizard-body">
         <aside className="wizard-nav">
@@ -1322,6 +1337,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, primaryLabel, on
           document.body,
         )}
     </div>
+    </LinkedSkillsContext.Provider>
     </EditingTaskContext.Provider>
   );
 }
@@ -1443,7 +1459,7 @@ const TASK_TYPE_OF: Record<TaskTypeKey, TaskType> = {
 };
 
 const today = () =>
-  new Date().toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
+  new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
 /** Turn the finished wizard state into a Task row. The caller assigns the id.
  *  `otherTags` are the edited record's non-audience tags, kept as they were. */
@@ -2235,9 +2251,16 @@ const AUDIENCE_ALL = "All Users";
 const AUDIENCE_B2B = "B2B Companies Only";
 const AUDIENCE_OPTIONS = [AUDIENCE_ALL, AUDIENCE_B2B] as const;
 
+/** "A", "A and B", "A, B and C". */
+function listNames(names: string[]): string {
+  return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
 function ContentTagsSection({ data, update }: StepProps) {
   // Product Config's saved B2B Management lists, live.
   const { trades, partnerships } = useB2BConfig();
+  const linkedSkills = useContext(LinkedSkillsContext);
+  const skillLocked = linkedSkills.length > 0;
   const valuesOf = (type: ContentTagType) =>
     data.contentTags.filter((t) => t.type === type).map((t) => t.value);
 
@@ -2266,8 +2289,21 @@ function ContentTagsSection({ data, update }: StepProps) {
   const lockedB2B = valuesOf("trade").length > 0 || valuesOf("partnership").length > 0;
   const audience = audienceOf(contentTagsToTags(data.contentTags)) as (typeof AUDIENCE_OPTIONS)[number];
 
+  /* Linked to a Skill: all three fields sit under the shared Locked Field
+     (1360:1883) — the Quiz Structure lock's format, no unlock action; the way
+     out is removing the Task from the Skills. Archived Skills count: they
+     still link the Task and can be unarchived. */
+  const one = linkedSkills.length === 1;
   return (
-    <>
+    <div className="ct-skill-lock">
+    <LockedField
+      locked={skillLocked}
+      sub={
+        `This Task is linked to the ${one ? "Skill" : "Skills"} ${listNames(linkedSkills.map((s) => s.name))}. ` +
+        "Skills can only link Tasks for All Users, so Audience, Trade and Partnership can't be changed. " +
+        `To change them, remove this Task from ${one ? "that Skill" : "those Skills"} first.`
+      }
+    >
       <div className="form-group">
         <label className="form-label">Audience</label>
         <SelectField
@@ -2292,6 +2328,7 @@ function ContentTagsSection({ data, update }: StepProps) {
           options={trades}
           value={valuesOf("trade")}
           onChange={(v) => setValues("trade", v)}
+          disabled={skillLocked}
           placeholder="Select Trades"
           searchPlaceholder="Search Trades..."
         />
@@ -2308,6 +2345,7 @@ function ContentTagsSection({ data, update }: StepProps) {
           options={partnerships}
           value={valuesOf("partnership")}
           onChange={(v) => setValues("partnership", v)}
+          disabled={skillLocked}
           placeholder="Select Partnerships"
           searchPlaceholder="Search Partnerships..."
         />
@@ -2317,7 +2355,8 @@ function ContentTagsSection({ data, update }: StepProps) {
           company can see it, partnered or not.
         </p>
       </div>
-    </>
+    </LockedField>
+    </div>
   );
 }
 
@@ -2388,8 +2427,8 @@ function QuizStructureStep({
   /* Two is the floor. Removing still works below it (Figma list item 36,
      1570:3366): the card goes red and the label row says why, at once. */
   const belowFloor = data.sections.length < MIN_SECTIONS;
-  // Order is structural too: an existing Quiz's Sections can't be reordered
-  // under past attempts, so the grips go inert with add/remove.
+  // Re-ordering stays open on an existing Quiz (spec review 2026-10-09):
+  // order doesn't re-score past attempts, so only add/remove go inert.
   const drag = useRowDrag(data.sections, (sections) => update({ sections }), ".qsec-row");
 
   const removeSection = (id: string) => {
@@ -2413,7 +2452,7 @@ function QuizStructureStep({
             "Adding or removing Sections, or switching between a single block and Sections, " +
             "can't be re-evaluated against past attempts, so the structure is fixed once a Quiz " +
             "is created. " +
-            (sectioned ? "You can still rename Sections below. " : "") +
+            (sectioned ? "You can still rename and re-order Sections below. " : "") +
             "To change it, create a new Quiz Task instead."
           }
         >
@@ -2448,7 +2487,8 @@ function QuizStructureStep({
 
       {/* No completion gate here: pass marks live on Grading & Completion, so
           this table is names and order only. Its structural controls (add /
-          remove) stay disabled on an existing Quiz via `locked`. */}
+          remove) stay disabled on an existing Quiz via `locked`; the grips
+          and names stay live. */}
         {sectioned && (
           <div className="form-group" onBlur={leave(() => { touch?.("sections"); touch?.("sectionName"); })}>
             <label className="form-label">
@@ -2494,12 +2534,9 @@ function QuizStructureStep({
               {data.sections.map((sec, i) => {
                 const { className: dragClass, ...rowDrag } = drag.rowProps(sec.id);
                 return (
-                <div className={`qsec-row${dragClass}`} key={sec.id} {...(locked ? {} : rowDrag)}>
+                <div className={`qsec-row${dragClass}`} key={sec.id} {...rowDrag}>
                   <span className="qsec-ord">
-                    <span
-                      className={`qsec-grip${locked ? " is-disabled" : ""}`}
-                      {...(locked ? { "aria-disabled": true } : drag.gripProps(sec.id))}
-                    >
+                    <span className="qsec-grip" {...drag.gripProps(sec.id)}>
                       <MoveIcon />
                     </span>
                     <span className="qsec-num">{i + 1}</span>
@@ -2605,7 +2642,6 @@ function QuizQuestionsStep({ data, update, host, missing }: StepProps & { host: 
                 pools={s.randomPools}
                 onChange={(patch) => updateSection(s.id, patch)}
               />
-              {s.nameEs && <p className="form-help">{s.nameEs}</p>}
             </div>
           ))
         )
@@ -3142,6 +3178,7 @@ function QuestionGroupEditor({
         <SelectQuestionsModal
           mode={picker.mode}
           editingPool={picker.mode === "pool" && !!picker.poolId}
+          lockedFlag="Added to Quiz"
           excludeIds={[
             ...usedElsewhere,
             ...staticQuestions.map((q) => q.id),
