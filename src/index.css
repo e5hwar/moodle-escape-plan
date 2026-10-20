@@ -11988,10 +11988,16 @@ body:has(.pm-overlay) .pl-copied-toast {
     linear-gradient(rgba(122, 122, 122, 0.1), rgba(122, 122, 122, 0.1)),
     #0d0d0d;
 }
+/* 1582:1484 — the view swap (Certifications only) at the left, top-aligned
+   with the close glyph, which keeps the right edge on its own. */
 .pp-side-bar {
   flex-shrink: 0;
   display: flex;
-  justify-content: flex-end;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.pp-side-bar .prm-close {
+  margin-left: auto;
 }
 /* 1582:1486 — 40px round the phone. Auto margins centre it without
    clipping its left edge once the column is narrower than it. */

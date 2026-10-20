@@ -1192,8 +1192,9 @@ function SetupCard({
           </button>
         </div>
         <div className="cs-progress" aria-hidden="true">
-          {status.list.map((s) => (
-            <span key={s.key} className={`cs-seg${status.steps[s.key].done ? " cs-seg--done" : ""}`} />
+          {/* A count, not a map of the steps: it always fills from the left. */}
+          {status.list.map((s, i) => (
+            <span key={s.key} className={`cs-seg${i < status.done ? " cs-seg--done" : ""}`} />
           ))}
         </div>
         <p className="cs-help">
@@ -1313,7 +1314,7 @@ function CertDrawer({
         { count: "—", title: "Active", sub: "Not live yet" },
       ];
   return (
-    <PreviewPanel image={cert.thumbnail ?? certThumbPlaceholder} title={cert.name} subtitle={cert.description} onMore={onMore} stats={stats} lead={setupCard} onClose={onClose}>
+    <PreviewPanel image={cert.thumbnail ?? certThumbPlaceholder} title={cert.name} subtitle={cert.description} onMore={onMore} stats={stats} lead={setupCard} pathView onClose={onClose}>
       <CertificationSummary cert={cert} contentLinks={contentLinks} />
     </PreviewPanel>
   );

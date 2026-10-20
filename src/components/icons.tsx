@@ -1150,6 +1150,16 @@ export const SetupCheckIcon = ({ size = 12 }: { size?: number }) => (
   </svg>
 );
 
+/* Layout grid on a 14px box — the preview panel's view swap (1741:1759). The
+   export's 11.67px group sits at a 1.17px inset; the path data is untouched. */
+export const PreviewViewIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.16667">
+    <g transform="translate(1.16667 1.16667)">
+      <path d="M11.0833 4.66667V11.0833H0.583333V4.66667M11.0833 4.66667H0.583333M11.0833 4.66667V0.583333H0.583333V4.66667M11.0833 4.66667H5.83333M0.583333 4.66667H5.83333M5.83333 4.66667V11.0833" />
+    </g>
+  </svg>
+);
+
 /* Open folder — "View All Tasks" (node 974:1063). The asset draws its group at
    an inset rather than in the full 16px frame, so a translate places it; the
    path data itself is the export's, untouched. */

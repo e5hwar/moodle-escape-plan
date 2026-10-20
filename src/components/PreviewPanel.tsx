@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Accordion, AccordionRows, AccordionScope } from "./Accordion";
 import { ModalCloseIcon } from "./PrmModal";
-import { RowKebabIcon } from "./icons";
+import { PreviewViewIcon, RowKebabIcon } from "./icons";
 
 /** How long the panel takes to leave — must match `.pp-overlay--closing`. */
 const CLOSE_MS = 160;
@@ -22,7 +22,9 @@ export type PreviewStat = { count: string; title: string; sub?: string };
  *  lighter wash: the close glyph at its top right over a fixed-size empty
  *  phone shell, where the learner frames will land. That column scrolls on
  *  its own when the window is too short for the phone; the phone never
- *  shrinks.
+ *  shrinks. With `pathView` (Certifications) a quiet button at the
+ *  column's top left swaps the phone between the record's Preview and its
+ *  Path (1741:1758).
  *
  *  `role="dialog"` sits on the panel, not the fixed overlay: App.tsx finds the
  *  open modal for ⌘K by `offsetParent`, which is null on a fixed element. */
@@ -33,6 +35,7 @@ export function PreviewPanel({
   onMore,
   stats,
   lead,
+  pathView,
   children,
   onClose,
 }: {
@@ -47,6 +50,8 @@ export function PreviewPanel({
   /** A block of its own between the head and the accordions, 28px from each
    *  (the Certification Setup card, Figma 1592:2588). */
   lead?: ReactNode;
+  /** The record also has a Path — the phone can swap between the two. */
+  pathView?: boolean;
   /** The record's sections — ConfirmCards, each drawn as an accordion. */
   children: ReactNode;
   onClose: () => void;
@@ -54,6 +59,7 @@ export function PreviewPanel({
   const panelRef = useRef<HTMLDivElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const [closing, setClosing] = useState(false);
+  const [view, setView] = useState<"preview" | "path">("preview");
   const closingRef = useRef(false);
 
   const requestClose = useCallback(() => {
@@ -157,13 +163,24 @@ export function PreviewPanel({
 
           <div className="pp-side">
             <div className="pp-side-bar">
+              {pathView && (
+                <button
+                  type="button"
+                  className="btn-dialog"
+                  onClick={() => setView((v) => (v === "preview" ? "path" : "preview"))}
+                >
+                  <PreviewViewIcon />
+                  {view === "preview" ? "Switch to Path View" : "Switch to Preview"}
+                </button>
+              )}
               <button className="prm-close" onClick={requestClose} aria-label="Close">
                 <ModalCloseIcon />
               </button>
             </div>
-            {/* The learner preview's place — an empty phone until its frames land. */}
+            {/* The learner preview's (or Path's) place — an empty phone until
+                its frames land. */}
             <div className="pp-stage">
-              <div className="pp-phone" aria-hidden="true" />
+              <div className="pp-phone" data-view={view} aria-hidden="true" />
             </div>
           </div>
         </div>
