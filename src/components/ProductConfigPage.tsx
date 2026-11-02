@@ -118,7 +118,17 @@ const DEFAULT_B2B_PRICES: PriceTable<Tier> = {
 };
 
 /** `date` is ISO "YYYY-MM-DD"; it prints through the app's `formatShortDate`. */
-type ForceUpdate = { id: string; version: string; date: string };
+/** One forced update. Each platform is versioned on its own; an entry carries
+ *  at least one of the two. */
+type ForceUpdate = { id: string; ios?: string; android?: string; date: string };
+type AppPlatform = "ios" | "android";
+const APP_PLATFORMS: { key: AppPlatform; name: string }[] = [
+  { key: "ios", name: "iOS" },
+  { key: "android", name: "Android" },
+];
+/** "iOS 4.2.0 · Android 4.2.0", or just the platform the entry carries. */
+const forceUpdateLabel = (h: ForceUpdate) =>
+  APP_PLATFORMS.filter((p) => h[p.key]).map((p) => `${p.name} ${h[p.key]}`).join(" · ");
 
 type BilingualDoc = { en: string; es: string };
 
@@ -173,9 +183,10 @@ export type B2BValueUsage = { companies: number; tasks: number; certifications: 
 
 export const DEFAULT_PRODUCT_SETTINGS: Settings = {
   forceUpdates: [
-    { id: "fu-3", version: "4.2.0", date: "2026-06-02" },
-    { id: "fu-2", version: "4.1.3", date: "2026-04-18" },
-    { id: "fu-1", version: "4.0.0", date: "2026-01-27" },
+    { id: "fu-4", android: "4.2.1", date: "2026-07-14" },
+    { id: "fu-3", ios: "4.2.0", android: "4.2.0", date: "2026-06-02" },
+    { id: "fu-2", ios: "4.1.3", android: "4.1.2", date: "2026-04-18" },
+    { id: "fu-1", ios: "4.0.0", android: "4.0.0", date: "2026-01-27" },
   ],
   webcamFrequency: "20",
   initialTaskCount: "5",
@@ -265,8 +276,8 @@ function useEscape(onClose: () => void) {
    shared across the data columns in proportion to it. The glyph columns
    (✕, edit, open, actions) stay fixed. */
 const cw = (px: number) => ({ "--cw": px }) as React.CSSProperties;
-// Equal thirds (user): the version, its date and its status read as peers.
-const FU_COLS = { version: cw(120), date: cw(120), status: cw(120) };
+// Equal quarters (user): both versions, their date and the status read as peers.
+const FU_COLS = { ios: cw(120), android: cw(120), date: cw(120), status: cw(120) };
 const DL_COLS = { dest: cw(160), link: cw(280), login: cw(120) };
 const TAB_COLS = { name: cw(160), url: cw(360), visible: cw(64) };
 const SUP_COLS = { page: cw(160), url: cw(400) };
@@ -480,8 +491,8 @@ function ForceAppUpdateField({
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<ForceUpdate | null>(null);
 
-  function force(version: string) {
-    onChange([{ id: `fu-${Date.now()}`, version, date: todayIso() }, ...history]);
+  function force(versions: Pick<ForceUpdate, AppPlatform>) {
+    onChange([{ id: `fu-${Date.now()}`, ...versions, date: todayIso() }, ...history]);
     setAdding(false);
   }
 
@@ -493,11 +504,13 @@ function ForceAppUpdateField({
   return (
     <div className="form-group">
       <label className="form-label">Force App Update</label>
-      {/* History is newest-first, and the newest entry is the version being
-          forced — so the log IS the current state: its first row is Active. */}
+      {/* History is newest-first, and each platform's newest version is the one
+          being forced — so the log IS the current state. A row can be Active
+          for one platform while a newer row carries only the other. */}
       <div className="qsec ct-prop">
         <div className="qsec-hd">
-          <span className="ct-col" style={FU_COLS.version}>VERSION</span>
+          <span className="ct-col" style={FU_COLS.ios}>IOS VERSION</span>
+          <span className="ct-col" style={FU_COLS.android}>ANDROID VERSION</span>
           <span className="ct-col" style={FU_COLS.date}>ENABLED ON</span>
           <span className="ct-col pc-col-status" style={FU_COLS.status}>STATUS</span>
           <span className="qsec-x" aria-hidden />
@@ -509,33 +522,41 @@ function ForceAppUpdateField({
           </div>
         )}
 
-        {history.map((h, i) => (
-          <div className="qsec-row" key={h.id}>
-            <span className="ct-col pc-strong" style={FU_COLS.version}>{h.version}</span>
-            <span className="ct-col pc-muted" style={FU_COLS.date}>{formatShortDate(h.date)}</span>
-            <span className="ct-col pc-col-status" style={FU_COLS.status}>
-              {i === 0 ? (
-                <span className="co-status-pill co-status-pill--green">Active</span>
-              ) : (
-                <span className="pc-muted">—</span>
-              )}
-            </span>
-            {/* Only the Active version can be removed (the one before it then
-                takes over); older entries are history, so their ✕ cell is an
-                empty spacer that keeps the columns aligned. */}
-            {i === 0 ? (
+        {history.map((h) => {
+          const activeFor = activePlatforms(history, h);
+          return (
+            <div className="qsec-row" key={h.id}>
+              {APP_PLATFORMS.map((p) => (
+                <span
+                  key={p.key}
+                  className={`ct-col ${h[p.key] ? "pc-strong" : "pc-muted"}`}
+                  style={FU_COLS[p.key]}
+                >
+                  {h[p.key] ?? "—"}
+                </span>
+              ))}
+              <span className="ct-col pc-muted" style={FU_COLS.date}>{formatShortDate(h.date)}</span>
+              <span className="ct-col pc-col-status" style={FU_COLS.status}>
+                {activeFor.length === 0 ? (
+                  <span className="pc-muted">—</span>
+                ) : (
+                  <span className="co-status-pill co-status-pill--green">
+                    {activeFor.length === APP_PLATFORMS.length
+                      ? "Active"
+                      : `Active on ${activeFor.map((p) => p.name).join(" & ")}`}
+                  </span>
+                )}
+              </span>
               <button
                 className="qsec-x"
-                aria-label={`Remove force update ${h.version}`}
+                aria-label={`Remove force update ${forceUpdateLabel(h)}`}
                 onClick={() => setRemoving(h)}
               >
                 <RowCloseIcon />
               </button>
-            ) : (
-              <span className="qsec-x" aria-hidden />
-            )}
-          </div>
-        ))}
+            </div>
+          );
+        })}
 
         <div className="qsec-foot">
           <button className="qsec-add" onClick={() => setAdding(true)}>
@@ -545,14 +566,13 @@ function ForceAppUpdateField({
         </div>
       </div>
       <p className="form-help">
-        Force learners on older app versions to update. Enter the minimum required version —
-        users below it are prompted to update before they can continue.
+        Force learners on older app versions to update. Enter the minimum required version for iOS,
+        Android or both — users below it are prompted to update before they can continue.
       </p>
 
       {adding && (
         <ForceUpdateModal
-          existing={history.map((h) => h.version)}
-          active={history[0]?.version}
+          history={history}
           onForce={force}
           onCancel={() => setAdding(false)}
         />
@@ -569,6 +589,13 @@ function ForceAppUpdateField({
   );
 }
 
+/** The platform's newest entry — the version currently forced on it. */
+const activeEntry = (history: ForceUpdate[], p: AppPlatform) => history.find((h) => h[p]);
+
+/** The platforms this entry is the Active one for. */
+const activePlatforms = (history: ForceUpdate[], entry: ForceUpdate) =>
+  APP_PLATFORMS.filter((p) => activeEntry(history, p.key)?.id === entry.id);
+
 const VERSION_RE = /^\d+(\.\d+)*$/;
 
 /** Compares dotted versions part by part ("4.10.0" > "4.9.2"; "4.2" = "4.2.0"). */
@@ -582,67 +609,83 @@ function compareVersions(a: string, b: string): number {
   return 0;
 }
 
+/** What's wrong with a typed version for one platform, if anything. Blank is
+ *  fine here — the modal separately needs at least one platform filled. */
+function versionError(v: string, history: ForceUpdate[], p: AppPlatform): string | null {
+  if (!v) return null;
+  if (!VERSION_RE.test(v)) return "Use numbers separated by dots, e.g. 4.3.0.";
+  if (history.some((h) => h[p] === v)) return `Version ${v} is already in the log.`;
+  const active = activeEntry(history, p)?.[p];
+  if (active && compareVersions(v, active) <= 0) return `Must be higher than the Active version, ${active}.`;
+  return null;
+}
+
 function ForceUpdateModal({
-  existing,
-  active,
+  history,
   onForce,
   onCancel,
 }: {
-  existing: string[];
-  /** The version currently forced — a new one must be higher. */
-  active?: string;
-  onForce: (version: string) => void;
+  history: ForceUpdate[];
+  onForce: (versions: Pick<ForceUpdate, AppPlatform>) => void;
   onCancel: () => void;
 }) {
-  const [version, setVersion] = useState("");
-  const v = version.trim();
-  const isFormat = VERSION_RE.test(v);
-  const isDuplicate = isFormat && existing.includes(v);
-  const isLower = isFormat && !isDuplicate && !!active && compareVersions(v, active) <= 0;
-  const isValid = isFormat && !isDuplicate && !isLower;
+  const [values, setValues] = useState<Record<AppPlatform, string>>({ ios: "", android: "" });
+  const typed = { ios: values.ios.trim(), android: values.android.trim() };
+  const errors = {
+    ios: versionError(typed.ios, history, "ios"),
+    android: versionError(typed.android, history, "android"),
+  };
+  const isEmpty = !typed.ios && !typed.android;
+  const isValid = !isEmpty && !errors.ios && !errors.android;
 
   useEscape(onCancel);
 
   function submit() {
-    if (isValid) onForce(v);
+    if (isValid) onForce({ ios: typed.ios || undefined, android: typed.android || undefined });
   }
 
   return (
     <PrmModal
       title="Force New Version"
-      description="Users below the minimum required version are prompted to update before they can continue."
+      description="Enter a minimum version for iOS, Android or both. Users below it are prompted to update before they can continue."
       confirmLabel="Force Update"
       confirmDisabled={!isValid}
+      confirmTip={isEmpty ? "Enter an iOS or Android version" : undefined}
       onCancel={onCancel}
       onConfirm={submit}
     >
       <div className="prm-stack">
-        <div className="prm-field">
-          <span className="prm-label">
-            Minimum Version<span className="prm-req">*</span>
-            {v && !isFormat ? (
-              <span className="form-label-error">Use numbers separated by dots, e.g. 4.3.0.</span>
-            ) : isDuplicate ? (
-              <span className="form-label-error">Version {v} is already in the log.</span>
-            ) : isLower ? (
-              <span className="form-label-error">Must be higher than the Active version, {active}.</span>
-            ) : null}
-          </span>
-          <input
-            autoFocus
-            className={`form-input${(v && !isFormat) || isDuplicate || isLower ? " has-error" : ""}`}
-            placeholder="e.g. 4.3.0"
-            value={version}
-            onChange={(e) => setVersion(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") submit();
-            }}
-            spellCheck={false}
-          />
-        </div>
+        {APP_PLATFORMS.map((p, i) => (
+          <div className="prm-field" key={p.key}>
+            <span className="prm-label">
+              {p.name} Minimum Version
+              {errors[p.key] && <span className="form-label-error">{errors[p.key]}</span>}
+            </span>
+            <input
+              autoFocus={i === 0}
+              className={`form-input${errors[p.key] ? " has-error" : ""}`}
+              placeholder={`e.g. ${nextVersionHint(activeEntry(history, p.key)?.[p.key])}`}
+              aria-label={`${p.name} Minimum Version`}
+              value={values[p.key]}
+              onChange={(e) => setValues((v) => ({ ...v, [p.key]: e.target.value }))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") submit();
+              }}
+              spellCheck={false}
+            />
+          </div>
+        ))}
       </div>
     </PrmModal>
   );
+}
+
+/** A plausible next version to show as the placeholder: the Active one with
+ *  its minor part bumped ("4.2.1" → "4.3.0"). */
+function nextVersionHint(active?: string): string {
+  if (!active) return "4.3.0";
+  const [major = 0, minor = 0] = active.split(".").map(Number);
+  return `${major}.${minor + 1}.0`;
 }
 
 function RemoveForceUpdateModal({
@@ -658,8 +701,10 @@ function RemoveForceUpdateModal({
 }) {
   useEscape(onCancel);
 
-  // Only the Active (newest) entry is removable; the next one takes over.
-  const fallback = history[history.findIndex((h) => h.id === entry.id) + 1];
+  // Any entry can go. Where it's the Active one for a platform, that
+  // platform's previous forced version takes over; older entries are history.
+  const activeFor = activePlatforms(history, entry);
+  const rest = history.filter((h) => h.id !== entry.id);
 
   return (
     <PrmModal
@@ -670,14 +715,26 @@ function RemoveForceUpdateModal({
       onConfirm={onRemove}
     >
       <p className="prm-content">
-        Remove force update <strong>{entry.version}</strong>?{" "}
-        {fallback ? (
-          <>
-            Users will fall back to the previous forced version{" "}
-            <strong>{fallback.version}</strong>.
-          </>
+        Remove force update <strong>{forceUpdateLabel(entry)}</strong>?{" "}
+        {activeFor.length === 0 ? (
+          <>It isn't Active on any platform, so no learner is affected.</>
         ) : (
-          <>No version will be forced after this.</>
+          activeFor.map((p, i) => {
+            const fallback = activeEntry(rest, p.key)?.[p.key];
+            return (
+              <span key={p.key}>
+                {i > 0 && " "}
+                {fallback ? (
+                  <>
+                    {p.name} users will fall back to the previous forced version{" "}
+                    <strong>{fallback}</strong>.
+                  </>
+                ) : (
+                  <>No {p.name} version will be forced after this.</>
+                )}
+              </span>
+            );
+          })
         )}
       </p>
     </PrmModal>
@@ -1273,13 +1330,13 @@ function describeChanges(
   for (const h of draft.forceUpdates)
     if (!savedIds.has(h.id))
       out.push({
-        key: `fu-${h.id}`, subject: `Force App Update · ${h.version}`, action: "Added",
+        key: `fu-${h.id}`, subject: `Force App Update · ${forceUpdateLabel(h)}`, action: "Added",
         onDrop: revert("forceUpdates", (d) => d.filter((x) => x.id !== h.id)),
       });
   for (const h of saved.forceUpdates)
     if (!draftIds.has(h.id))
       out.push({
-        key: `fu-${h.id}`, subject: `Force App Update · ${h.version}`, action: "Removed",
+        key: `fu-${h.id}`, subject: `Force App Update · ${forceUpdateLabel(h)}`, action: "Removed",
         onDrop: revert("forceUpdates", (d, sv) => {
           const keep = new Set([...d.map((x) => x.id), h.id]);
           return [...d.filter((x) => !savedIds.has(x.id)), ...sv.filter((x) => keep.has(x.id))];
