@@ -556,7 +556,7 @@ export function TasksPage({
               <Filters filters={filters} setFilters={setFilters} />
             </div>
 
-            <table ref={head.theadRef} className="table table-head table--small">
+            <table ref={head.theadRef} className="table table-head">
               <ColGroup cols={visibleCols} />
               <thead>
                 <tr>
@@ -585,7 +585,7 @@ export function TasksPage({
             </table>
 
             <div className="tasks-scroll">
-              <table className="table table-body table--small">
+              <table className="table table-body">
                 <ColGroup cols={visibleCols} />
                 <tbody>
                   {paged.map((task) => (

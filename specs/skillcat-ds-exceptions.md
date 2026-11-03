@@ -21,14 +21,19 @@ Everything else is Compact — including the wizard form controls. **Validated a
 
 **Field composite, checked against the DS Field component (17012:470) and the LMS "Time + unit" example (18261:43337) on 2026-11-02:** label Fira Sans Bold 16 / 20 #A8A8A8 with 8 above the control; control 40 tall, #404040 1px border, radius 8, value / placeholder IBM Plex Mono 16 / 24, placeholder #8A8A8A, text 12 from the edge; the unit addon is a hairline divider, the unit in white mono and a 16 chevron inside the same shell; Field / Message (help text) Fira Sans Regular 14 at line-height 1.3, grey, 8 below the control. All of that is what the stylesheet draws. The one copy fix was the placeholder: "Enter Approx. Time..." was coming out as "Enter approx. Time..." because the sentence-case helper read the abbreviation's period as the end of a sentence; it now knows the common abbreviations (approx., e.g., min., max., st., …), keeps brand and proper-noun capitals mid-sentence (Stripe, Apple, Google Play, Android, English / Spanish, days, months, United States) and writes a trailing "..." as the DS's "…" — so it reads "Enter approx. time…" like the DS example.
 
-## Table size Small on list pages (Eshwar, 2026-11-03)
+## Table size Small on every 40px table (Eshwar, 2026-11-03)
 
-- The Tasks list table uses **Table size Small** (19236:4922): header and rows 40 instead of 48; cells, padding 12, 24 between columns and the hover bar are unchanged. The DS shows Small "inside a card or dialog", but Eshwar's ruling: Small is a size like Default and Tall, usable on any table, not only in cards. Opt-in class `.table--small` on the table (Tasks only so far).
+- Every `.table` uses **Table size Small** (19236:4922): header and rows 40. That matches the Play Area's 40px tables, and covers list pages, picker modals and card tables alike. Cells, the 12 padding, the 24 between columns and the hover bar are as in Default. The DS shows Small "inside a card or dialog", but Eshwar's ruling is that Small is a size like Default and Tall, usable on any table.
+- Not Small, because they aren't like the Tasks table:
+  - Spotlight (`.sp-table`, 48 head, 64 rows).
+  - The two artwork tables, Award Templates and the Card / Certificate Design picker. They keep Default's 48 head, and their 144×76 tiles set the row height.
 
-## Status labels are Compact Default everywhere (Eshwar, 2026-11-03)
+## Status labels: two sizes, mapped from the Play Area (Eshwar, 2026-11-03)
 
-- Every status pill uses **Status Label Default at Compact: 28 tall, SemiBold 14**, 8 inset, radius 8, 14 icon, tone colour on its 10% tint (17062:713 / 17013:311). This includes table cells. The DS line "Small 20 … for tags inside table cells" and the 24px pills in the DS table example are **ignored** on Eshwar's ruling. Covers `.co-status-pill` (all tones, `--sm`), the name flags (`.pr-name-flag`: Hidden / Refunded / Disabled) and the payment badge. Skills' Type pills, which were Small 20, are now 28 too.
-- Name cells that the Play Area makes `display: flex` (hidden / flagged names, Skills' icon rows) were adding 1px to their row (49 / 41). They are now drawn 1 short so every row is 48 (40 in Small).
+- The DS has **Default** (Compact 28, SemiBold 14, 8 inset, 14 icon) and **Small** (20, SemiBold 12 on 15.6, 6 inset, 12 icon), both radius 8 with the tone colour on its 10% tint (17086:18962 / 17013:311). Each pill takes the size that matches its size in the Play Area. The DS line "Small … for tags inside table cells" is **not** used to pick the size.
+  - Default: the regular `.co-status-pill` (Play Area 29/14). This covers status columns, Skills' Type, subscription and builder tags.
+  - Small: the Play Area's small pills (22/12), which are `.co-status-pill--sm` (Exam Reviews' Verified / Re-Uploaded ID), the name flags (`.pr-name-flag`: Hidden / Refunded / Disabled) and the payment badge.
+- Name cells that the Play Area makes `display: flex` (hidden / flagged names, Skills' icon rows) were adding 1px to their row (49 / 41). They are now drawn 1 short so every row stays 40.
 
 ## Copy under the SkillCat look — same as the Play Area (ruling 2026-11-03)
 
@@ -94,6 +99,18 @@ Swept every list page, every create / edit flow (each wizard step), every row-me
 **Data that was being lowercased — reverted** (the first copy pass ran these through the sentence-case helper): Spotlight titles and descriptions (preview card and queue), learner's notes on the Hands-on review, preview-panel titles and subtitles (certification / task / skill names and descriptions), names inside the Name change confirm sentences, and Question bank category names in the Categories index (now Title Case like the quick pills — data, per the rule above).
 
 **Checked and left as is:** radio cards are 46 (12 + 20 + 12 + edges — the DS Choice / Description card), toasts sit outside the 40 rule, the Manage completions ghost dot overhangs its slot by design.
+
+## Alignment sweep (2026-11-03, later)
+
+Every list page, row-menu screen, wizard step, modal, console, preview panel, Attempts, Who Paid and the Full profile, compared box by box against the Play Area: alignment inside the parent, stacked left edges that split, sibling gaps, overlaps, controls running past their parent, clipped text.
+
+**Fixed**
+- Page head on every page whose header holds only the title + summary (Content Links, Industries, Feedback, Scholarships, Pending ID re-uploads, Attempts, Who paid, Manage IDs, Question versions…): a list-head rule was also landing on the title block itself, so the title was right-aligned over the summary and the gap to the search doubled (48). Title and summary are left-aligned again, 24 to the search.
+- Setup / Industries banners: the ✕ sat 4 over "Continue Setup" / "Assign Industries" (the Play Area pulls it back 28 out of a 40 gap; this banner's gap is 24). Now 12 after the button.
+- Hands-on review: the ten Score buttons were a fixed 40 and ran 21 past the rail at 1440 ("10" over the edge). They are up to 40 and give way to fit (38 at 1440).
+- Exam review: the name sat 8 right of the "Exam Reviews" crumb and 32 below it. The head is 32 inset like the crumb and the sections, and the name is the crumb's 4 below it.
+
+**Checked and left as is** (deliberate DS sizes, not drift): the dual-language upload's English / Español labels sit at the start (Field label) rather than centred; wizard content is 40 inset while the footer ✕ sits at 24 + its 32 box; the Question bank Categories head is a left label with the add button at the far right; Product config's ✕ is a 28 ghost box.
 
 ## Not restyled yet (still the Play Area look under the SkillCat switch)
 

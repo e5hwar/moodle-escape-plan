@@ -682,7 +682,7 @@ html[data-ds="skillcat"] .table {
   font-size: 14px;
 }
 html[data-ds="skillcat"] .table thead th {
-  height: 48px;
+  height: 40px;
   padding: 0 12px;
   font-size: 14px;
   font-weight: 600;
@@ -707,7 +707,7 @@ html[data-ds="skillcat"] .table tbody tr.selected {
   background: var(--sc-surface-row-selected);
 }
 html[data-ds="skillcat"] .table tbody td {
-  height: 48px;
+  height: 40px;
   padding: 0 12px;
   font-size: 14px;
   font-weight: 400;
@@ -730,28 +730,24 @@ html[data-ds="skillcat"] .table tbody tr.is-archived td.col-name,
 html[data-ds="skillcat"] .table tbody tr.is-disabled td.col-name {
   color: var(--sc-text-tertiary);
 }
-/* Table size Small (19236:4922): header and rows 40, everything else as
-   above. The DS frame shows it in a card, but it is a size like Default /
-   Tall, not a card-only one (Eshwar 2026-11-03) — opt a table in with
-   `.table--small` (Tasks list). */
-html[data-ds="skillcat"] .table.table--small thead th,
-html[data-ds="skillcat"] .table.table--small tbody td {
-  height: 40px;
+/* Table size Small (19236:4922) is the size of every `.table` above: header
+   and rows 40, like the Play Area's 40px tables (Eshwar 2026-11-03 — lists,
+   pickers and card tables alike; the DS frame shows Small in a card, but it
+   is a size, not a card-only one). The artwork tables keep Default's 48 head
+   — Award Templates and the Card / Certificate Design picker, whose 144×76
+   tiles set their rows — and Spotlight is its own `.sp-table` below. */
+html[data-ds="skillcat"] .table.aw-tpl-table thead th,
+html[data-ds="skillcat"] .tpm .table.stm-table thead th {
+  height: 48px;
 }
 /* Name cells that index.css turns into `display: flex` (a flagged / hidden
    name, so the name truncates before its pill; Skills' icon rows) sit in an
    anonymous cell that adds the row's 1px divider on top — those rows came out
-   49 (41 in Small). They are drawn 1 short so every row keeps its size. */
+   41. They are drawn 1 short so every row keeps its 40. */
 html[data-ds="skillcat"] .table tbody tr.task-dim td.col-name,
 html[data-ds="skillcat"] .table tbody td.col-name.has-flag,
 html[data-ds="skillcat"] .table tbody tr.skg-row td.col-name,
 html[data-ds="skillcat"] .table tbody tr.skg-group td.col-name {
-  height: 47px;
-}
-html[data-ds="skillcat"] .table.table--small tbody tr.task-dim td.col-name,
-html[data-ds="skillcat"] .table.table--small tbody td.col-name.has-flag,
-html[data-ds="skillcat"] .table.table--small tbody tr.skg-row td.col-name,
-html[data-ds="skillcat"] .table.table--small tbody tr.skg-group td.col-name {
   height: 39px;
 }
 html[data-ds="skillcat"] .col-actions {
@@ -819,15 +815,20 @@ html[data-ds="skillcat"] .page-btn svg {
 }
 
 /* ===== Status Label (17013:311) =====
-   Compact Default everywhere, table cells included (Eshwar 2026-11-03 — the
-   DS's "Small 20 for tags inside table cells" and Eric's 24 table pills are
-   ignored): 28 tall, SemiBold 14, 8 inset, radius 8, 4 to a 14 icon, the
-   tone's color on its 10% tint. Covers every status pill — `.co-status-pill`
-   (all tones, `--sm` too), the name flags (`.pr-name-flag`: Hidden,
-   Refunded, Disabled…) and the payment badge. index.css sizes these from
+   Two sizes, mapped from the Play Area's own two (Eshwar 2026-11-03 — not the
+   DS's "Small for tags inside table cells" rule; a pill's size follows what it
+   is, not where it sits):
+   · Default (Compact 28): the regular `.co-status-pill` (Play Area 29/14) —
+     status columns, Skills' Type, subscription, builder tags. SemiBold 14,
+     8 inset, 4 to a 14 icon.
+   · Small (20): the Play Area's small pills (22/12) — `.co-status-pill--sm`
+     (Exam Reviews' Verified / Re-Uploaded ID), the name flags
+     (`.pr-name-flag`: Hidden, Refunded, Disabled…) and the payment badge.
+     SemiBold 12 on 15.6, 6 inset, 4 to a 12 icon.
+   Both radius 8, the tone's color on its 10% tint. index.css sizes these from
    context with !important (`.table tbody td.col-status … .co-status-pill`,
-   `td.col-name … .pr-name-flag`, 0,4,2), so `:not(#ds-pill)` lifts this one
-   rule above them. */
+   `td.col-name … .pr-name-flag`, 0,4,2), so `:not(#ds-pill)` lifts both rules
+   above them; Small comes second so it wins on `--sm`. */
 html[data-ds="skillcat"] :is(.co-status-pill, .pr-name-flag, .pay-badge):not(#ds-pill) {
   display: inline-flex !important;
   align-items: center !important;
@@ -846,6 +847,16 @@ html[data-ds="skillcat"] :is(.co-status-pill, .pr-name-flag, .pay-badge):not(#ds
 html[data-ds="skillcat"] :is(.co-status-pill, .pr-name-flag, .pay-badge):not(#ds-pill) svg {
   width: 14px;
   height: 14px;
+}
+html[data-ds="skillcat"] :is(.co-status-pill--sm, .pr-name-flag, .pay-badge):not(#ds-pill) {
+  height: 20px !important;
+  padding: 0 6px !important;
+  font-size: 12px !important;
+  line-height: 15.6px !important;
+}
+html[data-ds="skillcat"] :is(.co-status-pill--sm, .pr-name-flag, .pay-badge):not(#ds-pill) svg {
+  width: 12px;
+  height: 12px;
 }
 
 /* ===== Menu (17779:4049) and Menu / Item (17039:16628) =====
@@ -1136,11 +1147,13 @@ html[data-ds="skillcat"] .filter-clear-link {
   height: 28px;
   padding: 0;
 }
-/* Row menu (Menu 53:10972 at 320 wide): rows 36 min, padding 8, Regular 16
-   white with a 16 icon; a disabled row's label is #737373 with its reason in
-   12 / 1.3 #7A7A7A beneath; Delete sits under a divider in red. */
+/* Row menu (Menu 17779:4049): hugs its rows, min 120 — no fixed width (the
+   320 of one mock's instance, 53:10972, is not the component's). Rows 36 min,
+   padding 8, Regular 16 white with a 16 icon; a disabled row's label is
+   #737373 with its reason in 12 / 1.3 #7A7A7A beneath; Delete is red, with
+   no divider above it (the Menu's dividers are optional). */
 html[data-ds="skillcat"] .u-menu {
-  min-width: 320px;
+  min-width: 120px;
   padding: 8px;
   background: var(--sc-surface-menu);
   border: 1px solid var(--sc-border-default);
@@ -1196,18 +1209,7 @@ html[data-ds="skillcat"] .u-menu-item-sub {
   white-space: normal;
 }
 html[data-ds="skillcat"] .u-menu-item--danger {
-  position: relative;
-  margin-top: 9px;
   color: var(--sc-error);
-}
-html[data-ds="skillcat"] .u-menu-item--danger::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: -5px;
-  height: 1px;
-  background: var(--sc-border-default);
 }
 html[data-ds="skillcat"] .u-menu-item--danger:disabled {
   color: var(--sc-text-disabled);
@@ -1966,9 +1968,12 @@ html[data-ds="skillcat"] .lm-banner .note-card-body {
   line-height: 20px;
   color: var(--sc-text-secondary);
 }
+/* index.css pulls the ✕ back 28 out of the Play Area's 40 gap; on this
+   banner's 24 that put it 4 over the CTA — take back 12 for the 12 button gap. */
 html[data-ds="skillcat"] .lm-banner .cs-close {
   width: 32px;
   height: 32px;
+  margin-left: -12px;
   border-radius: 8px;
   color: var(--sc-text-secondary);
 }
@@ -1982,8 +1987,10 @@ html[data-ds="skillcat"] .lm-banner .cs-close svg {
 }
 
 /* ===== Eric's "Exam reviews list" (1:2834) and "Hands-on submissions list" (1:3060) ===== */
-/* The list head on pages whose title sits straight in `.tasks-header`. */
-html[data-ds="skillcat"] .tasks-header > .rvc-pagehead:only-child,
+/* The list head on pages whose title sits straight in `.tasks-header`. (Pages
+   with a `.rvc-pagehead` are drawn by the header rule above — never give
+   these header styles to the pagehead itself: its column would right-align
+   the title under `align-items: flex-end` and double the 24 below.) */
 html[data-ds="skillcat"] .tasks-header:has(> .tasks-title),
 html[data-ds="skillcat"] .tasks-header:has(> div:not([class]) > .tasks-title) {
   align-items: flex-end;
@@ -2061,7 +2068,13 @@ html[data-ds="skillcat"] .row-chevron svg {
 /* Not in the split layout (`.rvc-hor`): there the column owns the gutter and
    the head keeps the Play Area's 0 0 24, so it lines up with the write-up. */
 html[data-ds="skillcat"] .rvc-root:not(.rvc-hor) .rvc-header {
-  padding: 32px 40px 24px;
+  padding: 32px 32px 24px;
+}
+/* Under the crumb row (which already takes the 32 top) the name sits the
+   crumb's 4 below it, as in the Play Area — this rule outranks index.css's
+   `.rvc-root > .rvc-crumbs + .rvc-header`, so it restates it. */
+html[data-ds="skillcat"] .rvc-root:not(.rvc-hor) > .rvc-crumbs + .rvc-header {
+  padding-top: 0;
 }
 html[data-ds="skillcat"] .rvc-root .rvc-crumbs,
 html[data-ds="skillcat"] .rvc-root .rvc-crumb {
@@ -2148,8 +2161,12 @@ html[data-ds="skillcat"] .rvc-rail-rule {
   margin: 24px 0;
   background: var(--sc-border-default);
 }
+/* 40 wide, but they give way when the rail can't hold ten 40s and nine 8s
+   (472) — at 1440 it holds 451, and a fixed 40 pushed "10" 21 past it. */
 html[data-ds="skillcat"] .rvc-score {
-  width: 40px;
+  flex: 0 1 40px;
+  width: auto;
+  min-width: 32px;
   height: 40px;
   border: 0.5px solid var(--sc-border-control);
   border-radius: 8px;
@@ -2281,7 +2298,7 @@ html[data-ds="skillcat"] .drp-presets--menu {
 html[data-ds="skillcat"] .drp-presets--menu .drp-presets-list {
   gap: 0;
   align-items: stretch;
-  min-width: 224px;
+  min-width: 120px; /* Menu hugs its rows, min 120 */
 }
 html[data-ds="skillcat"] .drp-presets--menu .drp-preset {
   display: flex;

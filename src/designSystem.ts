@@ -11,7 +11,12 @@ import { useSyncExternalStore } from "react";
 
 export type DesignSystem = "skillcat" | "play";
 
-const KEY = "demo.designSystem";
+/* The key carries a version so a stored choice from before the default
+ * flipped to SkillCat (2026-11-03) is ignored once, instead of pinning old
+ * browsers to the Play Area. */
+const KEY = "demo.designSystem.v2";
+
+const DEFAULT: DesignSystem = "skillcat";
 
 function read(): DesignSystem {
   try {
@@ -20,7 +25,7 @@ function read(): DesignSystem {
   } catch {
     /* storage blocked — fall through to the default */
   }
-  return "play";
+  return DEFAULT;
 }
 
 let current: DesignSystem = read();

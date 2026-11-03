@@ -82,7 +82,7 @@ export function AwardTemplatesSection({
       <div className="co-table-row">
         <div className="co-table-col">
           <div className="table-xscroll" style={{ "--table-min": `${TABLE_MIN}px` } as React.CSSProperties}>
-            <table className="table table-head">
+            <table className="table table-head aw-tpl-table">
               <TemplateColGroup />
               <thead>
                 <tr>
