@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { NewTaskWizard } from "./NewTaskWizard";
 import { formatTaskDuration } from "../data/tasks";
 import type { TaskTypeKey } from "./Footer";
@@ -25,6 +26,7 @@ type Props = {
    highlighted — removed on request; the wizard's own close returns to the
    builder, where the Task lands at the spot it was added from. */
 export function CertSplitTaskWizard({ taskType, onClose, onAdd, onQuestionCreated }: Props) {
+  const t = useDsText();
   const kind = TYPE_KEY_TO_KIND[taskType];
 
   return (
@@ -33,7 +35,7 @@ export function CertSplitTaskWizard({ taskType, onClose, onAdd, onQuestionCreate
         taskType={taskType}
         onClose={onClose}
         onQuestionCreated={onQuestionCreated}
-        primaryLabel="Add to Certification"
+        primaryLabel={t("Add to Certification")}
         onPrimary={(taskName, requiresSubscription, timeToComplete, record) =>
           onAdd({
             id: `t-${Date.now()}`,

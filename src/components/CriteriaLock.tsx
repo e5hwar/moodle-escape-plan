@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { FieldLockIcon } from "./icons";
@@ -106,6 +107,7 @@ export function CompletionCriteriaGate({
   banner?: boolean;
   children: ReactNode;
 }) {
+  const t = useDsText();
   /** 0 = no modal, 1 = the explanation, 2 = "Are you sure?" stacked on it. */
   const [step, setStep] = useState<0 | 1 | 2>(0);
 
@@ -132,8 +134,7 @@ export function CompletionCriteriaGate({
           locked={locked}
           sub={
             <>
-              {learners} Editing the criteria recomputes their completion
-              status and time of completion when you save.
+              {t(learners)} {t("Editing the criteria recomputes their completion status and time of completion when you save.")}
             </>
           }
           action={
@@ -142,7 +143,7 @@ export function CompletionCriteriaGate({
               className="prm-quiet"
               onClick={() => setStep(1)}
             >
-              Edit Criteria
+              {t("Edit Criteria")}
             </button>
           }
         >
@@ -159,8 +160,8 @@ export function CompletionCriteriaGate({
       {step >= 1 &&
         createPortal(
           <PrmModal
-            title="Edit Completion Criteria?"
-            confirmLabel="Edit Criteria"
+            title={t("Edit Completion Criteria?")}
+            confirmLabel={t("Edit Criteria")}
             onCancel={() => setStep(0)}
             onConfirm={() => setStep(2)}
           >
@@ -181,8 +182,8 @@ export function CompletionCriteriaGate({
         createPortal(
           <PrmModal
             title="Are you sure?"
-            confirmLabel="Yes, Edit Criteria"
-            cancelLabel="Go Back"
+            confirmLabel={t("Yes, Edit Criteria")}
+            cancelLabel={t("Go Back")}
             danger
             className="prm--sure"
             onCancel={() => setStep(0)}

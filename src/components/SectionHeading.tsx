@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import type { ReactNode } from "react";
 
 /* Mid-page section heading — Figma 715:1575.
@@ -7,9 +8,10 @@ import type { ReactNode } from "react";
    `trailing` renders after the label (e.g. the "Effective Today" pill in the
    subscription preview). */
 export function SectionHeading({ label, trailing }: { label: string; trailing?: ReactNode }) {
+  const t = useDsText();
   return (
     <div className="section-heading">
-      <span className="section-heading-label">{label}</span>
+      <span className="section-heading-label">{t(label)}</span>
       {trailing}
     </div>
   );

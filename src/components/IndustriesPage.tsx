@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useListState } from "../hooks/useListState";
 import {
   Fragment,
@@ -350,6 +351,7 @@ export function IndustriesPage({
   setCerts: Dispatch<SetStateAction<Certification[]>>;
   onBackToCerts?: () => void;
 }) {
+  const t = useDsText();
   /* `saved` is the record — every edit but a reorder writes it directly (they
      each confirm in their own modal). Each scope's `certIds` is matched to
      the Certifications' tags here, so it lists exactly the tagged ones in
@@ -873,7 +875,7 @@ export function IndustriesPage({
       {reviewOpen && (
         <PrmModal
           title={`Apply ${changes.length} ${changes.length === 1 ? "Change" : "Changes"}?`}
-          confirmLabel="Apply Changes"
+          confirmLabel={t("Apply Changes")}
           onCancel={() => setReviewOpen(false)}
           onConfirm={applyMoves}
         >
@@ -932,14 +934,14 @@ export function IndustriesPage({
       {/* ─── Modals ─── */}
       {modal.kind === "new-industry" && (
         <NameModal
-          title="New Industry"
+          title={t("New Industry")}
           nameLabel="Name"
-          nameHelp="Must be unique across all Industries."
+          nameHelp={t("Must be unique across all Industries.")}
           defaultName=""
           defaultNameEs=""
           defaultHidden={false}
           existingNames={industries.map((i) => i.name.toLowerCase())}
-          submitLabel="Create Industry"
+          submitLabel={t("Create Industry")}
           onSubmit={(name, nameEs, hidden, icon) => {
             addIndustry(name, nameEs, hidden, icon);
             setModal({ kind: "none" });
@@ -961,7 +963,7 @@ export function IndustriesPage({
             defaultNameEs=""
             defaultHidden={false}
             existingNames={parent.subIndustries.map((s) => s.name.toLowerCase())}
-            submitLabel="Create Sub-Industry"
+            submitLabel={t("Create Sub-Industry")}
             onSubmit={(name, nameEs, hidden, icon) => {
               addSub(modal.industryKey, name, nameEs, hidden, icon);
               setModal({ kind: "none" });
@@ -977,9 +979,9 @@ export function IndustriesPage({
         if (!ind) return null;
         return (
           <NameModal
-            title="Edit Industry"
+            title={t("Edit Industry")}
             nameLabel="Name"
-            nameHelp="Must be unique across all Industries."
+            nameHelp={t("Must be unique across all Industries.")}
             defaultName={ind.name}
             defaultNameEs={ind.nameEs ?? ""}
             defaultHidden={!!ind.hidden}
@@ -1154,6 +1156,7 @@ function UntaggedBanner({
   onAssign: () => void;
   onDismiss: () => void;
 }) {
+  const t = useDsText();
   return (
     <div
       className="note-card note-card--accent lm-banner cs-banner ind-banner"
@@ -1170,7 +1173,7 @@ function UntaggedBanner({
       <div className="lm-banner-main">
         <div className="lm-banner-count">{certs.length}</div>
         <div className="note-card-text">
-          <p className="note-card-title cs-ellipsis">Certifications Have No Industry</p>
+          <p className="note-card-title cs-ellipsis">{t("Certifications Have No Industry")}</p>
           <p className="note-card-body cs-ellipsis">{certs.map((c) => c.name).join(" · ")}</p>
         </div>
       </div>
@@ -1181,7 +1184,7 @@ function UntaggedBanner({
           onAssign();
         }}
       >
-        Assign Industries
+        {t("Assign Industries")}
         <span className="cta-kbd">A</span>
       </button>
       <button
@@ -1238,6 +1241,7 @@ function Launcher({
   /** The untagged-Certifications banner, between the header and the search. */
   banner?: React.ReactNode;
 }) {
+  const t = useDsText();
   // Drag reordering is only safe against the full, unfiltered order.
   const canDrag = !search.trim();
   const [overKey, setOverKey] = useState<string | null>(null);
@@ -1267,7 +1271,7 @@ function Launcher({
           2026-10-01) — it moved here when the list's head row, which had
           carried the "+", was removed. */}
       <nav className="rvc-crumbs" aria-label="Breadcrumb">
-        <button className="rvc-crumb" onClick={onBackToCerts} title="Back to Certifications">
+        <button className="rvc-crumb" onClick={onBackToCerts} title={t("Back to Certifications")}>
           Certifications
         </button>
       </nav>
@@ -1279,11 +1283,11 @@ function Launcher({
               tooltip via a plain `title` (auto-adopted, see
               [[tooltip-and-hover-convention]]). */}
           <div className="tasks-subtitle">
-            How learners browse Certifications by trade in the app
+            {t("How learners browse Certifications by trade in the app")}
             <span
               className="tasks-subtitle-info"
               tabIndex={0}
-              aria-label="How Industries work"
+              aria-label={t("How Industries work")}
               title={
                 "Industries and their Sub-Industries are the trades learners pick from to find Certifications. They appear in the app in the order shown here; drag a row to move it.\n\n" +
                 "A Certification can sit in more than one Industry or Sub-Industry, and is listed under each one it's added to.\n\n" +
@@ -1299,7 +1303,7 @@ function Launcher({
         {!q && (
           <div className="tasks-header-actions">
             <button className="cta-primary" onClick={onNewIndustry}>
-              Create Industry
+              {t("Create Industry")}
               <span className="cta-kbd">C</span>
             </button>
           </div>
@@ -1410,7 +1414,7 @@ function Launcher({
                 onOpen(item);
               }}
             >
-              View Industry
+              {t("View Industry")}
               <RowChevronIcon />
             </button>
           </span>
@@ -1460,6 +1464,7 @@ function Hub({
   onMoveCert: (id: string, to: number) => void;
   onRemoveCert: (id: string) => void;
 }) {
+  const t = useDsText();
   const name = sub ? sub.name : industry.name;
   const hidden = sub ? !!(sub.hidden || industry.hidden) : !!industry.hidden;
   const orderedSubs = [...industry.subIndustries].sort(
@@ -1499,14 +1504,14 @@ function Hub({
             trail Awards and the Question Bank run: only the steps above
             this page, every one of them navigates (Figma 1356:1828). */}
         <nav className="rvc-crumbs" aria-label="Breadcrumb">
-          <button className="rvc-crumb" onClick={onBackToCerts} title="Back to Certifications">
+          <button className="rvc-crumb" onClick={onBackToCerts} title={t("Back to Certifications")}>
             Certifications
           </button>
           <CrumbChevronIcon />
           <button
             className="rvc-crumb"
             onClick={onBackToLauncher}
-            title="Back to Industries"
+            title={t("Back to Industries")}
           >
             Industries
           </button>
@@ -1549,13 +1554,13 @@ function Hub({
           <section className="ind-section">
             <SecHead
               title={`Sub-Industries in “${industry.name}”`}
-              addLabel="New Sub-Industry"
+              addLabel={t("New Sub-Industry")}
               onAdd={onNewSub}
             />
             {orderedSubs.length === 0 ? (
               /* Figma 1600:3477 — one grey line under the head, the same
                  for the Certifications list below. */
-              <p className="ind-empty-line">No Sub-Industries added. Click the + icon to start adding</p>
+              <p className="ind-empty-line">{t("No Sub-Industries added. Click the + icon to start adding")}</p>
             ) : (
               /* Figma 1306:1393 — the Large Table row, the same one the
                  certifications below use: position, name, its first
@@ -1597,7 +1602,7 @@ function Hub({
                     hiddenPill={!!s.hidden}
                     meta={certificationsLine(s, certsById)}
                     action={
-                      <RowKebab label="Sub-Industry options" onClick={(e) => onSubMenu(e, s.key)} />
+                      <RowKebab label={t("Sub-Industry options")} onClick={(e) => onSubMenu(e, s.key)} />
                     }
                   />
                 ))}
@@ -1609,7 +1614,7 @@ function Hub({
         <section className="ind-section">
           <SecHead
             title={`Certifications in “${name}”`}
-            addLabel="Add Certification"
+            addLabel={t("Add Certification")}
             onAdd={onAddCerts}
           />
           <CertList certIds={certIds} certsById={certsById} onMove={onMoveCert} onRemove={onRemoveCert} />
@@ -1636,9 +1641,10 @@ function SecHead({
   addLabel?: string;
   onAdd?: () => void;
 }) {
+  const t = useDsText();
   return (
     <div className="ind-sechead">
-      <h2 className="ind-sechead-title">{title}</h2>
+      <h2 className="ind-sechead-title">{t(title)}</h2>
       {onAdd && (
         <button className="ind-sechead-add" onClick={onAdd} aria-label={addLabel} title={addLabel}>
           <TreeAddIcon />
@@ -1661,6 +1667,7 @@ function CertList({
   onMove: (id: string, to: number) => void;
   onRemove: (id: string) => void;
 }) {
+  const t = useDsText();
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
   // The row's 3-dot menu: Remove is its only item.
@@ -1669,7 +1676,7 @@ function CertList({
   if (certIds.length === 0) {
     return (
       /* Figma 1600:3477's line, worded for this list. */
-      <p className="ind-empty-line">No Certifications added. Click the + icon to start adding</p>
+      <p className="ind-empty-line">{t("No Certifications added. Click the + icon to start adding")}</p>
     );
   }
 
@@ -1790,6 +1797,7 @@ function NameModal({
   onSubmit: (name: string, nameEs: string, hidden: boolean, icon: PickedImage | null) => void;
   onCancel: () => void;
 }) {
+  const t = useDsText();
   const [name, setName] = useState(defaultName);
   const [nameEs, setNameEs] = useState(defaultNameEs);
   const [hidden, setHidden] = useState(defaultHidden);
@@ -1852,7 +1860,7 @@ function NameModal({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && submit()}
-                placeholder="Solar & Renewables"
+                placeholder={t("Solar & Renewables")}
                 aria-invalid={isDuplicate || limitFlag === "has-error" || undefined}
               />
               <CharCount value={name} max={NAME_MAX} />
@@ -1865,7 +1873,7 @@ function NameModal({
                 value={nameEs}
                 onChange={(e) => setNameEs(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && submit()}
-                placeholder="Solar y Energías Renovables"
+                placeholder={t("Solar y Energ\u00edas Renovables")}
               />
               <CharCount value={nameEs} max={NAME_MAX} />
             </div>
@@ -1935,6 +1943,7 @@ function DeleteConfirm({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const t = useDsText();
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onCancel();
@@ -1950,7 +1959,7 @@ function DeleteConfirm({
       danger
       doubleConfirm={
         <>
-          <strong>{label}</strong>
+          <strong>{t(label)}</strong>
           {isIndustry && subCount > 0
             ? ` and its ${subCount} Sub-${subCount === 1 ? "Industry" : "Industries"}`
             : ""}{" "}
@@ -1961,7 +1970,7 @@ function DeleteConfirm({
       onConfirm={onConfirm}
     >
       <p className="prm-content">
-        Delete <strong>{label}</strong>? This can't be undone.
+        Delete <strong>{t(label)}</strong>? This can't be undone.
       </p>
       <ul className="ind-modal-list">
         {isIndustry && subCount > 0 && (
@@ -2008,6 +2017,7 @@ function HideConfirm({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const t = useDsText();
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onCancel();
@@ -2028,17 +2038,17 @@ function HideConfirm({
       <p className="prm-content">
         {hiding ? (
           <>
-            Hide <strong>{label}</strong>? Learners won't see it
+            Hide <strong>{t(label)}</strong>? Learners won't see it
             {isIndustry && subCount > 0 ? <> or its <strong>{subCount}</strong> Sub-{subCount === 1 ? "Industry" : "Industries"}</> : null}{" "}
             when browsing. Its Certifications stay published, and you can show it again anytime.
           </>
         ) : hiddenParent ? (
           <>
-            Show <strong>{label}</strong>? It stays out of view until <strong>{hiddenParent}</strong> is shown too.
+            Show <strong>{t(label)}</strong>? It stays out of view until <strong>{hiddenParent}</strong> is shown too.
           </>
         ) : (
           <>
-            Show <strong>{label}</strong>? Learners will see it when browsing again.
+            Show <strong>{t(label)}</strong>? Learners will see it when browsing again.
           </>
         )}
       </p>
@@ -2068,6 +2078,7 @@ function RemoveCertConfirm({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const t = useDsText();
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onCancel();
@@ -2078,8 +2089,8 @@ function RemoveCertConfirm({
 
   return (
     <PrmModal
-      title="Remove Certification?"
-      confirmLabel="Remove Certification"
+      title={t("Remove Certification?")}
+      confirmLabel={t("Remove Certification")}
       danger
       doubleConfirm={
         <>
@@ -2124,6 +2135,7 @@ function AddCertsModal({
   onAdd: (ids: string[]) => void;
   onClose: () => void;
 }) {
+  const t = useDsText();
   const scopeLabel = subName ? `${industryName} › ${subName}` : `${industryName} (Industry-level)`;
 
   // The catalog's SkillCat-created Certifications (company-created ones can't
@@ -2139,7 +2151,7 @@ function AddCertsModal({
       only="cert"
       certPool={pool}
       existingNames={lockedNames}
-      title="Add Certifications"
+      title={t("Add Certifications")}
       description={`Adding to ${scopeLabel}`}
       confirmNoun="Certification"
       confirmVerb="Add"
@@ -2169,6 +2181,7 @@ function AssignIndustriesModal({
   onAssign: (picks: { certId: string; scopes: Scope[] }[]) => void;
   onClose: () => void;
 }) {
+  const t = useDsText();
   const options = useMemo(() => {
     const out: { label: string; scope: Scope }[] = [];
     for (const ind of [...industries].sort((a, b) => a.displayPosition - b.displayPosition)) {
@@ -2189,9 +2202,9 @@ function AssignIndustriesModal({
   return (
     <PrmModal
       className="ind-assign-modal"
-      title="Assign Industries"
-      description="Pick the Industry or Sub-Industry these Certifications are listed under. The order can later be updated from the Industry/Sub-Industry page"
-      confirmLabel="Assign Industries"
+      title={t("Assign Industries")}
+      description={t("Pick the Industry or Sub-Industry these Certifications are listed under. The order can later be updated from the Industry/Sub-Industry page")}
+      confirmLabel={t("Assign Industries")}
       confirmDisabled={count === 0}
       onCancel={onClose}
       onConfirm={() =>
@@ -2222,8 +2235,8 @@ function AssignIndustriesModal({
                 options={labels}
                 value={picked[c.id] ?? []}
                 onChange={(v) => setPicked((prev) => ({ ...prev, [c.id]: v }))}
-                placeholder="Select Industries..."
-                searchPlaceholder="Search Industries..."
+                placeholder={t("Select Industries...")}
+                searchPlaceholder={t("Search Industries...")}
                 popupMenu
               />
             </div>

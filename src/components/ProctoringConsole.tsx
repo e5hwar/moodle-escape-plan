@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { hasProctoringFootage } from "../data/proctoring";
@@ -109,6 +110,7 @@ export function ProctoringConsole({
    *  learner (Pending ID Re-Uploads) it would always read 0. */
   hidePendingCount?: boolean;
 }) {
+  const t = useDsText();
   /* The frame viewer shows no title (same chrome as the ID full view), so the
      state is just the node to display. */
   const [zoom, setZoom] = useState<ReactNode | null>(null);
@@ -239,9 +241,9 @@ export function ProctoringConsole({
                 <button
                   className="rvc-crumb"
                   onClick={onExitToSection}
-                  title="Back to Exam Reviews"
+                  title={t("Back to Exam Reviews")}
                 >
-                  Exam Reviews
+                  {t("Exam Reviews")}
                 </button>
                 <CrumbChevronIcon />
                 <button
@@ -253,8 +255,8 @@ export function ProctoringConsole({
                 </button>
               </>
             ) : (
-              <button className="rvc-crumb" onClick={onExit} title="Back to Exam Reviews">
-                Exam Reviews
+              <button className="rvc-crumb" onClick={onExit} title={t("Back to Exam Reviews")}>
+                {t("Exam Reviews")}
               </button>
             )}
           </nav>
@@ -309,7 +311,7 @@ export function ProctoringConsole({
                   nothing left for the reviewer to judge here. Proctored exams
                   only — on an ID-only submission the ID check IS the review. */}
               <ReviewSection
-                title="ID Verification"
+                title={t("ID Verification")}
                 /* Never both. Requesting a re-upload drops the prior
                    verification (it vouched for the document being replaced);
                    an approval on another of the learner's attempts verifies
@@ -319,19 +321,19 @@ export function ProctoringConsole({
                 stats={
                   idVerified ? (
                     <RailStat
-                      label="Approved On"
+                      label={t("Approved On")}
                       value={shortDateOf(submission.idPreviouslyVerified!.at)}
                       tone="is-muted"
                     />
                   ) : (
                     <>
                       <RailStat
-                        label="AI Confidence"
+                        label={t("AI Confidence")}
                         value={`${submission.idConfidence}%`}
                         tone={confidenceClass}
                         info
                       />
-                      <RailStat label="Identified Document" value={submission.idType} />
+                      <RailStat label={t("Identified Document")} value={submission.idType} />
                     </>
                   )
                 }
@@ -362,7 +364,7 @@ export function ProctoringConsole({
                   (1003:1266). */}
               {hasFootage && (
                 <ReviewSection
-                  title="Proctoring Footage"
+                  title={t("Proctoring Footage")}
                   info={FOOTAGE_TIP}
                   bodyClass="prc-section-body--footage"
                   stats={
@@ -398,8 +400,8 @@ export function ProctoringConsole({
                  Skip and the three CTAs together on the right. ── */}
           <div className="wizard-footer rvc-footer prc-footer">
             <button className="wizard-cancel" onClick={() => onExit()}>
-              Back
-            </button>
+{t("Back")}
+</button>
 
             <div className="prc-footer-right">
               {/* The Hands-On console's Skip atom (`.rvc-skip`): "Skip to Next ·
@@ -409,7 +411,7 @@ export function ProctoringConsole({
               {hasNext && (
                 <button className="btn-save-draft rvc-skip" onClick={skip}>
                   <span className="rvc-skip-label">
-                    Skip to Next
+                    {t("Skip to Next")}
                     {!hidePendingCount && (
                       <>
                         {" "}
@@ -430,7 +432,7 @@ export function ProctoringConsole({
                     : undefined
                 }
               >
-                Request ID Re-Upload
+                {t("Request ID Re-Upload")}
                 <span className="cta-kbd">I</span>
               </button>
               {/* ID-only submissions (ID reviews and re-uploads) can't be
@@ -637,6 +639,7 @@ function RejectModal({
   onCancel: () => void;
   onConfirm: (details: RejectDetails) => void;
 }) {
+  const t = useDsText();
   /* Multi-select: an attempt can fail on more than one count, and every box can
      be unticked again. */
   const [reasons, setReasons] = useState<Set<string>>(new Set());
@@ -736,7 +739,7 @@ function RejectModal({
                       <LimitedInput
                         max={NAME_MAX}
                         className="form-input"
-                        placeholder="Enter your reason here..."
+                        placeholder={t("Enter your reason here...")}
                         value={otherText}
                         onChange={(e) => setOtherText(e.target.value)}
                         autoFocus
@@ -760,7 +763,7 @@ function RejectModal({
           <LimitedInput
             max={DESCRIPTION_MAX}
             className="form-input"
-            placeholder="Add a note for future reviewers..."
+            placeholder={t("Add a note for future reviewers...")}
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />
@@ -925,10 +928,11 @@ function RailStat({
   /** Adds the (i) after the label — this number came from the AI. */
   info?: boolean;
 }) {
+  const t = useDsText();
   return (
     <span className="prc-stat">
       <span className="prc-stat-head">
-        <span className="prc-stat-label">{label}</span>
+        <span className="prc-stat-label">{t(label)}</span>
         {info && (
           <span className="prc-stat-info" data-tip={AI_CAVEAT} aria-label={AI_CAVEAT} role="img">
             <AiAssistIcon />
@@ -953,6 +957,7 @@ function FlaggedFilter({
   on: boolean;
   onToggle: () => void;
 }) {
+  const t = useDsText();
   const tip = on ? "Show all frames" : "Show only the flagged frames";
   return (
     <span className="prc-stat prc-stat--pick">
@@ -966,7 +971,7 @@ function FlaggedFilter({
         data-tip={tip}
       >
         <PrmCheck on={on} />
-        <span className="prc-stat-value">Flagged Images ({count})</span>
+        <span className="prc-stat-value">{t("Flagged Images (")}{count})</span>
       </button>
     </span>
   );
@@ -998,11 +1003,12 @@ function ReviewSection({
   bodyClass?: string;
   children: ReactNode;
 }) {
+  const t = useDsText();
   return (
     <section className="prc-section">
       <div className="prc-rail">
         <div className="prc-rail-left">
-          <h2 className="prc-rail-title">{title}</h2>
+          <h2 className="prc-rail-title">{t(title)}</h2>
           {info && (
             <span
               className="prc-rail-info"
@@ -1081,10 +1087,11 @@ const ReuploadAlertIcon = () => (
  *  on screen is one the candidate re-sent after being asked (Figma 1015:1454).
  *  It says the reviewer is looking at a second attempt, not the original. */
 function ReuploadedIdPill() {
+  const t = useDsText();
   return (
     <span className="co-status-pill co-status-pill--sm co-status-pill--yellow">
       <ReuploadAlertIcon />
-      Re-Uploaded ID
+      {t("Re-Uploaded ID")}
     </span>
   );
 }
@@ -1121,6 +1128,7 @@ function IntegrityNoteBanner({
   submission: Submission;
   previousRejected: Submission[];
 }) {
+  const t = useDsText();
   /* Shown for anyone with a quiz attempt rejected in the past (user,
      2026-10-02) — that alone decides it. The Proctor's Note line is optional:
      a note with no past rejection shows nothing, and a past rejection with no
@@ -1158,7 +1166,7 @@ function IntegrityNoteBanner({
       singleLine
       icon={<AlertCircleOutlineIcon />}
       mutedIcon
-      title="Caught Cheating in Past Quizzes"
+      title={t("Caught Cheating in Past Quizzes")}
       body={submission.integrityNote ? `Proctor’s Note: ${submission.integrityNote}` : undefined}
       onClick={openRejected}
       clickTip={tip}
@@ -1198,6 +1206,7 @@ function NameMismatchBanner({
   draft: string;
   onDraftChange: (name: string) => void;
 }) {
+  const t = useDsText();
   if (!submission.idDetectedName || submission.idDetectedName === submission.candidateName) {
     return null;
   }
@@ -1207,7 +1216,7 @@ function NameMismatchBanner({
       {/* Copy verbatim from Figma 308:2299 (re-cut 2026-10-02): the save note
           is the subtext now, so the card has no closing line. */}
       <div className="prc-mismatch-head">
-        <div className="prc-mismatch-title">Names Don’t Match - Set The Name To Keep</div>
+        <div className="prc-mismatch-title">{t("Names Don\u2019t Match - Set The Name To Keep")}</div>
         <p className="prc-mismatch-sub">
           Type to correct the name. Saved when you approve the review.
         </p>
@@ -1215,7 +1224,7 @@ function NameMismatchBanner({
 
       <div className="prc-mismatch-field">
         <label className="form-label" htmlFor="prc-name">
-          Name on SkillCat Profile<span className="req">*</span>
+          {t("Name on SkillCat Profile")}<span className="req">*</span>
           <LimitError max={NAME_MAX} values={[draft]} />
         </label>
         <LimitedInput
@@ -1241,7 +1250,7 @@ function NameMismatchBanner({
             className="prc-mismatch-use"
             onClick={() => onDraftChange(submission.idDetectedName!)}
           >
-            Use This
+            {t("Use This")}
           </button>
         </p>
       </div>

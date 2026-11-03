@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useMemo, useState } from "react";
 import { SKILL_STATUSES, type Skill } from "../data/skills";
 import {
@@ -59,6 +60,7 @@ export function SelectSkillsModal({
   onCancel: () => void;
   onConfirm: (ids: string[]) => void;
 }) {
+  const t = useDsText();
   const [query, setQuery] = useState("");
   /* Opens on Active Skills only — an archived Skill can't be earned, so it
      would make the Mastery Skill unearnable. Clearing the pill reveals them. */
@@ -161,8 +163,8 @@ export function SelectSkillsModal({
 
   return (
     <PrmModal
-      title="Select Skills"
-      description="Choose the Skills that make up this Mastery Skill"
+      title={t("Select Skills")}
+      description={t("Choose the Skills that make up this Mastery Skill")}
       confirmLabel="Continue"
       pickFull
       confirmDisabled={!canContinue}
@@ -176,7 +178,7 @@ export function SelectSkillsModal({
           <div className="toolbar">
             <EntitySearch
               scopes={[]}
-              placeholder="Search Skills..."
+              placeholder={t("Search Skills...")}
               query={query}
               onCommit={(v) => {
                 setQuery(v);
@@ -188,12 +190,12 @@ export function SelectSkillsModal({
           <div className="filters stm-filters">
             <MultiPill label="Status" all={[...SKILL_STATUSES]} value={statuses} onApply={resetPage(setStatuses)} width={200} tip={tips.status} />
             <MultiPill
-              label="Linked Task"
+              label={t("Linked Task")}
               all={allTasks}
               value={taskF}
               onApply={resetPage(setTaskF)}
               searchable
-              searchPlaceholder="Search Tasks..."
+              searchPlaceholder={t("Search Tasks...")}
               width={300}
               tip={tips.task}
             />
@@ -203,7 +205,7 @@ export function SelectSkillsModal({
               value={certs}
               onApply={resetPage(setCerts)}
               searchable
-              searchPlaceholder="Search Certifications..."
+              searchPlaceholder={t("Search Certifications...")}
               width={300}
               tip={tips.certifications}
             />
@@ -213,7 +215,7 @@ export function SelectSkillsModal({
               value={inds}
               onApply={resetPage(setInds)}
               searchable
-              searchPlaceholder="Search Industries/Sub-Industries..."
+              searchPlaceholder={t("Search Industries/Sub-Industries...")}
               width={300}
               tip={tips.industry}
             />
@@ -240,11 +242,11 @@ export function SelectSkillsModal({
                     </button>
                   </th>
                   {/* The Skills table's own column names, in its order. */}
-                  <Th col="name" label="Skill Name" cls="stm-col-name" sort={sort} toggle={toggleSort} />
+                  <Th col="name" label={t("Skill Name")} cls="stm-col-name" sort={sort} toggle={toggleSort} />
                   <Th col="industry" label="Industries" cls="stm-col-industry" sort={sort} toggle={toggleSort} />
-                  <Th col="tasks" label="Linked Tasks" cls="stm-col-certs" sort={sort} toggle={toggleSort} />
-                  <Th col="certs" label="Linked Certifications" cls="stm-col-certs" sort={sort} toggle={toggleSort} />
-                  <Th col="dateModified" label="Date Modified" cls="stm-col-edited" sort={sort} toggle={toggleSort} />
+                  <Th col="tasks" label={t("Linked Tasks")} cls="stm-col-certs" sort={sort} toggle={toggleSort} />
+                  <Th col="certs" label={t("Linked Certifications")} cls="stm-col-certs" sort={sort} toggle={toggleSort} />
+                  <Th col="dateModified" label={t("Date Modified")} cls="stm-col-edited" sort={sort} toggle={toggleSort} />
                 </tr>
               </thead>
             </table>
@@ -348,11 +350,12 @@ function Th({
   sort: { key: SortKey; dir: SortDir };
   toggle: (k: SortKey) => void;
 }) {
+  const t = useDsText();
   const active = sort.key === col;
   return (
     <th className={cls} onClick={() => toggle(col)}>
       <span className="th-content">
-        {label}
+        {t(label)}
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>

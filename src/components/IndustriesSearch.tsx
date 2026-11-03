@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useRef, useState } from "react";
 import { KeyCommandIcon, SearchIcon, SearchClearIcon } from "./icons";
 
@@ -21,6 +22,7 @@ export function IndustriesSearch({
   onCommit: (q: string) => void;
   inputRef: React.RefObject<HTMLInputElement>;
 }) {
+  const t = useDsText();
   const [text, setText] = useState(query);
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -85,7 +87,7 @@ export function IndustriesSearch({
         <input
           ref={inputRef}
           className="usearch-input"
-          placeholder="Search Certifications..."
+          placeholder={t("Search Certifications...")}
           value={text}
           onChange={(e) => {
             setText(e.target.value);

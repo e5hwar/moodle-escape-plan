@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLiveTasks, subscriptionLabel, taskInCertifications, type Task } from "../data/tasks";
 import { useLiveCerts, CERT_VISIBILITIES, type Certification } from "../data/certifications";
@@ -204,6 +205,7 @@ export function SelectRequirementModal({
   onCancel: () => void;
   onConfirm: (picks: RequirementPick[]) => void;
 }) {
+  const t = useDsText();
   /* The live lists (data/tasks, data/certifications), so Tasks and
      Certifications created this session can be picked. */
   const taskLibrary = useLiveTasks();
@@ -361,7 +363,7 @@ export function SelectRequirementModal({
 
   return (
     <PrmModal
-      title={title}
+      title={t(title)}
       description={typeof description === "function" ? description(tab) : description}
       confirmLabel={
         confirmLabel ??
@@ -451,7 +453,7 @@ export function SelectRequirementModal({
                   onApply={(v) => setTaskF({ visibilities: v })}
                 />
                 <ListPill
-                  label="Requires Subscription?"
+                  label={t("Requires Subscription?")}
                   tip={FILTER_TIPS.taskPicker.subscription}
                   options={SUBSCRIPTION_OPTIONS}
                   value={taskFilters.subscription}
@@ -510,10 +512,10 @@ export function SelectRequirementModal({
                   <thead>
                     <tr>
                       <th className="stm-col-check no-sort" />
-                      <Th label="Task Name" cls="stm-col-name" active={taskSort.key === "name"} dir={taskSort.dir} onClick={() => toggleSort(setTaskSort, "name")} />
+                      <Th label={t("Task Name")} cls="stm-col-name" active={taskSort.key === "name"} dir={taskSort.dir} onClick={() => toggleSort(setTaskSort, "name")} />
                       <Th label="Type" cls="stm-col-type" active={taskSort.key === "type"} dir={taskSort.dir} onClick={() => toggleSort(setTaskSort, "type")} />
                       <Th label="Certifications" cls="stm-col-certs" active={taskSort.key === "certs"} dir={taskSort.dir} onClick={() => toggleSort(setTaskSort, "certs")} />
-                      <Th label="Date Modified" cls="stm-col-edited" active={taskSort.key === "dateModified"} dir={taskSort.dir} onClick={() => toggleSort(setTaskSort, "dateModified")} />
+                      <Th label={t("Date Modified")} cls="stm-col-edited" active={taskSort.key === "dateModified"} dir={taskSort.dir} onClick={() => toggleSort(setTaskSort, "dateModified")} />
                       {preview && <th className="col-actions no-sort" />}
                     </tr>
                   </thead>
@@ -609,8 +611,8 @@ export function SelectRequirementModal({
                       <th className="stm-col-check no-sort" />
                       <Th label="Name" cls="stm-col-name" active={certSort.key === "name"} dir={certSort.dir} onClick={() => toggleSort(setCertSort, "name")} />
                       <Th label="Industries" cls="stm-col-certs" active={certSort.key === "industry"} dir={certSort.dir} onClick={() => toggleSort(setCertSort, "industry")} />
-                      <Th label="Career Stage" cls="stm-col-type" active={certSort.key === "careerStage"} dir={certSort.dir} onClick={() => toggleSort(setCertSort, "careerStage")} />
-                      <Th label="Date Modified" cls="stm-col-edited" active={certSort.key === "dateModified"} dir={certSort.dir} onClick={() => toggleSort(setCertSort, "dateModified")} />
+                      <Th label={t("Career Stage")} cls="stm-col-type" active={certSort.key === "careerStage"} dir={certSort.dir} onClick={() => toggleSort(setCertSort, "careerStage")} />
+                      <Th label={t("Date Modified")} cls="stm-col-edited" active={certSort.key === "dateModified"} dir={certSort.dir} onClick={() => toggleSort(setCertSort, "dateModified")} />
                     </tr>
                   </thead>
                 </table>
@@ -751,10 +753,11 @@ function Th({
   dir: SortDir;
   onClick: () => void;
 }) {
+  const t = useDsText();
   return (
     <th className={cls} onClick={onClick}>
       <span className="th-content">
-        {label}
+        {t(label)}
         <SortIcon active={active} dir={active ? dir : undefined} />
       </span>
     </th>

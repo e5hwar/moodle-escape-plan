@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CopiedToast } from "./CopiedToast";
 import {
@@ -90,6 +91,7 @@ export function FeedbackFormWizard({
   flash,
   onFlashDone,
 }: Props) {
+  const t = useDsText();
   const [toast, setToast] = useState<string | null>(flash ?? null);
   useEffect(() => {
     if (flash) setToast(flash);
@@ -225,7 +227,7 @@ export function FeedbackFormWizard({
                   <button
                     className="rvc-crumb"
                     onClick={() => leave(onBackToCerts)}
-                    title="Back to Certifications"
+                    title={t("Back to Certifications")}
                   >
                     Certifications
                   </button>
@@ -233,24 +235,23 @@ export function FeedbackFormWizard({
                   <button
                     className="rvc-crumb"
                     onClick={() => leave()}
-                    title="Back to Feedback Forms"
+                    title={t("Back to Feedback Forms")}
                   >
-                    Feedback Forms
+                    {t("Feedback Forms")}
                   </button>
                 </nav>
                 <div className="rvc-pagehead">
-                  <h1 className="tasks-title">{title}</h1>
+                  <h1 className="tasks-title">{t(title)}</h1>
                 </div>
                 <p className="tasks-subtitle wizard-desc">
-                  Link the Question Bank questions this form asks, then map it to
-                  the Tasks and Certifications whose completion should show it.
+                  {t("Link the Question Bank questions this form asks, then map it to the Tasks and Certifications whose completion should show it.")}
                 </p>
 
                 <div className="form-group" onBlur={leaveField(() => touch("name"))}>
                   <label className="form-label">
-                    Feedback Form Name<span className="req">*</span>
+                    {t("Feedback Form Name")}<span className="req">*</span>
                     {nameMissing && (
-                      <span className="form-label-error">Feedback Form Name cannot be left empty</span>
+                      <span className="form-label-error">{t("Feedback Form Name cannot be left empty")}</span>
                     )}
                     <LimitError max={NAME_MAX} values={[form.name]} warn={false} />
                   </label>
@@ -260,7 +261,7 @@ export function FeedbackFormWizard({
                     className={`form-input${nameMissing ? " has-error" : ""}`}
                     aria-invalid={nameMissing || undefined}
                     value={form.name}
-                    placeholder="Feedback Form Name"
+                    placeholder={t("Feedback Form Name")}
                     onChange={(e) => rename(e.target.value)}
                     // Land the cursor here for a brand-new, unnamed form.
                     autoFocus={form.name === ""}
@@ -278,7 +279,7 @@ export function FeedbackFormWizard({
                   <label className="form-label">
                     Questions<span className="req">*</span>
                     {questionsMissing && (
-                      <span className="form-label-error">Questions cannot be left empty</span>
+                      <span className="form-label-error">{t("Questions cannot be left empty")}</span>
                     )}
                   </label>
                   <FeedbackFormEditor
@@ -290,10 +291,7 @@ export function FeedbackFormWizard({
                     onCreateQuestion={onCreateQuestion}
                   />
                   <p className="form-help">
-                    Questions live in the Question Bank — this form links them,
-                    and editing one in the bank updates every quiz and form that
-                    uses it. Grading data on a linked question is ignored:
-                    responses are collected without scoring.
+                    {t("Questions live in the Question Bank \u2014 this form links them, and editing one in the bank updates every quiz and form that uses it. Grading data on a linked question is ignored: responses are collected without scoring.")}
                     <span
                       className="form-help-info"
                       tabIndex={0}
@@ -310,7 +308,7 @@ export function FeedbackFormWizard({
                     is something to bring back. */}
                 {form.questions.some((l) => l.status === "inactive") && (
                   <div className="form-group">
-                    <label className="form-label">Inactive Questions</label>
+                    <label className="form-label">{t("Inactive Questions")}</label>
                     <FeedbackInactiveQuestions form={form} bank={bank} onUpdate={saveLinks} />
                     <p className="form-help">
                       No longer shown to users. The questions and all responses
@@ -341,9 +339,7 @@ export function FeedbackFormWizard({
                       ([[form-subtext-pattern]]), and the "How triggers behave"
                       card that used to close the step is now the ⓘ on it. */}
                   <p className="form-help">
-                    This form is shown when a user completes any of these Tasks
-                    or Certifications. A Task or Certification can be mapped to
-                    at most one form.
+                    {t("This form is shown when a user completes any of these Tasks or Certifications. A Task or Certification can be mapped to at most one form.")}
                     <span
                       className="form-help-info"
                       tabIndex={0}
@@ -366,8 +362,8 @@ export function FeedbackFormWizard({
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
           <button className="wizard-cancel" onClick={() => leave()}>
-            Cancel
-          </button>
+{t("Cancel")}
+</button>
         </div>
         <div className="wizard-actions">
           {/* One primary button, named for what it does — the Task wizards'
@@ -380,7 +376,7 @@ export function FeedbackFormWizard({
             data-tip={blockedTip}
             onClick={done}
           >
-            {isCreating ? "Create Feedback Form" : "Save Changes"}
+            {isCreating ? t("Create Feedback Form") : t("Save Changes")}
             <WizardKeyHint shift />
           </button>
         </div>

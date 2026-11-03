@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useContext, type CSSProperties, type ReactNode } from "react";
 import { Accordion, AccordionRows, AccordionScope } from "./Accordion";
 import { RowEditIcon } from "./icons";
@@ -49,6 +50,7 @@ export function ConfirmCard({
   /** A body that isn't the field grid: a table, pills, a tab bar. */
   children?: ReactNode;
 }) {
+  const t = useDsText();
   const asAccordion = useContext(AccordionScope);
   const blank = (value: ReactNode) => value === "" || value == null || value === false;
   const shown: ConfirmField[] = !rows
@@ -85,7 +87,7 @@ export function ConfirmCard({
   return (
     <section className={`confirm-card${tableBody ? " confirm-card--table" : ""}`}>
       <header className="confirm-card-head">
-        <h2 className="confirm-card-title">{title}</h2>
+        <h2 className="confirm-card-title">{t(title)}</h2>
         {edit}
       </header>
       {/* Confirm Details 6B — fields sit in a four-column grid (the first column
@@ -103,7 +105,7 @@ export function ConfirmCard({
               }`}
               key={`${i}:${label}`}
             >
-              <div className="confirm-card-label">{label}</div>
+              <div className="confirm-card-label">{t(label)}</div>
               <div className="confirm-card-value">{value}</div>
             </div>
           ))}

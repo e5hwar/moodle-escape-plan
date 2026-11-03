@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useState } from "react";
 import { SelectField } from "./SelectField";
 import { DropdownCaretIcon } from "./icons";
@@ -39,14 +40,15 @@ export function TimeField<U extends string>({
   onUnitChange: (u: U) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const t = useDsText();
   return (
     <div className={`time-field${open ? " is-open" : ""}`}>
       <input
         className="time-field-value"
         type="text"
         inputMode="numeric"
-        placeholder="Enter Approx. Time..."
-        aria-label="Time to Complete"
+        placeholder={t("Enter Approx. Time...")}
+        aria-label={t("Time to Complete")}
         value={value}
         onChange={(e) => {
           const v = e.target.value;

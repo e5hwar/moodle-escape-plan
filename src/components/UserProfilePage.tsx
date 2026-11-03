@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { UserAvatar } from "./UserAvatar";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
@@ -153,6 +154,7 @@ function useEscape(active: boolean, onClose: () => void) {
 }
 
 export function UserProfilePage({ user: seedUser }: { user: User }) {
+  const t = useDsText();
   /* The live record (users.ts): this tab and the Users page read and write the
      same one, so an edit, a cancellation or a merge here shows there and back. */
   const user: User = useUser(seedUser.id) ?? seedUser;
@@ -263,7 +265,7 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
         <div className="tasks pr-page">
           {/* ── breadcrumb strip (Figma 1417:1395), then the header — identity row, actions on the right ── */}
           <nav className="rvc-crumbs" aria-label="Breadcrumb">
-            <button className="rvc-crumb" onClick={backToUsers} title="Back to Users">
+            <button className="rvc-crumb" onClick={backToUsers} title={t("Back to Users")}>
               Users
             </button>
           </nav>
@@ -295,7 +297,7 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
                 action the header still spells out. */}
             <div className="tasks-header-actions">
               <button className="cta-primary" onClick={() => loginAs(user)}>
-                <MenuEnterIcon /> Login As
+                <MenuEnterIcon /> {t("Login As")}
               </button>
               <button
                 className="cta-quiet cta-quiet--icon"
@@ -372,7 +374,7 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
                         toast("Awards Downloaded");
                       }}
                     >
-                      <DownloadIcon /> Download All
+                      <DownloadIcon /> {t("Download All")}
                     </button>
                   }
                   tableBody
@@ -381,7 +383,7 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
                 </ConfirmCard>
               ) : (
                 <ConfirmCard title="Awards">
-                  <p className="form-help">No Awards earned.</p>
+                  <p className="form-help">{t("No Awards earned.")}</p>
                 </ConfirmCard>
               )}
 
@@ -392,7 +394,7 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
                 fillBlanks
                 rows={sub.status === "Starter" ? undefined : subRows}
               >
-                {sub.status === "Starter" && <p className="form-help">No Subscription</p>}
+                {sub.status === "Starter" && <p className="form-help">{t("No Subscription")}</p>}
               </ConfirmCard>
 
               {/* Purchases / bills */}
@@ -403,7 +405,7 @@ export function UserProfilePage({ user: seedUser }: { user: User }) {
 
               {/* NATE details */}
               <ConfirmCard
-                title="NATE Details"
+                title={t("NATE Details")}
                 /* The bare pencil, as on the Profile card — it opens the same
                    modal whether there is a registration to edit or one to add. */
                 onEdit={() => setModal("edit-nate")}
@@ -530,6 +532,7 @@ const SKILL_COLS = { skill: 360, type: 180, date: 180 };
 const SKILL_TABLE_MIN = SKILL_COLS.skill + SKILL_COLS.type + SKILL_COLS.date;
 
 function SkillsTable({ skills }: { skills: SkillBadge[] }) {
+  const t = useDsText();
   const [sort, setSort] = useState<{ key: "type" | "date"; dir: SortDir }>({
     key: "date",
     dir: "desc",
@@ -557,7 +560,7 @@ function SkillsTable({ skills }: { skills: SkillBadge[] }) {
     return (
       <th onClick={() => toggle(key)}>
         <span className="th-content">
-          {label}
+          {t(label)}
           <SortIcon active={active} dir={active ? sort.dir : undefined} />
         </span>
       </th>
@@ -624,6 +627,7 @@ function AwardsTable({
   awards: AwardRecord[];
   onToast: (label: string) => void;
 }) {
+  const t = useDsText();
   const [sort, setSort] = useState<{ key: "tier" | "date"; dir: SortDir }>({
     key: "date",
     dir: "desc",
@@ -651,7 +655,7 @@ function AwardsTable({
     return (
       <th onClick={() => toggle(key)}>
         <span className="th-content">
-          {label}
+          {t(label)}
           <SortIcon active={active} dir={active ? sort.dir : undefined} />
         </span>
       </th>
@@ -672,7 +676,7 @@ function AwardsTable({
           <tr>
             <th className="no-sort">Certification</th>
             {th("tier", "Merit Tier")}
-            <th className="no-sort">Award Number</th>
+            <th className="no-sort">{t("Award Number")}</th>
             {th("date", "Date Awarded")}
             <th className="col-actions no-sort" aria-label="Actions" />
           </tr>
@@ -806,6 +810,7 @@ export function EditUserModal({
   onClose: () => void;
   onSave: (v: { name: string; email: string; phone: string }) => void;
 }) {
+  const t = useDsText();
   const [form, setForm] = useState(initial);
   const [submitted, setSubmitted] = useState(false);
   const { touched, touch } = useTouchedKeys();
@@ -837,9 +842,9 @@ export function EditUserModal({
 
   return (
     <PrmModal
-      title="Edit User"
+      title={t("Edit User")}
       description="An email or a phone number is required. Changing either resets its verified status."
-      confirmLabel="Save Changes"
+      confirmLabel={t("Save Changes")}
       confirmDisabled={!dirty}
       confirmTip={NO_CHANGES_TIP}
       onCancel={onClose}
@@ -866,7 +871,7 @@ export function EditUserModal({
         {/* The B2B Company Create phone field: dial-code picker + number. */}
         <div className="prm-field" onBlur={leave(() => touch("phone"))}>
           <label className="prm-label">
-            Phone Number
+            {t("Phone Number")}
             {(submitted || touched.has("phone")) && errors.phone && (
               <span className="form-label-error">{errors.phone}</span>
             )}
@@ -891,6 +896,7 @@ function EditNateModal({
   onClose: () => void;
   onSave: (v: NateDetail) => void;
 }) {
+  const t = useDsText();
   const [form, setForm] = useState<NateDetail>(
     initial ?? { connectId: "", firstName: "", lastName: "", email: "" },
   );
@@ -946,7 +952,7 @@ function EditNateModal({
       <div className="prm-stack">
         <div className="form-row-2">
           <PrmField
-            label="First Name"
+            label={t("First Name")}
             value={form.firstName}
             max={NAME_MAX}
             autoFocus
@@ -955,7 +961,7 @@ function EditNateModal({
             onLeave={() => touch("firstName")}
           />
           <PrmField
-            label="Last Name"
+            label={t("Last Name")}
             value={form.lastName}
             max={NAME_MAX}
             onChange={(v) => setForm((f) => ({ ...f, lastName: v }))}
@@ -971,7 +977,7 @@ function EditNateModal({
           onLeave={() => touch("email")}
         />
         <PrmField
-          label="NATE Connect ID"
+          label={t("NATE Connect ID")}
           value={form.connectId}
           placeholder="e.g. 483920"
           onChange={(v) => setForm((f) => ({ ...f, connectId: v }))}
@@ -995,14 +1001,15 @@ export function CancelSubscriptionModal({
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  const t = useDsText();
   useEscape(true, onClose);
   const platform = user.platform ?? "Stripe";
   const renewsOn = user.renewsOn;
   return (
     <PrmModal
-      title="Cancel Subscription?"
-      cancelLabel="Keep Subscription"
-      confirmLabel="Cancel Subscription"
+      title={t("Cancel Subscription?")}
+      cancelLabel={t("Keep Subscription")}
+      confirmLabel={t("Cancel Subscription")}
       onCancel={onClose}
       onConfirm={onConfirm}
     >
@@ -1055,6 +1062,7 @@ const PURCHASE_COLS = {
 const PURCHASE_TABLE_MIN = Object.values(PURCHASE_COLS).reduce((a, b) => a + b, 0);
 
 function PurchasesSection({ purchases }: { purchases: Purchase[] }) {
+  const t = useDsText();
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
   const [rowMenu, setRowMenu] = useState<{ idx: number; rect: DOMRect } | null>(null);
 
@@ -1108,7 +1116,7 @@ function PurchasesSection({ purchases }: { purchases: Purchase[] }) {
         constrainHeight
         trigger={({ open, toggle }) => (
           <PillTrigger
-            label="Purchase Type"
+            label={t("Purchase Type")}
             tip={FILTER_TIPS.profile.purchaseType}
             value={summarize(typeFilter, PURCHASE_TYPE_LABELS)}
             open={open}
@@ -1136,7 +1144,7 @@ function PurchasesSection({ purchases }: { purchases: Purchase[] }) {
      nothing keeps the table, with No Results Found. */
   if (purchases.length === 0) {
     return (
-      <ConfirmCard title="Purchases & Bills">
+      <ConfirmCard title={t("Purchases & Bills")}>
         <p className="form-help">No purchases made.</p>
       </ConfirmCard>
     );
@@ -1176,7 +1184,7 @@ function PurchasesSection({ purchases }: { purchases: Purchase[] }) {
             <tr>
               <th className="no-sort">Date</th>
               <th className="no-sort">Item</th>
-              <th className="no-sort">Purchase Type</th>
+              <th className="no-sort">{t("Purchase Type")}</th>
               <th className="no-sort">Platform</th>
               <th className="no-sort">Receipt</th>
               <th className="no-sort">Amount</th>
@@ -1243,6 +1251,7 @@ function EpaOrdersSection({
   orders: EpaCardOrder[];
   onToast: (label: string) => void;
 }) {
+  const t = useDsText();
   const [rowMenu, setRowMenu] = useState<{ id: string; rect: DOMRect } | null>(null);
   const [cancelling, setCancelling] = useState<EpaCardOrder | null>(null);
 
@@ -1266,7 +1275,7 @@ function EpaOrdersSection({
 
   if (orders.length === 0) {
     return (
-      <ConfirmCard title="EPA Card Orders">
+      <ConfirmCard title={t("EPA Card Orders")}>
         <p className="form-help">No EPA card ordered.</p>
       </ConfirmCard>
     );
@@ -1274,7 +1283,7 @@ function EpaOrdersSection({
 
   return (
     /* No count in the title — 1668:1554 reads "EPA Card Orders" alone. */
-    <ConfirmCard title="EPA Card Orders" tableBody>
+    <ConfirmCard title={t("EPA Card Orders")} tableBody>
       <div
         className="confirm-card-xscroll"
         style={{ "--table-min": `${EPA_TABLE_MIN}px` } as CSSProperties}
@@ -1287,9 +1296,9 @@ function EpaOrdersSection({
           <thead>
             <tr>
               <th className="no-sort">Certification</th>
-              <th className="no-sort">Shipping Address</th>
+              <th className="no-sort">{t("Shipping Address")}</th>
               <th className="no-sort">Status</th>
-              <th className="no-sort">Ordered On</th>
+              <th className="no-sort">{t("Ordered On")}</th>
               <th className="no-sort col-actions" aria-label="Actions" />
             </tr>
           </thead>
@@ -1331,9 +1340,9 @@ function EpaOrdersSection({
           says what cancelling does NOT do: refund. */}
       {cancelling && (
         <PrmModal
-          title="Cancel EPA Card Order?"
-          cancelLabel="Keep Order"
-          confirmLabel="Cancel Order"
+          title={t("Cancel EPA Card Order?")}
+          cancelLabel={t("Keep Order")}
+          confirmLabel={t("Cancel Order")}
           danger
           doubleConfirm={
             <>
@@ -1355,8 +1364,7 @@ function EpaOrdersSection({
             shipped.
           </p>
           <p className="prm-content">
-            Cancelling does not refund the user. The charge stays in Purchases &amp; Bills, where the
-            refund is issued.
+            {t("Cancelling does not refund the user. The charge stays in Purchases & Bills, where the refund is issued.")}
           </p>
         </PrmModal>
       )}

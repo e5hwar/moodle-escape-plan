@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   attemptCount,
@@ -431,6 +432,7 @@ export function QuestionBankPage({
    *  from a version opened in the editor). */
   initialHistoryId?: string;
 }) {
+  const t = useDsText();
   const [rowMenu, setRowMenu] = useState<{ q: Question; rect: DOMRect } | null>(null);
   // The question whose row was clicked, read back in the row preview panel —
   // held by id so the panel follows the question through an archive.
@@ -1168,7 +1170,7 @@ export function QuestionBankPage({
                 "Question Bank" joins the trail and returns to the category
                 index, in place of the footer's old "Back to search". */}
             <nav className="rvc-crumbs" aria-label="Breadcrumb">
-              <button className="rvc-crumb" onClick={onBackToTasks} title="Back to Tasks">
+              <button className="rvc-crumb" onClick={onBackToTasks} title={t("Back to Tasks")}>
                 Tasks
               </button>
               {atTable && (
@@ -1179,7 +1181,7 @@ export function QuestionBankPage({
                     onClick={morph.showLanding}
                     title="Back to the category index"
                   >
-                    Question Bank
+                    {t("Question Bank")}
                   </button>
                 </>
               )}
@@ -1192,7 +1194,7 @@ export function QuestionBankPage({
                     open-in-new-tab slot), not a header button. Only the icon
                     hovers: #a8a8a8 → white, and white while its menu is open. */}
                 <h1 className="tasks-title rvc-headtitle">
-                  {pageTitle}
+                  {atTable ? pageTitle : t(pageTitle)}
                   {atTable && openCat && (
                     <button
                       type="button"
@@ -1209,14 +1211,14 @@ export function QuestionBankPage({
                 {/* Landing only — bulk import lives here, not on the working
                     screens (it fades with the landing chrome). */}
                 <button className="cta-quiet qb-import" onClick={() => setBulk({ file: null })}>
-                  Import CSV
-                </button>
+{t("Import CSV")}
+</button>
                 {/* Straight into the editor as a Multiple Choice question —
                     no type menu (2026-09-29); the editor's Type select still
                     switches it before the first save. */}
                 <button className="cta-primary" onClick={() => startCreate("Multiple choice")}>
-                  Create Question
-                  <span className="cta-kbd">C</span>
+{t("Create Question")}
+<span className="cta-kbd">C</span>
                 </button>
               </div>
             </header>
@@ -1232,7 +1234,7 @@ export function QuestionBankPage({
             {openCat?.subcategories?.length ? (
               <ReviewRunsStrip label={`Sub-Categories in ${openCat.label}`} className="qb-subcards rr--fill">
                   <ReviewRunCard
-                    values={["All Questions"]}
+                    values={[t("All Questions")]}
                     sub={questionsLine(preSub.length)}
                     chevron={false}
                     selected={subFilter.length === 0}
@@ -1274,7 +1276,7 @@ export function QuestionBankPage({
                   <ReviewRunCard
                     variant="add"
                     icon={<AddCardIcon />}
-                    values={["Add Sub-Category"]}
+                    values={[t("Add Sub-Category")]}
                     onClick={() => setSubModal(openCat.key)}
                   />
               </ReviewRunsStrip>
@@ -1312,7 +1314,7 @@ export function QuestionBankPage({
                 OPEN a category, they don't add a filter. */}
             {recentShown.length > 0 && (
               <div className="qbl-recent">
-                <span className="lm-quick-label">Recent Searches:</span>
+                <span className="lm-quick-label">{t("Recent Searches:")}</span>
                 <span className="qbl-recent-pills">
                   {recentShown.map((label) => (
                     <button
@@ -1365,7 +1367,7 @@ export function QuestionBankPage({
                   />
                 )}
                 <MultiSelectPill
-                  label="Question Type"
+                  label={t("Question Type")}
                   options={TYPE_OPTIONS}
                   value={typeFilter}
                   onApply={setTypeFilter}
@@ -1392,8 +1394,8 @@ export function QuestionBankPage({
                 />
                 {appliedCount > 0 && (
                   <button className="filter-clear-link" onClick={clearFilters}>
-                    Clear Filters
-                  </button>
+{t("Clear Filters")}
+</button>
                 )}
               </div>
             </div>
@@ -1423,8 +1425,8 @@ export function QuestionBankPage({
                     <button
                       className={`qbl-index-add-btn ${catModalOpen && !atTable ? "is-open" : ""}`}
                       onClick={openNewCategory}
-                      title="Add Category"
-                      aria-label="Add Category"
+                      title={t("Add Category")}
+                      aria-label={t("Add Category")}
                     >
                       <TreeAddIcon />
                     </button>
@@ -1487,7 +1489,7 @@ export function QuestionBankPage({
                     {visibleCols.map((c) =>
                       c.sortable === false ? (
                         <th key={c.key} className={`${c.className} no-sort`}>
-                          <span className="th-content">{c.label}</span>
+                          <span className="th-content">{t(c.label)}</span>
                         </th>
                       ) : (
                         <QbHeader
@@ -1681,7 +1683,7 @@ export function QuestionBankPage({
                   }}
                 >
                   <span className="u-menu-item-icon"><TreeAddSubIcon /></span>
-                  <span className="u-menu-item-text">Add Sub-Category</span>
+                  <span className="u-menu-item-text">{t("Add Sub-Category")}</span>
                 </button>
               )}
               <button
@@ -1712,9 +1714,9 @@ export function QuestionBankPage({
         if (!cat) return null;
         return (
           <CatNameModal
-            title="Rename Category"
-            description="Renaming keeps every question and Sub-Category inside it."
-            submitLabel="Save Category"
+            title={t("Rename Category")}
+            description={t("Renaming keeps every question and Sub-Category inside it.")}
+            submitLabel={t("Save Category")}
             duplicateMessage="A category with this name already exists."
             defaultValue={cat.label}
             existingNames={categories
@@ -1736,10 +1738,10 @@ export function QuestionBankPage({
         if (!parent || !sub) return null;
         return (
           <CatNameModal
-            title="Rename Sub-Category"
+            title={t("Rename Sub-Category")}
             description={`In ${parent.label}. Renaming keeps every question inside it.`}
-            submitLabel="Save Sub-Category"
-            duplicateMessage="A Sub-Category with this name already exists."
+            submitLabel={t("Save Sub-Category")}
+            duplicateMessage={t("A Sub-Category with this name already exists.")}
             defaultValue={sub.label}
             existingNames={(parent.subcategories ?? [])
               .filter((s) => s.key !== catModal.subKey)
@@ -1946,6 +1948,7 @@ function CatNameModal({
   onSubmit: (label: string) => void;
   onCancel: () => void;
 }) {
+  const t = useDsText();
   const [value, setValue] = useState(defaultValue);
   const trimmed = value.trim();
   const isDuplicate = !!trimmed && existingNames.includes(trimmed.toLowerCase());
@@ -1995,7 +1998,7 @@ function CatNameModal({
             onKeyDown={(e) => {
               if (e.key === "Enter") submit();
             }}
-            placeholder="EPA 608"
+            placeholder={t("EPA 608")}
           />
         </div>
       </div>
@@ -2022,10 +2025,11 @@ function QuestionArchiveConfirm({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const t = useDsText();
   return (
     <PrmModal
-      title="Archive Question?"
-      confirmLabel="Archive Question"
+      title={t("Archive Question?")}
+      confirmLabel={t("Archive Question")}
       doubleConfirm={
         <>
           <strong>{q.id}</strong> will be archived and hidden from the Question Bank
@@ -2055,11 +2059,12 @@ function QuestionDeleteConfirm({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const t = useDsText();
   return (
     <PrmModal
-      title="Delete Question?"
+      title={t("Delete Question?")}
       danger
-      confirmLabel="Delete Question"
+      confirmLabel={t("Delete Question")}
       doubleConfirm={
         <>
           <strong>{q.id}</strong> and its version history will be permanently deleted. This
@@ -2090,6 +2095,7 @@ function CatDeleteConfirm({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const t = useDsText();
   const noun = isCategory ? "Category" : "Sub-Category";
   return (
     <PrmModal
@@ -2098,14 +2104,14 @@ function CatDeleteConfirm({
       confirmLabel={`Delete ${noun}`}
       doubleConfirm={
         <>
-          <strong>{label}</strong> will be permanently deleted. This can't be undone.
+          <strong>{t(label)}</strong> will be permanently deleted. This can't be undone.
         </>
       }
       onCancel={onCancel}
       onConfirm={onConfirm}
     >
       <p className="prm-content">
-        Delete <strong>{label}</strong>? This can't be undone.
+        Delete <strong>{t(label)}</strong>? This can't be undone.
       </p>
       <ul className="ind-modal-list">
         <li>
@@ -2142,10 +2148,11 @@ function QbHeader({
   toggle: (k: QSortKey) => void;
   sortable?: boolean;
 }) {
+  const t = useDsText();
   if (!sortable) {
     return (
       <th className={`qb-col-${col} no-sort`}>
-        <span className="th-content">{label}</span>
+        <span className="th-content">{t(label)}</span>
       </th>
     );
   }
@@ -2153,7 +2160,7 @@ function QbHeader({
   return (
     <th className={`qb-col-${col}`} onClick={() => toggle(col)}>
       <span className="th-content">
-        {label}
+        {t(label)}
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>
@@ -2268,6 +2275,7 @@ function QuestionPanel({
    *  and Delete act on the current question. */
   onMore?: (rect: DOMRect) => void;
 }) {
+  const t = useDsText();
   const dates = datesProp ?? questionDates(q);
   const [category, ...subs] = q.categoryPath;
   const lines = (names: string[]) => names.length > 0 && names.map((n) => <div key={n}>{n}</div>);
@@ -2344,7 +2352,7 @@ function QuestionPanel({
   return (
     <PreviewPanel
       title={q.text}
-      subtitle={longQuestionType(q.type)}
+      subtitle={t(longQuestionType(q.type))}
       onMore={onMore}
       onClose={onClose}
     >
@@ -2370,7 +2378,7 @@ function QuestionPanel({
       {answers}
       {/* One "Used In" accordion for both kinds of use (user, 2026-10-07). */}
       <ConfirmCard
-        title="Used In"
+        title={t("Used In")}
         fillBlanks
         rows={[
           ["Quizzes", lines(q.quizzes)],
@@ -2399,6 +2407,7 @@ function QuestionActionsMenu({
   onVersionHistory: () => void;
   onDelete: () => void;
 }) {
+  const t = useDsText();
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
 
@@ -2458,7 +2467,7 @@ function QuestionActionsMenu({
     >
       <span className="u-menu-item-icon">{icon}</span>
       <span className="u-menu-item-text">
-        <span>{label}</span>
+        <span>{t(label)}</span>
         {opts?.note && <span className="u-menu-item-sub">{opts.note}</span>}
       </span>
     </button>
@@ -2522,6 +2531,7 @@ function QbMoreFiltersPill({
   formNames: string[];
   onApply: (v: { grading: string[]; quizzes: string[]; forms: string[] }) => void;
 }) {
+  const t = useDsText();
   const count = grading.length + quizzes.length + forms.length;
   const value = useMemo(() => ({ grading, quizzes, forms }), [grading, quizzes, forms]);
 
@@ -2530,7 +2540,7 @@ function QbMoreFiltersPill({
       width={320}
       trigger={({ open, toggle }) => (
         <PillTrigger
-          label="More Filters"
+          label={t("More Filters")}
           value={count > 0 ? `${count} Active` : null}
           open={open}
           toggle={toggle}

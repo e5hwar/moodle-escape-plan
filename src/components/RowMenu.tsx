@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { RowKebabIcon } from "./icons";
+import { useDsText } from "../designSystem";
 
 /* Row actions for a table whose actions all live in a menu — the Full
    Profile's card tables (Figma 1278:1571). */
@@ -39,6 +40,7 @@ export function RowMenu({
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number } | null>(null);
+  const t = useDsText();
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -90,11 +92,11 @@ export function RowMenu({
           {it.icon && <span className="u-menu-item-icon">{it.icon}</span>}
           {it.disabled && it.sub ? (
             <span className="u-menu-item-text">
-              {it.label}
-              <span className="u-menu-item-sub">{it.sub}</span>
+              {t(it.label)}
+              <span className="u-menu-item-sub">{t(it.sub)}</span>
             </span>
           ) : (
-            it.label
+            t(it.label)
           )}
         </button>
       ))}

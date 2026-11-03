@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect } from "react";
 import { CheckIcon } from "./icons";
 
@@ -18,6 +19,7 @@ export function CopiedToast({
   onDone: () => void;
   ms?: number;
 }) {
+  const t = useDsText();
   useEffect(() => {
     const t = setTimeout(onDone, ms);
     return () => clearTimeout(t);
@@ -25,7 +27,7 @@ export function CopiedToast({
 
   return (
     <div className="pl-copied-toast" role="status">
-      {label}
+      {t(label)}
       <span className="pl-copied-toast-icon"><CheckIcon /></span>
     </div>
   );

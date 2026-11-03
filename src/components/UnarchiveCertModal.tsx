@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect } from "react";
 import { PrmModal } from "./PrmModal";
 import type { Certification } from "../data/certifications";
@@ -24,6 +25,7 @@ export function UnarchiveCertModal({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const t = useDsText();
   // PrmModal has no key handling of its own, so the owner closes on Escape
   // (the stacked confirm handles its own Escape, closing both).
   useEffect(() => {
@@ -41,7 +43,7 @@ export function UnarchiveCertModal({
   return (
     <PrmModal
       title={`Unarchive “${cert.name}”`}
-      confirmLabel="Unarchive Certification"
+      confirmLabel={t("Unarchive Certification")}
       doubleConfirm={
         <>
           <strong>{cert.name}</strong> will be unarchived. It stays {vis}.

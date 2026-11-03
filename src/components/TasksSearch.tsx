@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { TASK_TYPES, useCertificationOptions } from "../data/filters";
 import { KeyCommandIcon, SearchIcon, SearchClearIcon } from "./icons";
+import { useDsText } from "../designSystem";
 import { SearchHints, SearchScopeChip, stepActive, SearchNoResults, suggestFilters, SuggestionRow } from "./SearchPanelParts";
 
 const MAX_RESULTS = 6;
@@ -30,6 +31,7 @@ export function TasksSearch({
   query: string;
   onCommit: (q: string) => void;
 }) {
+  const t = useDsText();
   const CERTIFICATIONS = useCertificationOptions();
   const [text, setText] = useState(query);
   // Certifications picked in THIS search session (not yet applied). On Enter they
@@ -232,7 +234,7 @@ export function TasksSearch({
         <input
           ref={inputRef}
           className="usearch-input"
-          placeholder="Search Tasks..."
+          placeholder={t("Search Tasks...")}
           value={text}
           onChange={(e) => {
             setText(e.target.value);

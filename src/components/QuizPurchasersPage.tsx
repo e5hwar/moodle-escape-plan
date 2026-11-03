@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   users as allUsers,
@@ -196,6 +197,7 @@ export function QuizPurchasersPage({
   task: Task;
   onBack: () => void;
 }) {
+  const t = useDsText();
   const [toast, toastNode] = useToast();
   const userById = useMemo(() => new Map(allUsers.map((u) => [u.id, u])), []);
 
@@ -363,18 +365,18 @@ export function QuizPurchasersPage({
               way back — same header as Quiz Attempts. The Quiz this opened on
               is carried by the pre-applied Quiz Name pill, not a subtitle. */}
           <nav className="rvc-crumbs" aria-label="Breadcrumb">
-            <button className="rvc-crumb" onClick={onBack} title="Back to Tasks">
+            <button className="rvc-crumb" onClick={onBack} title={t("Back to Tasks")}>
               Tasks
             </button>
           </nav>
           <header className="tasks-header">
             <div className="rvc-pagehead">
-              <h1 className="tasks-title">Who Paid</h1>
+              <h1 className="tasks-title">{t("Who Paid")}</h1>
             </div>
             <div className="tasks-header-actions">
               <button className="new-task" onClick={() => setGranting(true)}>
                 <AddIcon />
-                Additional Attempts
+                {t("Additional Attempts")}
               </button>
             </div>
           </header>
@@ -386,7 +388,7 @@ export function QuizPurchasersPage({
                     pills below, exactly as on Quiz Attempts. */}
                 <EntitySearch
                   scopes={scopes}
-                  placeholder="Search Users by Name, Email, or Phone..."
+                  placeholder={t("Search Users by Name, Email, or Phone...")}
                   query={committedQuery}
                   onCommit={setCommittedQuery}
                 />
@@ -397,12 +399,12 @@ export function QuizPurchasersPage({
                 setFilters={setFilters}
                 leading={
                   <MultiPill
-                    label="Quiz Name"
+                    label={t("Quiz Name")}
                     all={quizOptions}
                     value={quizzes}
                     onApply={setQuizzes}
                     searchable
-                    searchPlaceholder="Search Quizzes..."
+                    searchPlaceholder={t("Search Quizzes...")}
                     width={300}
                     tip={FILTER_TIPS.whoPaid.quiz}
                   />
@@ -517,8 +519,8 @@ export function QuizPurchasersPage({
 
       {revoking && (
         <PrmModal
-          title="Revoke Access"
-          confirmLabel="Revoke Access"
+          title={t("Revoke Access")}
+          confirmLabel={t("Revoke Access")}
           danger
           doubleConfirm={
             <>
@@ -738,10 +740,11 @@ function SortableHeader({
   toggle: (k: SortKey) => void;
   sortable?: boolean;
 }) {
+  const t = useDsText();
   if (!sortable) {
     return (
       <th className={`${className ?? ""} no-sort`.trim()}>
-        <span className="th-content">{label}</span>
+        <span className="th-content">{t(label)}</span>
       </th>
     );
   }
@@ -749,7 +752,7 @@ function SortableHeader({
   return (
     <th className={className} onClick={() => toggle(col)}>
       <span className="th-content">
-        {label}
+        {t(label)}
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>

@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { PrmModal } from "./PrmModal";
 import { RteToolbar, type BlockFormat, type RteLive } from "./RteToolbar";
@@ -328,6 +329,7 @@ export function RichDocField({
 
 /* Insert Link — the shared modal shell with one required address. */
 function LinkModal({ onCancel, onInsert }: { onCancel: () => void; onInsert: (href: string) => void }) {
+  const t = useDsText();
   const [href, setHref] = useState("");
   const v = href.trim();
   useEffect(() => {
@@ -337,8 +339,8 @@ function LinkModal({ onCancel, onInsert }: { onCancel: () => void; onInsert: (hr
   }, [onCancel]);
   return (
     <PrmModal
-      title="Insert Link"
-      confirmLabel="Insert Link"
+      title={t("Insert Link")}
+      confirmLabel={t("Insert Link")}
       confirmDisabled={!v}
       onCancel={onCancel}
       onConfirm={() => v && onInsert(v)}
@@ -356,7 +358,7 @@ function LinkModal({ onCancel, onInsert }: { onCancel: () => void; onInsert: (hr
             onKeyDown={(e) => {
               if (e.key === "Enter" && v) onInsert(v);
             }}
-            placeholder="URL..."
+            placeholder={t("URL...")}
             spellCheck={false}
           />
         </div>

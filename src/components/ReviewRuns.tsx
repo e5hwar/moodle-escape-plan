@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useRef, type ReactNode } from "react";
 import { RowChevronIcon } from "./icons";
 
@@ -99,6 +100,7 @@ export function ReviewRunCard({
   icon?: ReactNode;
   onClick: () => void;
 }) {
+  const t = useDsText();
   const extra = values.length - 1;
   const subLine = recent ? (sub ? `${sub} · Recent` : "Recent") : sub;
   return (
@@ -119,7 +121,7 @@ export function ReviewRunCard({
           {values[0]}
           {extra > 0 && <>{" "}<span className="used-extra">+{extra}</span></>}
         </span>
-        {subLine && <span className="rr-sub">{subLine}</span>}
+        {subLine && <span className="rr-sub">{t(subLine)}</span>}
       </span>
       {variant !== "add" && (
         <span className="rr-chevron" aria-hidden={chevron ? undefined : true}>

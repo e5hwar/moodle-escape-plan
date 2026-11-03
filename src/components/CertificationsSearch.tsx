@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useMemo } from "react";
 import type { Certification } from "../data/certifications";
 import { NO_CAREER_STAGE, NO_TYPE } from "../data/certifications";
@@ -29,6 +30,7 @@ export function CertificationsSearch({
   query: string;
   onCommit: (q: string) => void;
 }) {
+  const t = useDsText();
   /* An Industry option is a top-level Industry or an "Industry › Sub-Industry"
      label, counted by exact tag — tagging a Sub-Industry does not tag its
      parent (mirrors `matchesIndustry`). */
@@ -85,7 +87,7 @@ export function CertificationsSearch({
   return (
     <EntitySearch
       scopes={scopes}
-      placeholder="Search Certifications..."
+      placeholder={t("Search Certifications...")}
       query={query}
       onCommit={onCommit}
     />

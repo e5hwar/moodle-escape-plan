@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -30,6 +31,7 @@ function taskKindLabel(type: string) {
 }
 
 export function FeedbackFormTriggers({ form, allForms, onSave, invalid = false, onPickingChange }: Props) {
+  const t = useDsText();
   const [picking, setPickingState] = useState(false);
   const setPicking = (open: boolean) => {
     setPickingState(open);
@@ -142,7 +144,7 @@ export function FeedbackFormTriggers({ form, allForms, onSave, invalid = false, 
 
         {form.triggers.length === 0 && (
           <div className="qz-empty">
-            No Triggers Added Yet
+            {t("No Triggers Added Yet")}
           </div>
         )}
 
@@ -176,7 +178,7 @@ export function FeedbackFormTriggers({ form, allForms, onSave, invalid = false, 
             aria-haspopup="dialog"
           >
             <TreeAddIcon />
-            Add Trigger
+            {t("Add Trigger")}
           </button>
         </div>
       </div>
@@ -189,7 +191,7 @@ export function FeedbackFormTriggers({ form, allForms, onSave, invalid = false, 
           <SelectRequirementModal
             /* Both tabs, one staged selection: Tasks and Certifications can
                be mapped in the same trip. */
-            title="Add Triggers"
+            title={t("Add Triggers")}
             /* Each tab says what it lists — only SkillCat-made records. */
             description={(tab) =>
               tab === "task"

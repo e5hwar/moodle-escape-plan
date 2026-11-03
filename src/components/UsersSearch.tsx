@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "../data/users";
 import { KeyCommandIcon, SearchIcon, SearchClearIcon } from "./icons";
@@ -342,6 +343,7 @@ export function UsersSearch({
   query: string;
   onCommit: (q: string) => void;
 }) {
+  const t = useDsText();
   const companies = useMemo(() => {
     const counts = new Map<string, number>();
     users.forEach((u) => {
@@ -363,7 +365,7 @@ export function UsersSearch({
   return (
     <EntitySearch
       scopes={[scope]}
-      placeholder="Search Users by Name, Email, or Phone..."
+      placeholder={t("Search Users by Name, Email, or Phone...")}
       query={query}
       onCommit={onCommit}
     />

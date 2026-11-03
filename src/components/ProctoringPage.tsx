@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useMemo, useState } from "react";
 import { renameUser } from "../data/users";
 import {
@@ -183,6 +184,7 @@ export function ProctoringPage({
   /** That page's name, for the console's breadcrumb. */
   originLabel?: string;
 }) {
+  const t = useDsText();
   /* The session's store, not local state: App remounts this page on every
      navigation, and Pending ID Re-Uploads reads the same list. */
   const list = useSubmissions();
@@ -551,7 +553,7 @@ export function ProctoringPage({
         <div className="tasks pr-page">
           <header className="tasks-header">
             <div>
-              <h1 className="tasks-title">Exam Reviews</h1>
+              <h1 className="tasks-title">{t("Exam Reviews")}</h1>
             </div>
             <div className="tasks-header-actions">
               {/* Pending ID Re-Uploads is reached from here (the slot Name
@@ -559,8 +561,8 @@ export function ProctoringPage({
                   CANDIDATE, not on an admin, so a badge beside the review
                   queue's own numbers would read as work to pick up. */}
               <button className="cta-quiet" onClick={onPendingIdReuploads}>
-                Pending ID Re-Uploads
-              </button>
+{t("Pending ID Re-Uploads")}
+</button>
             </div>
           </header>
 
@@ -600,7 +602,7 @@ export function ProctoringPage({
                   PillTrigger pills over one Clear Filters link. */}
               <div className="filters">
                 <MultiPill
-                  label="Review Type"
+                  label={t("Review Type")}
                   all={REVIEW_TYPE_OPTIONS}
                   value={reviewTypeFilter}
                   onApply={setReviewTypeFilter}
@@ -612,7 +614,7 @@ export function ProctoringPage({
                   value={examFilter}
                   onApply={setExamFilter}
                   searchable
-                  searchPlaceholder="Search Quizzes..."
+                  searchPlaceholder={t("Search Quizzes...")}
                   width={300}
                   tip={FILTER_TIPS.examReviews.quiz}
                 />
@@ -624,7 +626,7 @@ export function ProctoringPage({
                     the rest. `align="left"` opens its wide panel along the row
                     now that it no longer hangs off the right edge. */}
                 <DateRangePill
-                  label="Submission Date"
+                  label={t("Submission Date")}
                   value={dateRange}
                   onChange={setDateRange}
                   tip={FILTER_TIPS.examReviews.dateRange}
@@ -633,8 +635,8 @@ export function ProctoringPage({
                 />
                 {hasFilters && (
                   <button className="filter-clear-link" onClick={clearFilters}>
-                    Clear Filters
-                  </button>
+{t("Clear Filters")}
+</button>
                 )}
               </div>
 
@@ -648,11 +650,11 @@ export function ProctoringPage({
                   <ProctoringColGroup />
                   <thead>
                     <tr>
-                      <SortableHeader col="candidate" label="User's Name" className="col-name" sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="candidate" label={t("User's Name")} className="col-name" sort={sort} toggle={toggleSort} />
                       <SortableHeader col="email" label="Email" className="pr-col-email" sort={sort} toggle={toggleSort} />
                       <SortableHeader col="phone" label="Phone" className="pr-col-phone" sort={sort} toggle={toggleSort} />
                       <SortableHeader col="exam" label="Quiz" className="pr-col-exam" sort={sort} toggle={toggleSort} />
-                      <SortableHeader col="submittedAt" label="Submitted On" className="pr-col-date" sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="submittedAt" label={t("Submitted On")} className="pr-col-date" sort={sort} toggle={toggleSort} />
                       <th className="col-actions" />
                     </tr>
                   </thead>
@@ -680,7 +682,7 @@ export function ProctoringPage({
                           <td className="col-actions">
                             <button
                               className="row-action-btn lone-dots row-chevron"
-                              aria-label="Review Exam"
+                              aria-label={t("Review Exam")}
                               onClick={(e) => { e.stopPropagation(); openReview(s.id); }}
                             >
                               <RowChevronIcon />
@@ -690,7 +692,7 @@ export function ProctoringPage({
                                 className="row-action-btn row-action-btn--label"
                                 onClick={(e) => { e.stopPropagation(); openReview(s.id); }}
                               >
-                                Review Exam
+                                {t("Review Exam")}
                                 <RowChevronIcon />
                               </button>
                             </div>
@@ -735,6 +737,7 @@ function RunCards({
   pending: Submission[];
   onPick: (k: RunKey) => void;
 }) {
+  const t = useDsText();
   const runs = [
     ...recents.map((k) => ({ k, recent: true })),
     ...suggested.map((k) => ({ k, recent: false })),
@@ -745,7 +748,7 @@ function RunCards({
         <ReviewRunCard
           key={runId(k)}
           count={pending.filter((s) => inRun(s, k)).length}
-          values={runTitles(k)}
+          values={runTitles(k).map(t)}
           sub={RUN_SUBTITLE[k.kind]}
           recent={recent}
           onClick={() => onPick(k)}
@@ -801,11 +804,12 @@ function SortableHeader({
   sort: { key: SortKey; dir: SortDir };
   toggle: (k: SortKey) => void;
 }) {
+  const t = useDsText();
   const active = sort.key === col;
   return (
     <th className={className} onClick={() => toggle(col)}>
       <span className="th-content">
-        {label}
+        {t(label)}
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>

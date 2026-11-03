@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useMemo, useState } from "react";
 import { SUBSCRIPTION_FILTER_OPTIONS, subscriptionFilterLabel, subscriptionText, type User } from "../data/users";
 import { PrmModal } from "./PrmModal";
@@ -91,6 +92,7 @@ export function GrantAttemptsModal({
   onGrant: (users: User[], count: number) => void;
   onClose: () => void;
 }) {
+  const t = useDsText();
   const [picked, setPicked] = useState<string[]>([]);
   // The flow opens ON the picker; the form appears behind it after Continue.
   const [picking, setPicking] = useState(true);
@@ -121,9 +123,9 @@ export function GrantAttemptsModal({
     <>
       {reachedForm && (
       <PrmModal
-        title="Grant Additional Attempts"
+        title={t("Grant Additional Attempts")}
         description={`Give extra attempts on “${quizName}”. The users you pick get them at no charge, logged as an admin grant.`}
-        confirmLabel="Grant Attempts"
+        confirmLabel={t("Grant Attempts")}
         confirmDisabled={!valid}
         onCancel={onClose}
         onConfirm={() => valid && onGrant(chosen, clamped)}
@@ -139,7 +141,7 @@ export function GrantAttemptsModal({
             <div className="multiselect">
               <div className="multiselect-field" onClick={() => setPicking(true)}>
                 {chosen.length === 0 ? (
-                  <span className="multiselect-placeholder">Select Users</span>
+                  <span className="multiselect-placeholder">{t("Select Users")}</span>
                 ) : (
                   <MultiSelectTags
                     tags={chosen.map((u) => ({
@@ -228,6 +230,7 @@ export function SelectGrantUsersModal({
   onCancel: () => void;
   onConfirm: (ids: string[]) => void;
 }) {
+  const t = useDsText();
   const [committedQuery, setCommittedQuery] = useState("");
   const [types, setTypes] = useState<string[]>([]);
   const [subs, setSubs] = useState<string[]>([]);
@@ -382,7 +385,7 @@ export function SelectGrantUsersModal({
         <div className="stm-toolbar">
           <EntitySearch
             scopes={scopes}
-            placeholder="Search Users by Name, Email, or Phone..."
+            placeholder={t("Search Users by Name, Email, or Phone...")}
             query={committedQuery}
             onCommit={(q) => {
               setCommittedQuery(q);
@@ -393,13 +396,13 @@ export function SelectGrantUsersModal({
           <div className="filters stm-filters">
             <Dropdown
               width={200}
-              trigger={({ open, toggle: t }) => (
+              trigger={({ open, toggle: tg }) => (
                 <PillTrigger
-                  label="User Type"
+                  label={t("User Type")}
                   tip={FILTER_TIPS.userPicker.type}
                   value={summarize(types, USER_TYPES)}
                   open={open}
-                  toggle={t}
+                  toggle={tg}
                   onClear={() => resetPage(setTypes)([])}
                 />
               )}
@@ -418,13 +421,13 @@ export function SelectGrantUsersModal({
 
             <Dropdown
               width={220}
-              trigger={({ open, toggle: t }) => (
+              trigger={({ open, toggle: tg }) => (
                 <PillTrigger
                   label="Subscription"
                   tip={FILTER_TIPS.userPicker.subscription}
                   value={summarize(subs, SUBSCRIPTIONS)}
                   open={open}
-                  toggle={t}
+                  toggle={tg}
                   onClear={() => resetPage(setSubs)([])}
                 />
               )}
@@ -443,13 +446,13 @@ export function SelectGrantUsersModal({
 
             <Dropdown
               width={220}
-              trigger={({ open, toggle: t }) => (
+              trigger={({ open, toggle: tg }) => (
                 <PillTrigger
                   label="Role"
                   tip={FILTER_TIPS.userPicker.role}
                   value={summarize(roles, ROLES)}
                   open={open}
-                  toggle={t}
+                  toggle={tg}
                   onClear={() => resetPage(setRoles)([])}
                 />
               )}
@@ -468,13 +471,13 @@ export function SelectGrantUsersModal({
 
             <Dropdown
               width={260}
-              trigger={({ open, toggle: t }) => (
+              trigger={({ open, toggle: tg }) => (
                 <PillTrigger
                   label="Company"
                   tip={FILTER_TIPS.userPicker.company}
                   value={summarize(companies, allCompanies)}
                   open={open}
-                  toggle={t}
+                  toggle={tg}
                   onClear={() => resetPage(setCompanies)([])}
                 />
               )}
@@ -520,9 +523,9 @@ export function SelectGrantUsersModal({
                     </button>
                     )}
                   </th>
-                  <Th col="name" label="User Name" cls="gam-col-name" sort={sort} toggle={toggleSort} />
+                  <Th col="name" label={t("User Name")} cls="gam-col-name" sort={sort} toggle={toggleSort} />
                   <Th col="email" label="Email" cls="gam-col-email" sort={sort} toggle={toggleSort} />
-                  <Th col="phone" label="Phone Number" cls="gam-col-phone" sort={sort} toggle={toggleSort} />
+                  <Th col="phone" label={t("Phone Number")} cls="gam-col-phone" sort={sort} toggle={toggleSort} />
                   <Th col="company" label="Company" cls="gam-col-company" sort={sort} toggle={toggleSort} />
                   <Th col="role" label="Role" cls="gam-col-role" sort={sort} toggle={toggleSort} />
                   <Th col="subscription" label="Subscription" cls="gam-col-plan" sort={sort} toggle={toggleSort} />
@@ -640,11 +643,12 @@ function Th({
   sort: { key: SortKey; dir: SortDir };
   toggle: (k: SortKey) => void;
 }) {
+  const t = useDsText();
   const active = sort.key === col;
   return (
     <th className={cls} onClick={() => toggle(col)}>
       <span className="th-content">
-        {label}
+        {t(label)}
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>

@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useRef, useState } from "react";
 import { CheckBoldIcon, DownloadIcon, UploadTrayIcon } from "./icons";
 import { NoteCard } from "./NoteCard";
@@ -54,6 +55,7 @@ export function CertBulkUploadModal({
   /** Confirmed — the wizard opens with the file's structure already built. */
   onImport: (report: CertImportReport) => void;
 }) {
+  const t = useDsText();
   const [report, setReport] = useState<CertImportReport | null>(null);
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -108,8 +110,8 @@ export function CertBulkUploadModal({
       <>
         <PrmModal
           className="qbu qbu--pick"
-          title="CSV Upload"
-          description="Bulk-create Courses, Lessons, and Tasks from a CSV file."
+          title={t("CSV Upload")}
+          description={t("Bulk-create Courses, Lessons, and Tasks from a CSV file.")}
           hideFooter
           onCancel={onClose}
         >
@@ -140,8 +142,7 @@ export function CertBulkUploadModal({
             <span className="drop-big-icon"><UploadTrayIcon /></span>
             <div className="drop-big-title">Drag and drop, or click to upload</div>
             <div className="drop-big-hint">
-              One row per Task · Blank Lesson columns put a Task directly under its Course ·
-              Every row is checked before importing
+              {t("One row per Task \u00b7 Blank Lesson columns put a Task directly under its Course \u00b7 Every row is checked before importing")}
             </div>
             {/* The template is its own action inside the zone — clicking it must
                 not also open the file picker. */}
@@ -154,7 +155,7 @@ export function CertBulkUploadModal({
               }}
             >
               <DownloadIcon />
-              Download Template
+              {t("Download Template")}
             </button>
           </div>
           {input}
@@ -182,7 +183,7 @@ export function CertBulkUploadModal({
           report.fatal ??
           "Each issue names the column to correct. Fix them in your spreadsheet and drop the CSV again. Nothing is imported until every row passes."
         }
-        confirmLabel="Re-Upload"
+        confirmLabel={t("Re-Upload")}
         onCancel={onClose}
         onConfirm={pickFile}
       >
@@ -194,8 +195,8 @@ export function CertBulkUploadModal({
               <span className="qbu-err-c-row">Row</span>
               <span className="qbu-err-c-cat">Course</span>
               <span className="qbu-err-c-sub">Lesson</span>
-              <span className="qbu-err-c-q">Task Name</span>
-              <span className="qbu-err-c-type">Task Type</span>
+              <span className="qbu-err-c-q">{t("Task Name")}</span>
+              <span className="qbu-err-c-type">{t("Task Type")}</span>
               <span className="qbu-err-c-issue">Issue</span>
             </div>
             <div className="qbu-err-body">
@@ -239,8 +240,8 @@ export function CertBulkUploadModal({
     <PrmModal
       className="qbu qbu--ready"
       title={`Add ${n} ${n === 1 ? "Task" : "Tasks"}`}
-      description="Here's the structure this file builds. Tasks already in the library are reused, not copied — the rest are created as new Tasks."
-      confirmLabel="Import & Continue"
+      description={t("Here's the structure this file builds. Tasks already in the library are reused, not copied \u2014 the rest are created as new Tasks.")}
+      confirmLabel={t("Import & Continue")}
       onCancel={onClose}
       onConfirm={() => onImport(report)}
     >
@@ -248,7 +249,7 @@ export function CertBulkUploadModal({
         tone="ok"
         icon={<CheckBoldIcon />}
         title={`All ${plural(n, "Row")} Passed`}
-        body="Nothing has been imported yet. Review what will be added, then continue into the Certification wizard."
+        body={t("Nothing has been imported yet. Review what will be added, then continue into the Certification wizard.")}
       />
 
       <div className="qbu-sum">

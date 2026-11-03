@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { Fragment, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { TimeField, TIME_UNIT_BY_LABEL, TIME_UNIT_LABEL, TIME_UNIT_OPTIONS, type TimeUnit } from "./TimeField";
 import { CERT_DEEP_LINK_BASE as DEEP_LINK_BASE, certSlug, slugify } from "../data/deepLinks";
@@ -981,6 +982,7 @@ type Props = {
 const CertToast = createContext<(label: string) => void>(() => {});
 
 export function NewCertificationWizard({ onClose, onCreate, onSave, editingCert, imported, restored, onQuestionCreated, onTasksCreated }: Props) {
+  const t = useDsText();
   const isEditing = !!editingCert;
   const steps = STEPS;
   const [step, setStep] = useState(0);
@@ -1201,7 +1203,7 @@ export function NewCertificationWizard({ onClose, onCreate, onSave, editingCert,
   }
 
   const isLast = step === lastStep;
-  const createLabel = isEditing ? "Save Changes" : "Create Certification";
+  const createLabel = t(isEditing ? "Save Changes" : "Create Certification");
 
   /* The same footer as the Task wizard: ⌘/Ctrl+Enter fires the primary
      (Continue, or Create Certification on the last step); adding Shift fires
@@ -1259,9 +1261,9 @@ export function NewCertificationWizard({ onClose, onCreate, onSave, editingCert,
   // nav and opens straight on the selected Course (Figma 886:1148).
   const stepHead = (
     <>
-      <h1 className="tasks-title">{steps[step].label}</h1>
+      <h1 className="tasks-title">{t(steps[step].label)}</h1>
       <p className="tasks-subtitle wizard-desc">
-        {steps[step].desc}
+        {t(steps[step].desc)}
         {steps[step].tip && (
           <span
             className="form-help-info wizard-desc-info"
@@ -1284,10 +1286,10 @@ export function NewCertificationWizard({ onClose, onCreate, onSave, editingCert,
         <aside className="wizard-nav">
           <div className="wizard-brand">
             <span className="wizard-brand-eyebrow">
-              {isEditing ? "Editing Certification" : "Creating"}
+              {isEditing ? t("Editing Certification") : t("Creating")}
             </span>
             <span className="wizard-brand-name">
-              {editingCert ? editingCert.name : "New Certification"}
+              {editingCert ? editingCert.name : t("New Certification")}
             </span>
           </div>
 
@@ -1302,7 +1304,7 @@ export function NewCertificationWizard({ onClose, onCreate, onSave, editingCert,
                 >
                   <WizardStepRail status={status} num={i + 1} />
                   <div className="wizard-step-text">
-                    <div className="wizard-step-title">{s.label}</div>
+                    <div className="wizard-step-title">{t(s.label)}</div>
                   </div>
                 </li>
               );
@@ -1370,7 +1372,7 @@ export function NewCertificationWizard({ onClose, onCreate, onSave, editingCert,
 
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
-          <button className="wizard-cancel" onClick={requestClose}>Cancel</button>
+          <button className="wizard-cancel" onClick={requestClose}>{t("Cancel")}</button>
         </div>
         <div className="wizard-actions">
           {step > 0 && (
@@ -1446,7 +1448,7 @@ export function NewCertificationWizard({ onClose, onCreate, onSave, editingCert,
           <SelectRequirementModal
             only="task"
             allCreators
-            title="Add Existing Tasks"
+            title={t("Add Existing Tasks")}
             description={`Adding to ${destinationLabel(data.courses, existingPicker)}. Library Tasks are reused, not duplicated.`}
             confirmNoun="Task"
             existingNames={flattenTasks(data.courses).map((t) => t.name)}
@@ -1585,13 +1587,14 @@ function DetailsStep({
   update: (p: Partial<WizardData>) => void;
   nameError?: boolean;
 }) {
+  const t = useDsText();
   return (
     <>
       <div className="form-group" onBlur={leave(() => touch("name"))}>
         <label className="form-label">
           Name<span className="req">*</span>
           {nameError && (
-            <span className="form-label-error">Enter a name to publish this Certification.</span>
+            <span className="form-label-error">{t("Enter a name to publish this Certification.")}</span>
           )}
           <LimitError max={NAME_MAX} values={[data.nameEn, data.nameEs]} />
         </label>
@@ -1609,7 +1612,7 @@ function DetailsStep({
 
       <div className="form-group">
         <label className="form-label">
-          Description
+          {t("Description")}
           <LimitError max={DESCRIPTION_MAX} values={[data.descEn, data.descEs]} />
         </label>
         <RichTextField
@@ -1622,12 +1625,12 @@ function DetailsStep({
           maxLength={DESCRIPTION_MAX}
         />
         <p className="form-help">
-          Around 200 characters reads best. Longer descriptions are accepted but truncated in compact views.
+          {t("Around 200 characters reads best. Longer descriptions are accepted but truncated in compact views.")}
         </p>
       </div>
 
       <div className="form-group">
-        <label className="form-label">Time to Complete</label>
+        <label className="form-label">{t("Time to Complete")}</label>
         <TimeField
           value={data.timeValue}
           unit={TIME_UNIT_LABEL[data.timeUnit]}
@@ -1636,7 +1639,7 @@ function DetailsStep({
           onUnitChange={(v) => update({ timeUnit: TIME_UNIT_BY_LABEL[v] })}
         />
         <p className="form-help">
-          Estimated time required for the user to complete the Task
+          {t("Estimated time required for the user to complete the Task")}
         </p>
       </div>
 
@@ -1645,7 +1648,7 @@ function DetailsStep({
           Archiving — the permanent retirement — is its own page off the row
           menu, not a visibility state. */}
       <div className="form-group">
-        <label className="form-label">Visibility</label>
+        <label className="form-label">{t("Visibility")}</label>
         <div className="seg-control">
           <button
             type="button"
@@ -1665,23 +1668,21 @@ function DetailsStep({
           </button>
         </div>
         <p className="form-help">
-          Hiding a Certification prevents any user from seeing it anywhere in the app (including in
-          their own Path). If the Certification is later made visible again, it reappears in the Path
-          for users
+          {t("Hiding a Certification prevents any user from seeing it anywhere in the app (including in their own Path). If the Certification is later made visible again, it reappears in the Path for users")}
         </p>
       </div>
 
       <div className="form-group">
-        <label className="form-label">Thumbnail</label>
+        <label className="form-label">{t("Thumbnail")}</label>
         <ImageUploadField
           value={data.thumbnail}
           onChange={(v) => update({ thumbnail: v })}
         />
-        <p className="form-help">Recommended aspect ratio is 4:3 or 1:1</p>
+        <p className="form-help">{t("Recommended aspect ratio is 4:3 or 1:1")}</p>
       </div>
 
       <div className="form-group">
-        <label className="form-label">Career Stage</label>
+        <label className="form-label">{t("Career Stage")}</label>
         <div className="seg-control">
           {CAREER_STAGES.map((s) => (
             <button
@@ -1693,12 +1694,12 @@ function DetailsStep({
               aria-pressed={data.careerStage === s.value}
               onClick={() => update({ careerStage: s.value })}
             >
-              {s.label}
+              {t(s.label)}
             </button>
           ))}
         </div>
         <p className="form-help form-help--tip">
-          The experience level this Certification is aimed at
+          {t("The experience level this Certification is aimed at")}
           <span
             className="form-help-info"
             tabIndex={0}
@@ -1712,7 +1713,7 @@ function DetailsStep({
       </div>
 
       <div className="form-group">
-        <label className="form-label">Type</label>
+        <label className="form-label">{t("Type")}</label>
         <div className="radio-card-group">
           {CERT_TYPES.map((t) => (
             <RadioCard
@@ -1724,7 +1725,7 @@ function DetailsStep({
             />
           ))}
         </div>
-        <p className="form-help">Only used for internal reference</p>
+        <p className="form-help">{t("Only used for internal reference")}</p>
       </div>
     </>
   );
@@ -1745,11 +1746,12 @@ function AdditionalInfoStep({
   /** A blocked create flagged the slug (shown even while the slug is empty). */
   slugError?: boolean;
 }) {
+  const t = useDsText();
   return (
     <>
       <div className="form-group">
         <label className="form-label">
-          Announcement
+          {t("Announcement")}
           <LimitError max={DESCRIPTION_MAX} values={[data.announceEn, data.announceEs]} />
         </label>
         <RichTextField
@@ -1757,32 +1759,32 @@ function AdditionalInfoStep({
           es={data.announceEs}
           onChangeEn={(v) => update({ announceEn: v })}
           onChangeEs={(v) => update({ announceEs: v })}
-          placeholderEn="Announcement..."
-          placeholderEs="Anuncio..."
+          placeholderEn={t("Announcement...")}
+          placeholderEs={t("Anuncio...")}
           maxLength={DESCRIPTION_MAX}
         />
-        <p className="form-help">Shown to learners currently going through this Certification. Use for important updates.</p>
+        <p className="form-help">{t("Shown to learners currently going through this Certification. Use for important updates.")}</p>
       </div>
 
       <div className="form-group">
-        <label className="form-label">CEUs Awarded</label>
+        <label className="form-label">{t("CEUs Awarded")}</label>
         <input
           className="form-input no-spinner small"
           type="text"
           inputMode="decimal"
-          placeholder="0.0"
+          placeholder={t("0.0")}
           value={data.ceus}
           onChange={(e) => {
             const v = e.target.value;
             if (v === "" || /^\d*\.?\d*$/.test(v)) update({ ceus: v });
           }}
         />
-        <p className="form-help">Decimal values supported. Leave blank if no CEUs are issued.</p>
+        <p className="form-help">{t("Decimal values supported. Leave blank if no CEUs are issued.")}</p>
       </div>
 
       <div className="form-group">
         <label className="form-label">
-          Keywords
+          {t("Keywords")}
           <LimitError max={NAME_MAX} values={[data.keywordsEn, data.keywordsEs]} />
         </label>
         <LangField
@@ -1795,15 +1797,14 @@ function AdditionalInfoStep({
           maxLength={NAME_MAX}
         />
         <p className="form-help">
-          Improves search and discoverability. Separate keywords with a comma
+          {t("Improves search and discoverability. Separate keywords with a comma")}
         </p>
       </div>
 
       <div className="form-group">
         <DeepLinkField data={data} update={update} editingId={editingId} flagged={slugError} />
         <p className="form-help">
-          URL-safe characters only (letters, numbers, dashes, underscores). Must be unique across
-          all Certifications.
+          {t("URL-safe characters only (letters, numbers, dashes, underscores). Must be unique across all Certifications.")}
         </p>
       </div>
     </>
@@ -1827,6 +1828,7 @@ function DeepLinkField({
   editingId?: string;
   flagged?: boolean;
 }) {
+  const t = useDsText();
   const effectiveSlug = effectiveSlugOf(data);
   // An emptied custom slug only flags once the field has been moved past or
   // a create was attempted — not the moment the last character goes.
@@ -1849,7 +1851,7 @@ function DeepLinkField({
       {/* The label lives here rather than in the caller because the slug
           error it carries in its row (Figma 1369:1479) is this field's own. */}
       <label className="form-label">
-        Deep Link
+        {t("Deep Link")}
         {error && <span className="form-label-error">{error}</span>}
       </label>
       <div className={`deeplink-input ${error ? "invalid" : ""}`}>
@@ -1858,7 +1860,7 @@ function DeepLinkField({
           <input
             className="deeplink-slug"
             value={effectiveSlug}
-            placeholder="Enter the DeepLink Slug..."
+            placeholder={t("Enter the DeepLink Slug...")}
             spellCheck={false}
             autoCapitalize="none"
             aria-invalid={!!error || undefined}
@@ -1987,6 +1989,7 @@ function TasksStep({
   onCreateTask: (courseId: string, lessonId: string | undefined, taskType: TaskTypeKey) => void;
   onAddExisting: (courseId: string, lessonId: string | undefined) => void;
 }) {
+  const t = useDsText();
   const toast = useContext(CertToast);
   const [importing, setImporting] = useState(false);
   // The live list, so Certifications created this session can be imported;
@@ -2334,11 +2337,10 @@ function TasksStep({
       {data.courses.length === 0 ? (
         <div className="ctb ctb--empty">
           <div className="ctb-start">
-            <span className="wizard-brand-eyebrow">Add Tasks</span>
-            <h1 className="tasks-title">Build the Certification</h1>
+            <span className="wizard-brand-eyebrow">{t("Add Tasks")}</span>
+            <h1 className="tasks-title">{t("Build the Certification")}</h1>
             <p className="tasks-subtitle wizard-desc">
-              A Certification is made of Courses. Each Course holds Lessons and Tasks. Start with
-              one Course, or bring Courses over from a Certification you have already built.
+              {t("A Certification is made of Courses. Each Course holds Lessons and Tasks. Start with one Course, or bring Courses over from a Certification you have already built.")}
             </p>
             <div className="ctb-start-cards">
               <button
@@ -2348,10 +2350,9 @@ function TasksStep({
               >
                 <span className="ctb-start-icon"><PlusThinIcon /></span>
                 <span className="rr-text">
-                  <span className="rr-title">Add New Courses</span>
+                  <span className="rr-title">{t("Add New Courses")}</span>
                   <span className="rr-sub">
-                    Create new Courses &amp; Lessons. Tasks can be created or existing ones can be
-                    added.
+                    {t("Create new Courses & Lessons. Tasks can be created or existing ones can be added.")}
                   </span>
                 </span>
               </button>
@@ -2362,9 +2363,9 @@ function TasksStep({
               >
                 <span className="ctb-start-icon"><ImportCoursesIcon /></span>
                 <span className="rr-text">
-                  <span className="rr-title">Import Courses</span>
+                  <span className="rr-title">{t("Import Courses")}</span>
                   <span className="rr-sub">
-                    Import Courses from other Certifications. Tasks are reused, not duplicated
+                    {t("Import Courses from other Certifications. Tasks are reused, not duplicated")}
                   </span>
                 </span>
               </button>
@@ -2423,11 +2424,11 @@ function TasksStep({
           <div className="ctb-side-foot">
             <button className="ctb-add-primary" onClick={addCourse}>
               <PlusThinIcon />
-              Add Course
+              {t("Add Course")}
             </button>
             <button className="ctb-add-sub" onClick={() => setImporting(true)}>
               <ImportCoursesIcon />
-              Import from Other Certifications
+              {t("Import from Other Certifications")}
             </button>
           </div>
         </aside>
@@ -2483,7 +2484,7 @@ function TasksStep({
         createPortal(
         <SelectRequirementModal
           only="cert"
-          title="Import Courses"
+          title={t("Import Courses")}
           description={
             criteriaLocked
               ? "Pick the Certifications to merge in. Their Courses, Lessons, and Tasks are copied in (Tasks are reused, not duplicated). Completion Criteria are locked, so they stay as they are."
@@ -2535,8 +2536,8 @@ function TasksStep({
       {deletingCourse &&
         createPortal(
           <PrmModal
-            title="Delete Course?"
-            confirmLabel="Delete Course"
+            title={t("Delete Course?")}
+            confirmLabel={t("Delete Course")}
             danger
             doubleConfirm={
               <>
@@ -2576,8 +2577,8 @@ function TasksStep({
       {deletingLesson &&
         createPortal(
           <PrmModal
-            title="Delete Lesson?"
-            confirmLabel="Delete Lesson"
+            title={t("Delete Lesson?")}
+            confirmLabel={t("Delete Lesson")}
             danger
             doubleConfirm={
               <>
@@ -2647,6 +2648,7 @@ function NodeModal({
   onCancel: () => void;
   onSave: (vals: NodeDraft) => void;
 }) {
+  const t = useDsText();
   const [draft, setDraft] = useState<NodeDraft>({
     nameEn: node?.nameEn ?? "",
     nameEs: node?.nameEs ?? "",
@@ -2719,7 +2721,7 @@ function NodeModal({
 
         <div className="prm-field">
           <span className="prm-label">
-            Description
+            {t("Description")}
             <LimitError max={DESCRIPTION_MAX} values={[draft.descEn, draft.descEs]} />
           </span>
           <RichTextField
@@ -2825,6 +2827,7 @@ function CoursePane({
   onOpenLessonEditor: (lesson: CertLesson) => void;
   onRemoveLesson: (lessonId: string) => void;
 }) {
+  const t = useDsText();
   const childScope = `course:${course.id}`;
   const groups = groupChildren(course.children);
   return (
@@ -2910,10 +2913,10 @@ function CoursePane({
       <div className="ctb-foot">
         <button className="ctb-add-primary" onClick={onAddLesson}>
           <PlusThinIcon />
-          Add Lesson
+          {t("Add Lesson")}
         </button>
         <AddTaskMenu
-          label="Add Task Directly to Lesson"
+          label={t("Add Task Directly to Lesson")}
           onCreateNew={onCreateTask}
           onAddExisting={onAddExistingTask}
         />
@@ -2956,6 +2959,7 @@ function LessonCard({
   onCreateTask: (taskType: TaskTypeKey) => void;
   onAddExistingTask: () => void;
 }) {
+  const t = useDsText();
   const taskScope = `lesson:${lesson.id}`;
   return (
     // The whole block takes a drop (not just its header), so a Lesson with a
@@ -2969,7 +2973,7 @@ function LessonCard({
         <div className="ctb-lesson-titles">
           <div className="ctb-lesson-eyebrow">
             Lesson {num}
-            {empty && <span className="form-label-error">Add at least one Task</span>}
+            {empty && <span className="form-label-error">{t("Add at least one Task")}</span>}
           </div>
           <div className="ctb-lesson-name-row">
             <span className="ctb-lesson-name">{lesson.nameEn || "Untitled Lesson"}</span>
@@ -2982,8 +2986,8 @@ function LessonCard({
         <span className="ctb-lesson-acts">
           <button
             className="ctb-lesson-edit"
-            aria-label="Edit Lesson"
-            title="Edit Lesson"
+            aria-label={t("Edit Lesson")}
+            title={t("Edit Lesson")}
             onClick={onOpenEditor}
           >
             <PencilIcon />
@@ -3148,6 +3152,7 @@ function gatePrereqs(task: CertTask, allTasks: CertTask[]): string[] {
 // The restriction banner under a gated Task (Figma 1246:2615), naming its
 // prerequisites. Nothing at all while there are none to name.
 function TaskGate({ names, mode }: { names: string[]; mode: AccessRestriction["mode"] }) {
+  const t = useDsText();
   if (names.length === 0) return null;
   // "A and B are completed" vs. the single-prerequisite / any-of "is completed".
   const verb = mode === "all" && names.length > 1 ? "are completed" : "is completed";
@@ -3155,7 +3160,7 @@ function TaskGate({ names, mode }: { names: string[]; mode: AccessRestriction["m
     <div className="ctb-task-gate">
       <span className="ctb-task-gate-icon"><RestrictionLockIcon /></span>
       <p className="ctb-task-gate-text">
-        Not Available Unless:{" "}
+        {t("Not Available Unless:")}{" "}
         {names.map((name, i) => (
           <Fragment key={i}>
             {i > 0 && (mode === "all" ? ", " : " or ")}
@@ -3214,6 +3219,7 @@ function TaskRow({
   onUpdate: (patch: Partial<CertTask>) => void;
   onRemove: () => void;
 }) {
+  const t = useDsText();
   const toast = useContext(CertToast);
   // The Access Restriction modal.
   const [restricting, setRestricting] = useState(false);
@@ -3326,7 +3332,7 @@ function TaskRow({
       {editing &&
         createPortal(
         <PrmModal
-          title="Edit Task"
+          title={t("Edit Task")}
           confirmLabel="Got it"
           hideCancel
           onCancel={() => setEditing(false)}
@@ -3343,8 +3349,8 @@ function TaskRow({
       {deleting &&
         createPortal(
         <PrmModal
-          title="Delete Task?"
-          confirmLabel="Delete Task"
+          title={t("Delete Task?")}
+          confirmLabel={t("Delete Task")}
           danger
           doubleConfirm={
             <>
@@ -3381,6 +3387,7 @@ function AccessRestrictionModal({
   /** `undefined` removes the restriction. */
   onSave: (restriction: AccessRestriction | undefined) => void;
 }) {
+  const t = useDsText();
   const existing = task.restriction?.enabled ? task.restriction : undefined;
   /* The Certification's own Tasks. The library's ID Upload Task is one of
      them only once it has been added to this Certification's tree; until then
@@ -3443,7 +3450,7 @@ function AccessRestrictionModal({
     >
       <div className="prm-stack">
         <div className="prm-field">
-          <label className="prm-label">Tasks</label>
+          <label className="prm-label">{t("Tasks")}</label>
           <MultiSelect
             options={names}
             value={picked}
@@ -3458,8 +3465,8 @@ function AccessRestrictionModal({
                   }
                 : undefined
             }
-            placeholder="Select Tasks"
-            searchPlaceholder="Search Tasks..."
+            placeholder={t("Select Tasks")}
+            searchPlaceholder={t("Search Tasks...")}
             popupMenu
             defaultOpen
           />
@@ -3468,7 +3475,7 @@ function AccessRestrictionModal({
             Single-Select's accent state (639:895) — the neutral fill is the
             modal card's own 20% wash and would vanish into it. */}
         <div className="prm-field">
-          <label className="prm-label">Unlocks When</label>
+          <label className="prm-label">{t("Unlocks When")}</label>
           <div className="seg-control">
             <button
               type="button"
@@ -3476,7 +3483,7 @@ function AccessRestrictionModal({
               aria-pressed={mode === "all"}
               onClick={() => setMode("all")}
             >
-              All Tasks are Completed
+              {t("All Tasks are Completed")}
             </button>
             <button
               type="button"
@@ -3484,7 +3491,7 @@ function AccessRestrictionModal({
               aria-pressed={mode === "any"}
               onClick={() => setMode("any")}
             >
-              Any One Task is Completed
+              {t("Any One Task is Completed")}
             </button>
           </div>
         </div>
@@ -3645,6 +3652,7 @@ function CompletionStep({
   /** Flagged by a publish attempt with no completable Condition Set. */
   missing?: boolean;
 }) {
+  const t = useDsText();
   const sets = data.conditionSets;
   const atCap = sets.length >= MAX_CONDITION_SETS;
 
@@ -3685,10 +3693,10 @@ function CompletionStep({
     <>
       <div className="form-group" onBlur={leave(() => touch("completion"))}>
         <label className="form-label cc-label">
-          Completion Criteria<span className="req">*</span>
+          {t("Completion Criteria")}<span className="req">*</span>
           {missing && (
             <span className="form-label-error">
-              Add at least one Condition Set with a requirement to publish.
+              {t("Add at least one Condition Set with a requirement to publish.")}
             </span>
           )}
         </label>
@@ -3739,15 +3747,14 @@ function CompletionStep({
                 <span className="cc-add-icon">
                   <PlusThinIcon />
                 </span>
-                Add Condition Set
+                {t("Add Condition Set")}
               </button>
             )}
           </div>
         </CompletionCriteriaGate>
 
         <p className="form-help">
-          Learner must satisfy any one Condition Set in full. Within the Condition Set, all items
-          must be completed.
+          {t("Learner must satisfy any one Condition Set in full. Within the Condition Set, all items must be completed.")}
         </p>
       </div>
     </>
@@ -3797,6 +3804,7 @@ function ConditionSetCard({
   onAddItems?: (items: CompletionItem[]) => void;
   onRemoveItem?: (itemId: string) => void;
 }) {
+  const t = useDsText();
   // "+ Add Requirement" opens the shared table picker (Select Tasks / Select
   // Questions chrome) rather than the 340px dropdown it used to open.
   const [picking, setPicking] = useState(false);
@@ -3819,7 +3827,7 @@ function ConditionSetCard({
           <button
             className="cc-head-x"
             onClick={onRemove}
-            title="Remove Condition Set"
+            title={t("Remove Condition Set")}
             aria-label={`Remove Condition Set ${index}`}
           >
             <CardMinusIcon />
@@ -3868,7 +3876,7 @@ function ConditionSetCard({
           existingCertIds={set.items.flatMap((i) => (i.kind === "cert" ? [i.certId] : []))}
           excludeCertIds={selfId ? [selfId] : undefined}
           lockedFlag={() => "In this Condition Set"}
-          lockedTip="Already in this Condition Set — each requirement can be added once."
+          lockedTip={t("Already in this Condition Set — each requirement can be added once.")}
           onCancel={() => setPicking(false)}
           onConfirm={(picks) => {
             onAddItems(picks.map(pickToItem));
@@ -3913,16 +3921,17 @@ function PaywallStep({
   data: WizardData;
   update: (p: Partial<WizardData>) => void;
 }) {
+  const t = useDsText();
   return (
     <>
       <div className="form-group">
-        <label className="form-label">Access Type</label>
+        <label className="form-label">{t("Access Type")}</label>
         <div className="radio-card-group">
           <RadioCard
             selected={data.accessType === "open"}
             onSelect={() => update({ accessType: "open" })}
             title={ACCESS_TYPE_LABEL.open}
-            desc="Free for any user who can see the Certification. Access depends on B2C tier."
+            desc={t("Free for any user who can see the Certification. Access depends on B2C tier.")}
           />
           <RadioCard
             selected={data.accessType === "non-consumable"}
@@ -3934,32 +3943,32 @@ function PaywallStep({
             selected={data.accessType === "consumable"}
             onSelect={() => update({ accessType: "consumable" })}
             title={ACCESS_TYPE_LABEL.consumable}
-            desc="Access lasts until an admin revokes it from Who Paid. The user can then buy it again."
+            desc={t("Access lasts until an admin revokes it from Who Paid. The user can then buy it again.")}
           />
         </div>
       </div>
 
       {data.accessType !== "open" && (
         <div className="form-group">
-          <label className="form-label">Product IDs</label>
+          <label className="form-label">{t("Product IDs")}</label>
           <PriceIdFields
             value={data.priceIds}
             onChange={(ids) => update({ priceIds: ids })}
           />
-          <p className="form-help">Enter the Product IDs from the respective stores.</p>
+          <p className="form-help">{t("Enter the Product IDs from the respective stores.")}</p>
         </div>
       )}
 
       {/* Repurchase behaviour applies only to Consumable paywalls. */}
       {data.accessType === "consumable" && (
         <div className="form-group">
-          <label className="form-label">Progress on Repurchase</label>
+          <label className="form-label">{t("Progress on Repurchase")}</label>
           <div className="radio-card-group">
             <RadioCard
               selected={data.consumableProgress === "reset"}
               onSelect={() => update({ consumableProgress: "reset" })}
               title={PROGRESS_LABEL.reset}
-              desc="All Task completions, Quiz attempts, and Quiz-Section completions for Tasks within the Certification are cleared for that user. On repurchase, the user starts fresh."
+              desc={t("All Task completions, Quiz attempts, and Quiz-Section completions for Tasks within the Certification are cleared for that user. On repurchase, the user starts fresh.")}
             />
             <RadioCard
               selected={data.consumableProgress === "preserve"}
@@ -3969,7 +3978,7 @@ function PaywallStep({
             />
           </div>
           <p className="form-help">
-            Only applies to Consumable Certifications. Reset will be required if and when we are allowed to offer OSHA ourselves.
+            {t("Only applies to Consumable Certifications. Reset will be required if and when we are allowed to offer OSHA ourselves.")}
           </p>
         </div>
       )}
@@ -3993,6 +4002,7 @@ function AudienceStep({
   data: WizardData;
   update: (p: Partial<WizardData>) => void;
 }) {
+  const t = useDsText();
   // Product Config's saved B2B Management lists, live.
   const { trades, partnerships } = useB2BConfig();
   const valuesOf = (type: ContentTagType) =>
@@ -4026,52 +4036,47 @@ function AudienceStep({
   return (
     <>
       <div className="form-group">
-        <label className="form-label">Audience</label>
+        <label className="form-label">{t("Audience")}</label>
         <SelectField
           className="select-field--full"
           value={audience}
           disabled={lockedB2B}
           options={AUDIENCE_OPTIONS}
+          dsCase
           onChange={(v) =>
             setValues("userType", v === AUDIENCE_B2B ? [USER_TYPE_VALUES[0]] : [])
           }
         />
         <p className="form-help">
-          Choose "B2B Companies Only" to hide this Certification from B2C users. "All
-          Users" means no audience restriction. B2C is still excluded if you set a Trade
-          or Partnership below.
+          {t("Choose \"B2B Companies Only\" to hide this Certification from B2C users. \"All Users\" means no audience restriction. B2C is still excluded if you set a Trade or Partnership below.")}
         </p>
       </div>
 
       <div className="form-group">
-        <label className="form-label">Trade</label>
+        <label className="form-label">{t("Trade")}</label>
         <MultiSelect
           options={trades}
           value={valuesOf("trade")}
           onChange={(v) => setValues("trade", v)}
-          placeholder="Select Trades"
-          searchPlaceholder="Search Trades..."
+          placeholder={t("Select Trades")}
+          searchPlaceholder={t("Search Trades...")}
         />
         <p className="form-help">
-          Only companies tagged with a Trade you pick will see this Certification. Picking
-          more than one Trade widens the audience — a company needs to match just one.
-          Leave blank so every company can see it.
+          {t("Only companies tagged with a Trade you pick will see this Certification. Picking more than one Trade widens the audience \u2014 a company needs to match just one. Leave blank so every company can see it.")}
         </p>
       </div>
 
       <div className="form-group">
-        <label className="form-label">Partnership</label>
+        <label className="form-label">{t("Partnership")}</label>
         <MultiSelect
           options={partnerships}
           value={valuesOf("partnership")}
           onChange={(v) => setValues("partnership", v)}
-          placeholder="Select Partnerships"
-          searchPlaceholder="Search Partnerships..."
+          placeholder={t("Select Partnerships")}
+          searchPlaceholder={t("Search Partnerships...")}
         />
         <p className="form-help">
-          Only companies in a Partnership you pick will see this Certification. Picking
-          more than one widens the audience — a company needs to match just one. Leave
-          blank so every company can see it, partnered or not.
+          {t("Only companies in a Partnership you pick will see this Certification. Picking more than one widens the audience \u2014 a company needs to match just one. Leave blank so every company can see it, partnered or not.")}
         </p>
       </div>
     </>
@@ -4095,6 +4100,7 @@ export function CertificationSummary({
    *  left out on the wizard's Review step, which has no such step. */
   contentLinks?: { prereqs: string[]; recommended: string[]; related: string[] };
 }) {
+  const t = useDsText();
   const lines = (names: string[]) =>
     names.length > 0 && names.map((n) => <div key={n}>{n}</div>);
   // Once per Certification: the sample structure mints fresh node ids.
@@ -4113,7 +4119,7 @@ export function CertificationSummary({
   const criteriaSets = data.conditionSets.filter((set) => set.items.length > 0);
   const singleRequirement = criteriaSets.length === 1 && criteriaSets[0].items.length === 1;
   const tasksCard = (
-    <ConfirmCard title="Courses, Lessons & Tasks">
+    <ConfirmCard title={t("Courses, Lessons & Tasks")}>
       <CourseTreeSummary courses={data.courses} allTasks={allTasks} />
     </ConfirmCard>
   );
@@ -4140,7 +4146,7 @@ export function CertificationSummary({
       />
 
       <ConfirmCard
-        title="Additional Info"
+        title={t("Additional Info")}
         fillBlanks
         rows={[
           ["Announcement", data.announceEn, true],
@@ -4172,7 +4178,7 @@ export function CertificationSummary({
           "Required", and the any-one / all note only shows once there is more
           than one requirement to combine (user, 2026-10-07). */}
       <ConfirmCard
-        title="Completion Criteria"
+        title={t("Completion Criteria")}
         fillBlanks
         rows={
           criteriaSets.length === 0
@@ -4198,7 +4204,7 @@ export function CertificationSummary({
 
       {contentLinks && (
         <ConfirmCard
-          title="Content Links"
+          title={t("Content Links")}
           fillBlanks
           rows={[
             ["Pre-Requisites", lines(contentLinks.prereqs)],
@@ -4384,6 +4390,7 @@ export function ArchiveCertificationPage({
     replacementAlert?: { en: string; es: string };
   }) => void;
 }) {
+  const t = useDsText();
   const alreadyArchived = !!cert.archived;
   // Replacements are a plain multi-select — the field is the shared
   // MultiSelect (Figma 591:1322), so the chosen Certs live as its pills. The
@@ -4466,7 +4473,7 @@ export function ArchiveCertificationPage({
         <div className="wizard-main">
           <div className="wizard-content">
             <div className="wizard-pane">
-              <h1 className="tasks-title">Archive &amp; Replace</h1>
+              <h1 className="tasks-title">{t("Archive & Replace")}</h1>
               <p className="tasks-subtitle wizard-desc">
                 {alreadyArchived ? (
                   <>
@@ -4504,20 +4511,20 @@ export function ArchiveCertificationPage({
               </div>
 
               <div className="form-group">
-                <label className="form-label">Replacement Certifications</label>
+                <label className="form-label">{t("Replacement Certifications")}</label>
                 <MultiSelect
                   options={replacementOptions}
                   value={replacementCerts}
                   onChange={setReplacementCerts}
-                  placeholder="Select Certifications"
-                  searchPlaceholder="Search Certifications..."
+                  placeholder={t("Select Certifications")}
+                  searchPlaceholder={t("Search Certifications...")}
                 />
-                <p className="form-help">When this Cert is archived, learners are pointed to the replacement(s) in their Path.</p>
+                <p className="form-help">{t("When this Cert is archived, learners are pointed to the replacement(s) in their Path.")}</p>
               </div>
 
               <div className="form-group">
                 <label className="form-label">
-                  Replacement Alert
+                  {t("Replacement Alert")}
                   <LimitError max={DESCRIPTION_MAX} values={[alertEn, alertEs]} />
                 </label>
                 <RichTextField
@@ -4528,7 +4535,7 @@ export function ArchiveCertificationPage({
                   maxLength={DESCRIPTION_MAX}
                 />
                 <p className="form-help">
-                  Shown to enrolled learners only when this Cert is archived. Different from the general Announcement.
+                  {t("Shown to enrolled learners only when this Cert is archived. Different from the general Announcement.")}
                 </p>
               </div>
             </div>
@@ -4538,15 +4545,15 @@ export function ArchiveCertificationPage({
 
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
-          <button className="wizard-cancel" onClick={() => guard(onClose)}>Cancel</button>
+          <button className="wizard-cancel" onClick={() => guard(onClose)}>{t("Cancel")}</button>
         </div>
         <div className="wizard-actions">
           {/* Archived mode only: the way back out of Archived, left of the
               primary — explained, then confirmed, before it runs. */}
           {alreadyArchived && (
             <button className="cta-quiet" onClick={() => setUnarchiving(true)}>
-              Unarchive
-            </button>
+{t("Unarchive")}
+</button>
           )}
           <button
             className={`btn-publish${ctaBlocked ? " is-disabled" : ""}`}
@@ -4573,8 +4580,8 @@ export function ArchiveCertificationPage({
       {confirming &&
         createPortal(
           <PrmModal
-            title="Archive this Certification?"
-            confirmLabel="Archive Certification"
+            title={t("Archive this Certification?")}
+            confirmLabel={t("Archive Certification")}
             danger
             doubleConfirm={
               <>
@@ -4619,6 +4626,7 @@ function RadioCard({
   title: React.ReactNode;
   desc?: string;
 }) {
+  const t = useDsText();
   return (
     <button
       type="button"
@@ -4627,8 +4635,8 @@ function RadioCard({
     >
       <span className="radio-dot" />
       <div className="radio-card-text">
-        <div className="radio-card-title">{title}</div>
-        {desc && <div className="radio-card-desc">{desc}</div>}
+        <div className="radio-card-title">{typeof title === "string" ? t(title) : title}</div>
+        {desc && <div className="radio-card-desc">{t(desc)}</div>}
       </div>
     </button>
   );

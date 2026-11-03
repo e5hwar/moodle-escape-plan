@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -78,6 +79,7 @@ function initialData(p: Props): Data {
  * the note card (1121:1671).
  */
 export function NewAwardWizard(props: Props) {
+  const t = useDsText();
   const { onClose, certification: cert } = props;
   const isEditing = !!props.editingAward;
   const [data, setData] = useState<Data>(() => initialData(props));
@@ -160,16 +162,16 @@ export function NewAwardWizard(props: Props) {
                     back out; there is no page for one Certification, so it gets
                     no crumb — every crumb is clickable. */}
                 <nav className="rvc-crumbs" aria-label="Breadcrumb">
-                  <button className="rvc-crumb" onClick={requestClose} title="Back to Certifications">
+                  <button className="rvc-crumb" onClick={requestClose} title={t("Back to Certifications")}>
                     Certifications
                   </button>
                 </nav>
                 <div className="rvc-pagehead">
-                  <h1 className="tasks-title">{title}</h1>
+                  <h1 className="tasks-title">{t(title)}</h1>
                 </div>
                 <p className="tasks-subtitle wizard-desc">
-                  Completing {cert.name} issues this Award. Set its Merit Tier and
-                  choose how it appears in the user’s Portfolio.
+                  {t("Completing")} {cert.name}{" "}
+                  {t("issues this Award. Set its Merit Tier and choose how it appears in the user’s Portfolio.")}
                 </p>
 
                 <MeritTierField data={data} update={update} />
@@ -184,32 +186,32 @@ export function NewAwardWizard(props: Props) {
                     so neither is individually optional — which one you drop is
                     the choice. The blocked Create button spells the rule out. */}
                 <TemplateField
-                  label="Card Design"
+                  label={t("Card Design")}
                   required
                   error={cardMissing}
                   onLeave={() => touch("card")}
                   templates={props.templates}
                   selectedId={data.cardTemplateId}
                   onSelect={(id) => update({ cardTemplateId: id })}
-                  emptyLabel="No Card"
-                  pickerTitle="Select Card Design"
-                  pickerDescription="Pick the Design Template for this Award’s Card on the user’s Portfolio."
+                  emptyLabel={t("No Card")}
+                  pickerTitle={t("Select Card Design")}
+                  pickerDescription={t("Pick the Design Template for this Award’s Card on the user’s Portfolio.")}
                   awards={props.allAwards}
-                  help="Compact visual shown on the user’s Portfolio. Recommended for every Award."
+                  help={t("Compact visual shown on the user\u2019s Portfolio. Recommended for every Award.")}
                 />
                 <TemplateField
-                  label="Certificate Design"
+                  label={t("Certificate Design")}
                   required
                   error={certificateMissing}
                   onLeave={() => touch("certificate")}
                   templates={props.templates}
                   selectedId={data.certificateTemplateId}
                   onSelect={(id) => update({ certificateTemplateId: id })}
-                  emptyLabel="No Certificate"
-                  pickerTitle="Select Certificate Design"
-                  pickerDescription="Pick the Design Template for this Award’s Certificate."
+                  emptyLabel={t("No Certificate")}
+                  pickerTitle={t("Select Certificate Design")}
+                  pickerDescription={t("Pick the Design Template for this Award’s Certificate.")}
                   awards={props.allAwards}
-                  help="Detailed document for printing, PDF export, and formal verification — Trade School diplomas, for example."
+                  help={t("Detailed document for printing, PDF export, and formal verification \u2014 Trade School diplomas, for example.")}
                 />
 
               </div>
@@ -225,7 +227,7 @@ export function NewAwardWizard(props: Props) {
 
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
-          <button className="wizard-cancel" onClick={requestClose}>Cancel</button>
+          <button className="wizard-cancel" onClick={requestClose}>{t("Cancel")}</button>
           {/* Deleting the Award is the only way to give the Certification its
               "Add Award" entry back, and the Awards table that used to carry
               the action is gone — so it sits here, on the footer's left, far
@@ -235,7 +237,7 @@ export function NewAwardWizard(props: Props) {
               className="btn-publish btn-publish--danger"
               onClick={() => setConfirmDelete(true)}
             >
-              Delete Award
+              {t("Delete Award")}
             </button>
           )}
         </div>
@@ -250,7 +252,7 @@ export function NewAwardWizard(props: Props) {
             data-tip={blockedTip}
             onClick={() => { if (canSave) handleSave(); else if (!appearanceValid) setAttempted(true); }}
           >
-            {isEditing ? "Save Changes" : "Create Award"}
+            {isEditing ? t("Save Changes") : t("Create Award")}
             <WizardKeyHint />
           </button>
         </div>
@@ -258,8 +260,8 @@ export function NewAwardWizard(props: Props) {
 
       {confirmDelete && props.editingAward && (
         <ConfirmModal
-          title="Delete this Award?"
-          confirmLabel="Delete Award"
+          title={t("Delete this Award?")}
+          confirmLabel={t("Delete Award")}
           danger
           doubleConfirm={
             <>
@@ -302,10 +304,11 @@ function MeritTierField({
   data: Data;
   update: (p: Partial<Data>) => void;
 }) {
+  const t = useDsText();
   return (
     <div className="form-group">
       <label className="form-label">
-        Merit Tier<span className="req">*</span>
+        {t("Merit Tier")}<span className="req">*</span>
       </label>
       <div className="radio-card-group">
         {MERIT_TIERS.map((tier) => (
@@ -319,8 +322,7 @@ function MeritTierField({
         ))}
       </div>
       <p className="form-help">
-        Tiers are fixed and control where the Award sits in the user’s Portfolio — Platinum at the
-        top, Bronze at the bottom.
+        {t("Tiers are fixed and control where the Award sits in the user\u2019s Portfolio \u2014 Platinum at the top, Bronze at the bottom.")}
       </p>
     </div>
   );
@@ -335,9 +337,10 @@ function StatusField({
   data: Data;
   update: (p: Partial<Data>) => void;
 }) {
+  const t = useDsText();
   return (
     <div className="form-group">
-      <label className="form-label">Status</label>
+      <label className="form-label">{t("Status")}</label>
       <div className="seg-control">
         <button
           type="button"
@@ -404,6 +407,7 @@ function TemplateField({
   selectedId?: string;
   onSelect: (id: string | undefined) => void;
 }) {
+  const t = useDsText();
   const [open, setOpen] = useState(false);
   const selected = selectedId ? templates.find((t) => t.id === selectedId) : undefined;
   const value = selected?.name ?? emptyLabel;
@@ -418,7 +422,7 @@ function TemplateField({
       <label className="form-label">
         {label}{required && <span className="req">*</span>}
         {error && (
-          <span className="form-label-error">Choose a Card or a Certificate design</span>
+          <span className="form-label-error">{t("Choose a Card or a Certificate design")}</span>
         )}
       </label>
       <button
@@ -432,7 +436,7 @@ function TemplateField({
       </button>
       {/* Templates themselves are managed on Product Config › Award Templates —
           this field only picks one. */}
-      <p className="form-help">{help}</p>
+      <p className="form-help">{t(help)}</p>
       {/* Portalled: `.wizard-pane` carries a transform, which would turn the
           overlay's `position: fixed` into a box inside the pane. */}
       {open && createPortal(
@@ -470,13 +474,14 @@ function AwardPreview({
   card?: AwardDesignTemplate;
   certificate?: AwardDesignTemplate;
 }) {
+  const t = useDsText();
   return (
     <aside className="aw-preview">
       <h2 className="aw-preview-title">Preview</h2>
 
       {!card && !certificate ? (
         <div className="aw-preview-empty">
-          Pick a Card or Certificate design and it appears here.
+          {t("Pick a Card or Certificate design and it appears here.")}
         </div>
       ) : (
         <>
@@ -485,9 +490,9 @@ function AwardPreview({
                item 75): label, the artwork where the control would be, and
                the picked template's name as the subtext. */
             <div className="form-group aw-preview-slot">
-              <div className="form-label">Card</div>
+              <div className="form-label">{t("Card")}</div>
               <div className="art-ph aw-art aw-art--card">
-                The Card must show here with the Viewer's data used for the dynamic fields
+                {t("The Card must show here with the Viewer's data used for the dynamic fields")}
               </div>
               <p className="form-help">{card.name}</p>
             </div>
@@ -495,9 +500,9 @@ function AwardPreview({
 
           {certificate && (
             <div className="form-group aw-preview-slot">
-              <div className="form-label">Certificate</div>
+              <div className="form-label">{t("Certificate")}</div>
               <div className="art-ph aw-art aw-art--cert">
-                The Certificate must show here with the Viewer's data used for the dynamic fields
+                {t("The Certificate must show here with the Viewer's data used for the dynamic fields")}
               </div>
               <p className="form-help">{certificate.name}</p>
             </div>

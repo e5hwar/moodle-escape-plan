@@ -1,0 +1,2856 @@
+/* =============================================================
+ * SkillCat Design System — Compact density
+ * Figma: SkillCat-UI (EEki6uMz0Q3KkQv8vhKkvD), "App & Web v1.0 Design System"
+ *
+ * Loaded after index.css and keyed off `html[data-ds="skillcat"]`, which the
+ * Demo Controls panel toggles. Nothing in the React tree changes between the
+ * two design systems — the same screen, the same typed-in data — only these
+ * overrides switch on. Every rule here re-skins a class index.css already
+ * draws; the ids in comments are the DS components it was measured from.
+ *
+ * Density: Compact everywhere (Foundations › Density: "LMS = Compact"). The
+ * places that deliberately use Comfortable are listed in
+ * specs/skillcat-ds-exceptions.md.
+ * ============================================================= */
+
+html[data-ds="skillcat"] {
+  /* Semantic colors (Foundations › Color, 18192:36) */
+  --sc-bg-canvas: #0d0d0d;
+  --sc-bg-surface: #1b1b1b;
+  --sc-bg-raised: #222222;
+  --sc-bg-hover: #2e2e2e;
+  --sc-surface-menu: #1d1d1d;
+  --sc-border-subtle: #363535;
+  --sc-border-default: #404040;
+  --sc-border-divider: rgba(64, 64, 64, 0.5);
+  --sc-border-muted: #7a7a7a;
+  --sc-border-focus: #fcfcfc;
+  --sc-border-control: rgba(122, 122, 122, 0.1);
+  --sc-surface-control: rgba(122, 122, 122, 0.15);
+  --sc-surface-control-strong: rgba(122, 122, 122, 0.2);
+  --sc-surface-control-hover: rgba(122, 122, 122, 0.3);
+  --sc-surface-row-hover: rgba(115, 115, 115, 0.1);
+  --sc-surface-row-hover-subtle: rgba(122, 122, 122, 0.05);
+  --sc-surface-row-selected: rgba(122, 122, 122, 0.1);
+  --sc-surface-locked: rgba(64, 64, 64, 0.14);
+  --sc-text-primary: #fcfcfc;
+  --sc-text-secondary: #a8a8a8;
+  --sc-text-tertiary: #7a7a7a;
+  --sc-text-placeholder: #8a8a8a;
+  --sc-text-disabled: #737373;
+  --sc-text-on-color: #ffffff;
+  --sc-primary: #f05523;
+  --sc-primary-hover: #f8754b;
+  --sc-primary-pressed: #8a3114;
+  --sc-primary-subtle: rgba(240, 85, 35, 0.1);
+  --sc-primary-border-subtle: rgba(240, 85, 35, 0.15);
+  --sc-primary-border: rgba(240, 85, 35, 0.75);
+  --sc-error: #ff1f17;
+  --sc-success: #29b673;
+  --sc-warning: #ffc524;
+  --sc-purple: #9d88ff;
+  --sc-status-neutral: rgba(115, 115, 115, 0.1);
+  --sc-status-error: rgba(255, 31, 23, 0.1);
+  --sc-status-success: rgba(41, 182, 115, 0.1);
+  --sc-status-warning: rgba(255, 197, 36, 0.1);
+  --sc-status-purple: rgba(105, 68, 255, 0.1);
+
+  /* The button / chip fills are a tint composited on #0d0d0d (Glass Flat). */
+  --sc-fill-primary: linear-gradient(0deg, rgba(138, 49, 20, 0.75) 0%, rgba(240, 85, 35, 0.75) 70.9%), rgba(13, 13, 13, 0.75);
+  --sc-fill-secondary: linear-gradient(var(--sc-surface-control-strong), var(--sc-surface-control-strong)), #0d0d0d;
+  --sc-fill-secondary-hover: linear-gradient(var(--sc-surface-control-hover), var(--sc-surface-control-hover)), #0d0d0d;
+  --sc-fill-glass: linear-gradient(var(--sc-surface-control-strong), var(--sc-surface-control-strong)), #0d0d0d;
+  --sc-shadow-menu: 0 8px 24px rgba(0, 0, 0, 0.4);
+
+  /* Re-point the app's own tokens so anything drawn from them follows. */
+  --bg: var(--sc-bg-canvas);
+  --bg-panel: var(--sc-bg-surface);
+  --bg-row-hover: var(--sc-bg-hover);
+  --border: var(--sc-border-default);
+  --border-strong: var(--sc-border-muted);
+  --text: var(--sc-text-primary);
+  --text-muted: var(--sc-text-secondary);
+  --text-faint: var(--sc-text-tertiary);
+  --accent: var(--sc-primary);
+  --accent-strong: var(--sc-primary-hover);
+  --field-error: var(--sc-error);
+  --field-focus: var(--sc-border-focus);
+  --field-warning: var(--sc-warning);
+  --row-hover-wash: var(--sc-surface-row-hover-subtle);
+  --panel-bg: var(--sc-surface-menu);
+  --panel-border: var(--sc-border-default);
+  --search-bg: var(--sc-surface-control);
+  --search-border: var(--sc-border-default);
+  --search-bg-hover: var(--sc-surface-control);
+  --search-h: 40px;
+  --search-h-lg: 40px;
+}
+
+/* ===== List page head — Eric's "Tasks, row menu" (DJoYweP5YPusfzCFDByOFp 1:1337) =====
+   Title block: headlineMedium Bold 24 / 29 with the summary (Page/Subtitle
+   16 / 24 grey) 4 below it, the header buttons at the right, centred on the
+   block, 16 above. No line under it (the DS has no page-head divider; the
+   one in Eric's screen is dropped, Eshwar 2026-11-03). Then 24 to the search —
+   Input / Search Default (Compact 40), Filled style (15% grey on a #404040
+   edge), IBM Plex Mono 14 — 12 to the chip row (28 Table-select chips, 8
+   apart), 24 to the table. The markup stays what it is (`.tasks-header`, `.tasks-title`,
+   `.tasks-subtitle`, `.toolbar`, `.filters` as siblings); the element that
+   holds them becomes a three-column grid and each piece is placed. The
+   collapsing-header animation (`.tasks.clh`) is switched off: Eric's head is
+   one fixed band that stays pinned while the rows scroll under it. */
+html[data-ds="skillcat"] :has(> .tasks-title):has(> .toolbar + .filters) {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  column-gap: 16px;
+  align-items: center;
+}
+html[data-ds="skillcat"] :has(> .tasks-title):has(> .toolbar + .filters) > * {
+  grid-column: 1 / -1;
+}
+html[data-ds="skillcat"] :has(> .tasks-title):has(> .toolbar + .filters) > .tasks-title {
+  grid-column: 1 / 3;
+  grid-row: 1;
+  margin: 0;
+  padding-top: 16px;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 29px;
+  white-space: nowrap;
+}
+html[data-ds="skillcat"] :has(> .tasks-title):has(> .toolbar + .filters) > .tasks-subtitle {
+  grid-column: 1 / 3;
+  grid-row: 2;
+  display: block;
+  width: auto;
+  margin: 0;
+  padding-top: 4px;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+  color: var(--sc-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+html[data-ds="skillcat"] :has(> .tasks-title):has(> .toolbar + .filters) > .tasks-header {
+  grid-column: 3;
+  grid-row: 1 / 3;
+  align-self: end;
+  margin: 0;
+  padding: 0;
+  width: max-content;
+}
+html[data-ds="skillcat"] :has(> .tasks-title):has(> .toolbar + .filters) > .toolbar {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  margin: 0;
+  padding: 24px 0 12px;
+}
+html[data-ds="skillcat"] :has(> .tasks-title):has(> .toolbar + .filters) > .toolbar + .filters {
+  grid-column: 1 / -1;
+  grid-row: 4;
+  min-height: 28px;
+  padding-bottom: 24px;
+}
+html[data-ds="skillcat"] .tasks-header-actions {
+  gap: 12px;
+  min-height: 32px;
+}
+/* The page search: Default (Compact 40), Filled. */
+html[data-ds="skillcat"] .toolbar .usearch-bar,
+html[data-ds="skillcat"] .tasks.clh .toolbar .usearch-bar {
+  height: 40px;
+  gap: 8px;
+  padding: 0 11px;
+  background: linear-gradient(var(--sc-surface-control), var(--sc-surface-control)), var(--sc-bg-canvas);
+  border: 1px solid var(--sc-border-default);
+  border-radius: 8px;
+}
+html[data-ds="skillcat"] .toolbar .usearch-bar:hover,
+html[data-ds="skillcat"] .tasks.clh .toolbar .usearch-bar:hover {
+  background: linear-gradient(var(--sc-surface-control), var(--sc-surface-control)), var(--sc-bg-canvas);
+  border-color: var(--sc-border-muted);
+}
+html[data-ds="skillcat"] .toolbar .usearch-bar.open,
+html[data-ds="skillcat"] .toolbar .usearch-bar:focus-within,
+html[data-ds="skillcat"] .tasks.clh .toolbar .usearch-bar.open,
+html[data-ds="skillcat"] .tasks.clh .toolbar .usearch-bar:focus-within {
+  border-color: var(--sc-border-focus);
+}
+/* The landing pages' big search text (index.css: 20 on `.tasks.clh`, a
+   16–20 calc on `.tasks.lm`) leaked through at 20 — the DS value is mono 14. */
+html[data-ds="skillcat"] .tasks.clh .toolbar .usearch-input,
+html[data-ds="skillcat"] .tasks.clh .toolbar .usearch-input::placeholder,
+html[data-ds="skillcat"] .tasks.lm .toolbar .usearch-input,
+html[data-ds="skillcat"] .tasks.lm .toolbar .usearch-input::placeholder,
+html[data-ds="skillcat"] .tasks.lm .toolbar .search-input::placeholder {
+  font-size: 14px;
+  line-height: 18px;
+}
+html[data-ds="skillcat"] .tasks.lm .toolbar .usearch-kbd .kbd-letter {
+  font-size: 12px;
+}
+html[data-ds="skillcat"] .tasks.lm .toolbar .search-wrap > .search-icon svg,
+html[data-ds="skillcat"] .tasks.lm .toolbar .usearch-icon svg {
+  width: 16px;
+  height: 16px;
+}
+/* Switch the collapse off: no rises, no scaling title, no two-half search bar. */
+html[data-ds="skillcat"] .tasks.clh {
+  --clh-title-drop: 0px;
+  --clh-title-grow: 0px;
+  --clh-sub-h: 0px;
+  --clh-bar-grow: 0px;
+  --clh-gap-grow: 0px;
+  --clh-banner-h: 0px;
+  --clh-note-h: 0px;
+}
+html[data-ds="skillcat"] .tasks.clh .clh-canvas {
+  min-height: 100%;
+}
+html[data-ds="skillcat"] .tasks.clh .clh-head > *,
+html[data-ds="skillcat"] .tasks.clh .clh-head > *::before,
+html[data-ds="skillcat"] .tasks.clh .clh-head > *::after,
+html[data-ds="skillcat"] .tasks.clh .toolbar .usearch-bar::before,
+html[data-ds="skillcat"] .tasks.clh .toolbar .usearch-bar::after,
+html[data-ds="skillcat"] .tasks.clh .toolbar .usearch-panel,
+html[data-ds="skillcat"] .tasks.clh .toolbar .usearch-icon,
+html[data-ds="skillcat"] .tasks.clh .toolbar .usearch-bar > .usearch-scope,
+html[data-ds="skillcat"] .tasks.clh .toolbar .usearch-input,
+html[data-ds="skillcat"] .tasks.clh .toolbar .usearch-clear,
+html[data-ds="skillcat"] .tasks.clh .toolbar .usearch-kbd,
+html[data-ds="skillcat"] .tasks.clh .toolbar .usearch-kbd .kbd-cmd,
+html[data-ds="skillcat"] .tasks.clh .toolbar .usearch-kbd .kbd-cmd svg,
+html[data-ds="skillcat"] .tasks.clh .clh-canvas > .table-head::after {
+  animation: none !important;
+  transform: none !important;
+}
+html[data-ds="skillcat"] .tasks.clh .clh-head::after,
+html[data-ds="skillcat"] .tasks.clh .clh-head > .toolbar::before,
+html[data-ds="skillcat"] .tasks.clh .toolbar .usearch-bar::before,
+html[data-ds="skillcat"] .tasks.clh .toolbar .usearch-bar::after {
+  display: none;
+}
+html[data-ds="skillcat"] .tasks.clh .clh-head {
+  background: var(--sc-bg-canvas);
+}
+html[data-ds="skillcat"] .tasks.clh .clh-head::before {
+  height: 100%;
+}
+html[data-ds="skillcat"] .tasks.clh .clh-head > .clh-actions {
+  margin: 0;
+}
+html[data-ds="skillcat"] .tasks.clh .clh-head > .tasks-title {
+  font-size: 24px;
+  line-height: 29px;
+}
+html[data-ds="skillcat"] .tasks.clh .clh-head > .clh-sub {
+  font-size: 16px;
+  line-height: 24px;
+  margin: 0;
+  padding-top: 3px;
+}
+html[data-ds="skillcat"] .tasks.clh .toolbar .usearch-icon svg {
+  width: 16px;
+  height: 16px;
+}
+/* The suggestions panel keeps the bar's width. */
+html[data-ds="skillcat"] .toolbar .usearch-panel {
+  top: calc(100% + 4px);
+}
+
+/* ===== Shell ===== */
+html[data-ds="skillcat"] .app {
+  background: var(--sc-bg-canvas);
+}
+
+/* ===== Sidebar (18945:4167 — pinned Compact) =====
+   240 expanded / 64 collapsed on bg/surface, 24 top, 16 sides, 16 bottom.
+   Rows are Menu / Item Tone Subtle: 36 min, padding 8, radius 8, Regular 14
+   grey; current = 10% tint + SemiBold white. Section labels are plain 14 grey
+   rows, 28 tall, with an 8 gap before them. */
+html[data-ds="skillcat"] .sidebar-host--wide {
+  width: 240px;
+}
+html[data-ds="skillcat"] .sidebar-host--narrow {
+  width: 64px;
+}
+html[data-ds="skillcat"] .sidebar {
+  background: var(--sc-bg-surface);
+  border-right: none;
+  padding: 24px 16px 16px;
+  gap: 4px;
+}
+html[data-ds="skillcat"] .sidebar--collapsed {
+  padding: 24px 12px 16px;
+  align-items: center;
+}
+html[data-ds="skillcat"] .sidebar__header {
+  padding: 0 0 12px 8px;
+  border-bottom: none;
+  margin-bottom: 12px;
+}
+html[data-ds="skillcat"] .sidebar__top-collapsed {
+  justify-content: center;
+  padding: 0 0 12px;
+  border-bottom: none;
+  margin-bottom: 12px;
+}
+html[data-ds="skillcat"] .sidebar__brand img,
+html[data-ds="skillcat"] .sidebar__logo-btn img {
+  width: 24px;
+  height: 24px;
+}
+html[data-ds="skillcat"] .sidebar__nav,
+html[data-ds="skillcat"] .sidebar__nav-collapsed {
+  padding: 0;
+  gap: 0;
+}
+html[data-ds="skillcat"] .sidebar__group {
+  gap: 0;
+}
+html[data-ds="skillcat"] .sidebar__group + .sidebar__group {
+  margin-top: 8px;
+}
+html[data-ds="skillcat"] .sidebar__section {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 4px 8px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .sidebar__group-items {
+  gap: 4px;
+}
+html[data-ds="skillcat"] .sidebar__link {
+  gap: 8px;
+  min-height: 36px;
+  padding: 8px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .sidebar__link:hover {
+  background: var(--sc-surface-row-hover);
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .sidebar__link.is-active {
+  background: var(--sc-surface-row-selected);
+  color: var(--sc-text-primary);
+  font-weight: 600;
+}
+html[data-ds="skillcat"] .sidebar__link-icon {
+  width: 16px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Counts are plain text on the right of the row, not a pill. */
+html[data-ds="skillcat"] .sidebar__link-badge {
+  width: auto;
+  height: auto;
+  padding: 0;
+  background: none;
+  border-radius: 0;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .sidebar__link.is-active .sidebar__link-badge {
+  background: none;
+  color: var(--sc-text-secondary);
+}
+/* Collapsed: Ghost icon buttons 32, 16 icon; a 36 section gap holds the icons
+   level with the expanded rows. */
+html[data-ds="skillcat"] .sidebar__group-collapsed {
+  gap: 4px;
+}
+html[data-ds="skillcat"] .sidebar__group-collapsed + .sidebar__group-collapsed {
+  margin-top: 36px;
+}
+html[data-ds="skillcat"] .sidebar__icon-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .sidebar__icon-btn:hover {
+  background: var(--sc-surface-row-hover);
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .sidebar__icon-btn.is-active {
+  background: var(--sc-fill-secondary);
+  border: 0.5px solid var(--sc-border-control);
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .sidebar__footer {
+  padding-top: 0;
+  border-top: none;
+}
+html[data-ds="skillcat"] .sidebar__collapse-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .sidebar__collapse-icon:hover {
+  background: var(--sc-surface-row-hover);
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .sidebar__collapse-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ===== Page header =====
+   displayLarge Compact: Fira Sans Bold 32 / 34. Page/Subtitle: Regular 16 / 24
+   grey. (Type, 18192:37) */
+html[data-ds="skillcat"] .tasks-title {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 34px;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .tasks-subtitle {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+  color: var(--sc-text-secondary);
+}
+
+/* ===== Buttons (17011:187) — Compact Medium 32 =====
+   Label Bold 14 / 20; padding 16; radius 8. Primary is the orange Glass Flat
+   fill with a 0.5 orange-15% edge; Secondary a 20% grey tint on #0d0d0d with a
+   0.5 grey-10% edge (30% on hover). Focus is a grey ring. */
+html[data-ds="skillcat"] .cta-primary,
+html[data-ds="skillcat"] .new-task,
+html[data-ds="skillcat"] .btn-primary,
+html[data-ds="skillcat"] .btn-publish,
+html[data-ds="skillcat"] .btn-apply {
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 8px;
+  background: var(--sc-fill-primary);
+  border: 0.5px solid var(--sc-primary-border-subtle);
+  color: var(--sc-text-on-color);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+}
+html[data-ds="skillcat"] .cta-primary:hover:not(:disabled),
+html[data-ds="skillcat"] .new-task:hover:not(:disabled),
+html[data-ds="skillcat"] .btn-primary:hover:not(:disabled),
+html[data-ds="skillcat"] .btn-publish:hover:not(:disabled),
+html[data-ds="skillcat"] .btn-apply:hover:not(:disabled) {
+  filter: none;
+  background: linear-gradient(0deg, rgba(138, 49, 20, 0.85) 0%, rgba(240, 85, 35, 0.85) 70.9%), rgba(13, 13, 13, 0.75);
+}
+html[data-ds="skillcat"] .cta-quiet,
+html[data-ds="skillcat"] .btn-save-draft {
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 8px;
+  background: var(--sc-fill-secondary);
+  border: 0.5px solid var(--sc-border-control);
+  color: var(--sc-text-primary);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+}
+html[data-ds="skillcat"] .cta-quiet:hover:not(:disabled),
+html[data-ds="skillcat"] .btn-save-draft:hover:not(:disabled) {
+  background: var(--sc-fill-secondary-hover);
+}
+html[data-ds="skillcat"] .cta-quiet.cta-quiet--icon {
+  width: 32px;
+  padding: 0;
+}
+/* Shortcut key box (Button › shortcut key / Input Search › shortcut): 20px,
+   4% white on radius 4, IBM Plex Mono Medium 12 grey. */
+html[data-ds="skillcat"] .cta-kbd,
+html[data-ds="skillcat"] .search-kbd .kbd-letter,
+html[data-ds="skillcat"] .search-kbd .kbd-cmd {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--sc-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+}
+html[data-ds="skillcat"] .search-kbd {
+  gap: 4px;
+}
+
+/* ===== Input / Search (17012:223) =====
+   Default size (Compact 40), Filled style (19133:188239) — every search in
+   this look (Eshwar 2026-11-03): 16 search icon, 12 inset, 8 gap, IBM Plex
+   Mono Regular 14, placeholder #8A8A8A, 15% grey fill, border #404040 →
+   hover #7A7A7A → focus #FCFCFC (the fill stays), orange caret, radius 8. */
+html[data-ds="skillcat"] .search-input {
+  height: 40px;
+  padding: 0 64px 0 36px;
+  background: linear-gradient(var(--sc-surface-control), var(--sc-surface-control)), var(--sc-bg-canvas);
+  border: 1px solid var(--sc-border-default);
+  border-radius: 8px;
+  color: var(--sc-text-primary);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 18px;
+  caret-color: var(--sc-primary);
+}
+html[data-ds="skillcat"] .search-input::placeholder {
+  color: var(--sc-text-placeholder);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 400;
+}
+html[data-ds="skillcat"] .search-input:hover {
+  background: linear-gradient(var(--sc-surface-control), var(--sc-surface-control)), var(--sc-bg-canvas);
+  border-color: var(--sc-border-muted);
+}
+html[data-ds="skillcat"] .search-input:focus,
+html[data-ds="skillcat"] .search-input:focus-visible {
+  background: linear-gradient(var(--sc-surface-control), var(--sc-surface-control)), var(--sc-bg-canvas);
+  border-color: var(--sc-border-focus);
+  box-shadow: none;
+}
+html[data-ds="skillcat"] .search-icon {
+  left: 12px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .search-icon svg {
+  width: 16px;
+  height: 16px;
+}
+html[data-ds="skillcat"] .search-kbd {
+  right: 12px;
+}
+/* The page search bars (`.usearch-*`, every list page) are the same control. */
+html[data-ds="skillcat"] .usearch-bar {
+  height: 40px;
+  gap: 8px;
+  padding: 0 11px;
+  background: linear-gradient(var(--sc-surface-control), var(--sc-surface-control)), var(--sc-bg-canvas);
+  border: 1px solid var(--sc-border-default);
+  border-radius: 8px;
+}
+html[data-ds="skillcat"] .usearch-bar:hover {
+  background: linear-gradient(var(--sc-surface-control), var(--sc-surface-control)), var(--sc-bg-canvas);
+  border-color: var(--sc-border-muted);
+}
+html[data-ds="skillcat"] .usearch-bar:focus-within,
+html[data-ds="skillcat"] .usearch.is-open .usearch-bar {
+  background: linear-gradient(var(--sc-surface-control), var(--sc-surface-control)), var(--sc-bg-canvas);
+  border-color: var(--sc-border-focus);
+}
+html[data-ds="skillcat"] .usearch-icon {
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .usearch-icon svg {
+  width: 16px;
+  height: 16px;
+}
+html[data-ds="skillcat"] .usearch-input {
+  color: var(--sc-text-primary);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 18px;
+  caret-color: var(--sc-primary);
+}
+html[data-ds="skillcat"] .usearch-input::placeholder {
+  color: var(--sc-text-placeholder);
+}
+html[data-ds="skillcat"] .usearch-kbd {
+  gap: 4px;
+}
+html[data-ds="skillcat"] .usearch-kbd .cta-kbd,
+html[data-ds="skillcat"] .usearch-kbd .kbd-letter,
+html[data-ds="skillcat"] .usearch-kbd .kbd-cmd {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--sc-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+}
+/* Its suggestions panel is a Menu. */
+html[data-ds="skillcat"] .usearch-panel {
+  top: calc(100% + 4px);
+  background: var(--sc-surface-menu);
+  border: 1px solid var(--sc-border-default);
+  border-radius: 8px;
+  box-shadow: var(--sc-shadow-menu);
+}
+html[data-ds="skillcat"] .usearch-head {
+  padding: 4px 16px;
+  min-height: 28px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .usearch-chip {
+  border-radius: 8px;
+  font-weight: 700;
+}
+
+/* ===== Chips (17013:210) =====
+   Table select / Table date range, Compact: 28 tall, 12 inset, full radius,
+   1px #404040 — dashed while empty, solid once applied — label Bold 14 grey,
+   value Bold 14 orange, 16 icons. */
+html[data-ds="skillcat"] .filter-pill-dashed {
+  height: 28px;
+  gap: 8px;
+  padding: 4px 12px;
+  background-image: none;
+  border: 1px dashed var(--sc-border-default);
+  border-radius: 999px;
+  color: var(--sc-text-secondary);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 15.6px;
+}
+html[data-ds="skillcat"] .filter-pill-dashed:hover {
+  border-color: var(--sc-border-muted);
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .filter-pill-dashed svg {
+  width: 16px;
+  height: 16px;
+}
+html[data-ds="skillcat"] .filter-applied {
+  height: 28px;
+  gap: 8px;
+  border: 1px solid var(--sc-border-default);
+  border-radius: 999px;
+}
+html[data-ds="skillcat"] .filter-applied-main {
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 15.6px;
+}
+html[data-ds="skillcat"] .filter-applied-main .label {
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .filter-applied-main .value {
+  color: var(--sc-primary);
+  font-weight: 700;
+}
+html[data-ds="skillcat"] .filter-applied-clear {
+  padding-left: 12px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .filter-applied-clear svg {
+  width: 16px;
+  height: 16px;
+}
+/* Clear Filters is a Link button: grey, white on hover. */
+html[data-ds="skillcat"] .filter-clear-link {
+  color: var(--sc-text-secondary);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+}
+html[data-ds="skillcat"] .filter-clear-link:hover {
+  color: var(--sc-text-primary);
+}
+
+/* ===== Table (17021:1473 / 17285:5287) =====
+   Header 48, SemiBold 14 white, solid #404040 line under it. Rows 48 with a
+   50% #404040 divider; padding 12, 24 between columns. Name Medium 14 white;
+   every other cell Regular 14 grey, mono data IBM Plex Mono 14. Hover 5%
+   tint, selected 10%. Disabled (archived) text #7A7A7A. */
+html[data-ds="skillcat"] .table {
+  font-size: 14px;
+}
+html[data-ds="skillcat"] .table thead th {
+  height: 48px;
+  padding: 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--sc-text-primary);
+  border-bottom: 1px solid var(--sc-border-default);
+}
+html[data-ds="skillcat"] .th-content {
+  gap: 4px;
+}
+html[data-ds="skillcat"] .th-content svg {
+  width: 16px;
+  height: 16px;
+}
+html[data-ds="skillcat"] .table tbody tr {
+  border-bottom: 1px solid var(--sc-border-divider);
+}
+html[data-ds="skillcat"] .table tbody tr:hover {
+  background: var(--sc-surface-row-hover-subtle);
+}
+html[data-ds="skillcat"] .table tbody tr.selected {
+  background: var(--sc-surface-row-selected);
+}
+html[data-ds="skillcat"] .table tbody td {
+  height: 48px;
+  padding: 0 12px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .table tbody td:not(.col-name):not(.col-actions):not(.col-checkbox) {
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .table tbody td.col-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .table tbody tr.is-hidden td,
+html[data-ds="skillcat"] .table tbody tr.is-archived td,
+html[data-ds="skillcat"] .table tbody tr.is-disabled td,
+html[data-ds="skillcat"] .table tbody tr.is-hidden td.col-name,
+html[data-ds="skillcat"] .table tbody tr.is-archived td.col-name,
+html[data-ds="skillcat"] .table tbody tr.is-disabled td.col-name {
+  color: var(--sc-text-tertiary);
+}
+/* Table size Small (19236:4922): header and rows 40, everything else as
+   above. The DS frame shows it in a card, but it is a size like Default /
+   Tall, not a card-only one (Eshwar 2026-11-03) — opt a table in with
+   `.table--small` (Tasks list). */
+html[data-ds="skillcat"] .table.table--small thead th,
+html[data-ds="skillcat"] .table.table--small tbody td {
+  height: 40px;
+}
+/* Name cells that index.css turns into `display: flex` (a flagged / hidden
+   name, so the name truncates before its pill; Skills' icon rows) sit in an
+   anonymous cell that adds the row's 1px divider on top — those rows came out
+   49 (41 in Small). They are drawn 1 short so every row keeps its size. */
+html[data-ds="skillcat"] .table tbody tr.task-dim td.col-name,
+html[data-ds="skillcat"] .table tbody td.col-name.has-flag,
+html[data-ds="skillcat"] .table tbody tr.skg-row td.col-name,
+html[data-ds="skillcat"] .table tbody tr.skg-group td.col-name {
+  height: 47px;
+}
+html[data-ds="skillcat"] .table.table--small tbody tr.task-dim td.col-name,
+html[data-ds="skillcat"] .table.table--small tbody td.col-name.has-flag,
+html[data-ds="skillcat"] .table.table--small tbody tr.skg-row td.col-name,
+html[data-ds="skillcat"] .table.table--small tbody tr.skg-group td.col-name {
+  height: 39px;
+}
+html[data-ds="skillcat"] .col-actions {
+  --actions-bg: var(--sc-bg-canvas);
+}
+html[data-ds="skillcat"] .table tbody tr:hover .col-actions {
+  --actions-bg: linear-gradient(var(--sc-surface-row-hover-subtle), var(--sc-surface-row-hover-subtle)), var(--sc-bg-canvas);
+}
+html[data-ds="skillcat"] .table tbody tr.selected .col-actions {
+  --actions-bg: linear-gradient(var(--sc-surface-row-selected), var(--sc-surface-row-selected)), var(--sc-bg-canvas);
+}
+/* Row actions: Ghost icon button, Compact Small 28, 16 icon, radius 8 — the
+   resting kebab / chevron only. The hover bar's cells (`.row-action-bar >
+   .row-action-btn`: labelled "Review Task" cells, joined hairlines, split
+   corners) keep the shared bar component's own rules, so they are left out
+   here; matching them squeezed every cell to a 28 square ("ew T"). */
+html[data-ds="skillcat"] .lone-dots,
+html[data-ds="skillcat"] .row-action-btn:where(:not(.row-action-bar > .row-action-btn)) {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 8px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .lone-dots:hover,
+html[data-ds="skillcat"] .row-action-btn:where(:not(.row-action-bar > .row-action-btn)):hover {
+  background: var(--sc-surface-row-hover);
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .lone-dots svg,
+html[data-ds="skillcat"] .row-action-btn svg {
+  width: 16px;
+  height: 16px;
+}
+/* Pagination (17786:3765): 48 tall under the last divider, no line of its
+   own; range Regular 14 grey, arrows in 30px ghost buttons 4 apart. */
+html[data-ds="skillcat"] .pagination {
+  height: 48px;
+  padding: 0 12px;
+  gap: 12px;
+  border-top: none;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .pagination-controls {
+  gap: 4px;
+}
+html[data-ds="skillcat"] .page-btn {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .page-btn:hover:not(:disabled) {
+  background: var(--sc-surface-row-hover);
+}
+html[data-ds="skillcat"] .page-btn:disabled {
+  color: var(--sc-text-disabled);
+}
+html[data-ds="skillcat"] .page-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ===== Status Label (17013:311) =====
+   Compact Default everywhere, table cells included (Eshwar 2026-11-03 — the
+   DS's "Small 20 for tags inside table cells" and Eric's 24 table pills are
+   ignored): 28 tall, SemiBold 14, 8 inset, radius 8, 4 to a 14 icon, the
+   tone's color on its 10% tint. Covers every status pill — `.co-status-pill`
+   (all tones, `--sm` too), the name flags (`.pr-name-flag`: Hidden,
+   Refunded, Disabled…) and the payment badge. index.css sizes these from
+   context with !important (`.table tbody td.col-status … .co-status-pill`,
+   `td.col-name … .pr-name-flag`, 0,4,2), so `:not(#ds-pill)` lifts this one
+   rule above them. */
+html[data-ds="skillcat"] :is(.co-status-pill, .pr-name-flag, .pay-badge):not(#ds-pill) {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px;
+  box-sizing: border-box;
+  height: 28px !important;
+  padding: 0 8px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  font-family: var(--font-sans);
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  line-height: 18px !important;
+  letter-spacing: 0;
+}
+html[data-ds="skillcat"] :is(.co-status-pill, .pr-name-flag, .pay-badge):not(#ds-pill) svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ===== Menu (17779:4049) and Menu / Item (17039:16628) =====
+   #1D1D1D on a 1px #404040 edge, radius 8, 24px-blur shadow, padding 8.
+   Rows 36 min, padding 8, radius 8, Regular 16 white; hover 10% tint;
+   selected SemiBold. Section labels Regular 14 grey, 28 tall, cased as in the Play Area.
+   Compact checkbox 16, radius 4, 1px #7A7A7A; checked = 20% orange tint on a
+   0.5 orange-75% edge. */
+html[data-ds="skillcat"] .dropdown {
+  top: calc(100% + 4px);
+  background: var(--sc-surface-menu);
+  border: 1px solid var(--sc-border-default);
+  border-radius: 8px;
+  box-shadow: var(--sc-shadow-menu);
+}
+html[data-ds="skillcat"] .dropdown-list {
+  padding: 8px;
+}
+html[data-ds="skillcat"] .dropdown-item,
+html[data-ds="skillcat"] .menu-item {
+  gap: 8px;
+  min-height: 36px;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .dropdown-item:hover,
+html[data-ds="skillcat"] .menu-item:hover {
+  background: var(--sc-surface-row-hover);
+}
+html[data-ds="skillcat"] .dropdown-item.is-checked,
+html[data-ds="skillcat"] .dropdown-item.is-current,
+html[data-ds="skillcat"] .dropdown-item[aria-checked="true"] {
+  font-weight: 600;
+}
+html[data-ds="skillcat"] .dropdown-section-label {
+  height: 28px;
+  padding: 4px 8px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .dropdown-allnone {
+  gap: 8px;
+}
+html[data-ds="skillcat"] .dropdown-allnone button {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--sc-primary);
+}
+html[data-ds="skillcat"] .dropdown-footer {
+  padding: 8px;
+  gap: 8px;
+  box-shadow: none;
+  border-top: 1px solid var(--sc-border-default);
+}
+html[data-ds="skillcat"] .checkbox {
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--sc-border-muted);
+  border-radius: 4px;
+  background: transparent;
+}
+html[data-ds="skillcat"] .checkbox.checked,
+html[data-ds="skillcat"] .checkbox.is-checked,
+html[data-ds="skillcat"] .dropdown-item.is-checked .checkbox,
+html[data-ds="skillcat"] .dropdown-item[aria-checked="true"] .checkbox {
+  border: 0.5px solid var(--sc-primary-border);
+  background: linear-gradient(var(--sc-primary-subtle), var(--sc-primary-subtle)), linear-gradient(var(--sc-primary-subtle), var(--sc-primary-subtle)), rgba(13, 13, 13, 0.75);
+}
+
+/* ===== Tabs (19233:193584) =====
+   40 tall in Compact, 12 inset, 4 apart, titleMedium SemiBold 16; selected
+   white on a 2px orange line; the row sits on a 1px #404040 line. */
+html[data-ds="skillcat"] .tabbar {
+  gap: 4px;
+  border-bottom: 1px solid var(--sc-border-default);
+}
+html[data-ds="skillcat"] .tab {
+  position: relative;
+  height: 40px;
+  padding: 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--sc-text-secondary);
+  border-bottom: none;
+}
+html[data-ds="skillcat"] .tab:hover {
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .tab.active,
+html[data-ds="skillcat"] .tab.is-active,
+html[data-ds="skillcat"] .tab[aria-selected="true"] {
+  color: var(--sc-text-primary);
+  border-bottom: none;
+}
+html[data-ds="skillcat"] .tab.active::after,
+html[data-ds="skillcat"] .tab.is-active::after,
+html[data-ds="skillcat"] .tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--sc-primary);
+}
+
+/* ===== Field (17012:470) · Input / Text (17012:71) · Input / Select =====
+   Compact: label Bold 16 grey, 8 above; control 40 tall, 12 inset, IBM Plex
+   Mono Regular 16 white, placeholder #8A8A8A, border #404040 → hover
+   #7A7A7A → focus #FCFCFC with an orange caret; error #FF1F17, warning
+   #FFC524; read-only on a 14% grey wash with a 16 lock. Multiline min 142. */
+html[data-ds="skillcat"] .form-label,
+html[data-ds="skillcat"] .form-sub-label {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 20px;
+  color: var(--sc-text-secondary);
+  margin-bottom: 8px;
+}
+html[data-ds="skillcat"] .form-label .req {
+  color: var(--sc-primary);
+}
+html[data-ds="skillcat"] .form-input,
+html[data-ds="skillcat"] .form-select {
+  min-height: 40px;
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid var(--sc-border-default);
+  border-radius: 8px;
+  color: var(--sc-text-primary);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+  caret-color: var(--sc-primary);
+}
+html[data-ds="skillcat"] .form-select {
+  padding-right: 36px;
+}
+html[data-ds="skillcat"] .form-input::placeholder,
+html[data-ds="skillcat"] .form-select.is-placeholder {
+  color: var(--sc-text-placeholder);
+}
+html[data-ds="skillcat"] .form-input:hover:not(:disabled):not(:focus),
+html[data-ds="skillcat"] .form-select:hover:not(:disabled):not(:focus) {
+  border-color: var(--sc-border-muted);
+}
+html[data-ds="skillcat"] .form-input:focus,
+html[data-ds="skillcat"] .form-select:focus {
+  border-color: var(--sc-border-focus);
+}
+html[data-ds="skillcat"] .form-input:disabled,
+html[data-ds="skillcat"] .form-select:disabled {
+  color: var(--sc-text-disabled);
+  border-color: var(--sc-border-subtle);
+}
+html[data-ds="skillcat"] .form-input[readonly] {
+  background: var(--sc-surface-locked);
+  border-color: transparent;
+}
+html[data-ds="skillcat"] textarea.form-input {
+  min-height: 142px;
+}
+html[data-ds="skillcat"] .form-help {
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--sc-text-secondary);
+}
+/* Bilingual box: the same control with EN / ES rows split by a hairline. */
+html[data-ds="skillcat"] .lang-field {
+  background: transparent;
+  border: 1px solid var(--sc-border-default);
+  border-radius: 8px;
+}
+html[data-ds="skillcat"] .lang-field:focus-within {
+  border-color: var(--sc-border-focus);
+}
+html[data-ds="skillcat"] .lang-field-input {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--sc-text-primary);
+  caret-color: var(--sc-primary);
+}
+html[data-ds="skillcat"] .lang-field-input::placeholder {
+  color: var(--sc-text-placeholder);
+}
+
+/* ===== Modal (17052:1185) — Dialog =====
+   20% grey tint on #0d0d0d, radius 16, padding 24, 24 between parts. Title
+   Bold 20 / 24 white; description IBM Plex Mono Medium 14 / 19.6 grey;
+   actions right-aligned, 8 apart, Secondary then Primary; close is a 30
+   ghost circle with a 16 icon. Scrim #000 at 50%. */
+html[data-ds="skillcat"] .pr-confirm-overlay {
+  background: rgba(0, 0, 0, 0.5);
+}
+html[data-ds="skillcat"] .prm {
+  --prm-surface: var(--sc-fill-glass);
+  background: var(--sc-fill-glass);
+  border: none;
+  border-radius: 16px;
+  box-shadow: none;
+}
+html[data-ds="skillcat"] .prm-body {
+  padding: 24px;
+  gap: 24px;
+}
+html[data-ds="skillcat"] .prm-headgroup {
+  gap: 4px;
+}
+html[data-ds="skillcat"] .prm-title {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 24px;
+  color: var(--sc-text-on-color);
+}
+html[data-ds="skillcat"] .prm-close {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .prm-close:hover {
+  background: var(--sc-surface-row-hover);
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .prm-close svg {
+  width: 16px;
+  height: 16px;
+}
+html[data-ds="skillcat"] .prm-text,
+html[data-ds="skillcat"] .prm-content {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 19.6px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .prm-text--primary {
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .prm-foot-end {
+  gap: 8px;
+}
+/* Cancel is the Secondary button, not a text link, in the DS dialog. */
+html[data-ds="skillcat"] .prm-cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 8px;
+  background: var(--sc-fill-secondary);
+  border: 0.5px solid var(--sc-border-control);
+  color: var(--sc-text-primary);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+}
+html[data-ds="skillcat"] .prm-cancel:hover {
+  background: var(--sc-fill-secondary-hover);
+  color: var(--sc-text-primary);
+}
+
+/* ===== Eric's Tasks list — the pieces the shared rules don't reach ===== */
+/* Primary button shortcut box: 20 tall, 6 inset, white mono Medium 12. */
+html[data-ds="skillcat"] .new-task .cta-kbd,
+html[data-ds="skillcat"] .cta-primary .cta-kbd,
+html[data-ds="skillcat"] .btn-publish .cta-kbd {
+  padding: 0 6px;
+  color: var(--sc-text-on-color);
+}
+/* Chip icons are the 14px add-circle / close-circle. */
+html[data-ds="skillcat"] .filter-pill-dashed .icon svg,
+html[data-ds="skillcat"] .filter-applied-clear svg {
+  width: 14px;
+  height: 14px;
+}
+html[data-ds="skillcat"] .filter-clear-link {
+  height: 28px;
+  padding: 0;
+}
+/* Row menu (Menu 53:10972 at 320 wide): rows 36 min, padding 8, Regular 16
+   white with a 16 icon; a disabled row's label is #737373 with its reason in
+   12 / 1.3 #7A7A7A beneath; Delete sits under a divider in red. */
+html[data-ds="skillcat"] .u-menu {
+  min-width: 320px;
+  padding: 8px;
+  background: var(--sc-surface-menu);
+  border: 1px solid var(--sc-border-default);
+  border-radius: 8px;
+  box-shadow: var(--sc-shadow-menu);
+}
+html[data-ds="skillcat"] .u-menu-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px;
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--sc-text-primary);
+  text-align: left;
+}
+html[data-ds="skillcat"] .u-menu-item:hover:not(:disabled) {
+  background: var(--sc-surface-row-hover);
+}
+html[data-ds="skillcat"] .u-menu-item:disabled {
+  color: var(--sc-text-disabled);
+  background: none;
+}
+html[data-ds="skillcat"] .u-menu-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 20px;
+  flex-shrink: 0;
+  color: inherit;
+}
+html[data-ds="skillcat"] .u-menu-item-icon svg {
+  width: 16px;
+  height: 16px;
+}
+html[data-ds="skillcat"] .u-menu-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+html[data-ds="skillcat"] .u-menu-item-sub {
+  max-width: 240px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.3;
+  color: var(--sc-text-tertiary);
+  white-space: normal;
+}
+html[data-ds="skillcat"] .u-menu-item--danger {
+  position: relative;
+  margin-top: 9px;
+  color: var(--sc-error);
+}
+html[data-ds="skillcat"] .u-menu-item--danger::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -5px;
+  height: 1px;
+  background: var(--sc-border-default);
+}
+html[data-ds="skillcat"] .u-menu-item--danger:disabled {
+  color: var(--sc-text-disabled);
+}
+/* Rail (DS Sidebar, collapsed): the expand control in a 40 top row, 24 down;
+   the Account icon button at the bottom, 16 from the edge. */
+html[data-ds="skillcat"] .sidebar--collapsed .sidebar__top-collapsed {
+  height: 40px;
+  padding: 0;
+  margin-bottom: 12px;
+}
+html[data-ds="skillcat"] .sidebar--collapsed .sidebar__footer {
+  justify-content: center;
+}
+html[data-ds="skillcat"] .sidebar__account {
+  width: 32px;
+  height: 32px;
+}
+
+/* ===== Eric's "Create task menu" (1:1476) =====
+   The CTA's menu is a DS Menu: 36 rows, Regular 16, a 20 keycap on the right. */
+html[data-ds="skillcat"] .ct-menu {
+  padding: 8px;
+  background: var(--sc-surface-menu);
+  border: 1px solid var(--sc-border-default);
+  border-radius: 8px;
+  box-shadow: var(--sc-shadow-menu);
+}
+html[data-ds="skillcat"] .ct-menu-item {
+  gap: 24px;
+  min-height: 36px;
+  padding: 8px;
+  border-radius: 8px;
+}
+html[data-ds="skillcat"] .ct-menu-item:hover {
+  background: var(--sc-surface-row-hover);
+}
+html[data-ds="skillcat"] .ct-menu-label {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .ct-menu-item .cta-kbd {
+  color: var(--sc-text-secondary);
+}
+
+/* ===== Eric's "Delete task" (1:1614) — confirm dialog =====
+   Destructive button: 20% red tint on #0d0d0d with a 0.5 red-15% edge. */
+html[data-ds="skillcat"] .prm .btn-publish.danger,
+html[data-ds="skillcat"] .prm .btn-danger,
+html[data-ds="skillcat"] .prm .cta-danger,
+html[data-ds="skillcat"] .prm .btn-publish.is-danger {
+  background: linear-gradient(rgba(255, 31, 23, 0.2), rgba(255, 31, 23, 0.2)), #0d0d0d;
+  border: 0.5px solid rgba(255, 31, 23, 0.15);
+  color: var(--sc-text-on-color);
+}
+html[data-ds="skillcat"] .prm .btn-publish.danger:hover:not(:disabled),
+html[data-ds="skillcat"] .prm .btn-danger:hover:not(:disabled),
+html[data-ds="skillcat"] .prm .cta-danger:hover:not(:disabled),
+html[data-ds="skillcat"] .prm .btn-publish.is-danger:hover:not(:disabled) {
+  background: linear-gradient(rgba(255, 31, 23, 0.3), rgba(255, 31, 23, 0.3)), #0d0d0d;
+}
+
+/* ===== Eric's "Create task, step 1–5" (1:1746 …) — the wizard shell =====
+   Steps rail 320 wide on a 1px #404040 edge, 40 top / 32 sides: CREATING in
+   Bold 12 orange, the name in Bold 24 / 29, then 16 to the step list — rows
+   of a mono 12 number (16 wide) and a 14 title, 12 apart, 6 above and below,
+   4 between rows; the current step white SemiBold, the rest #7A7A7A Regular.
+   Form column 40 in: heading Bold 24 / 29 with its 16 / 24 grey line 4
+   under, 24 to the first field, 24 between fields. Footer: #1B1B1B on a
+   #404040 line, 24 / 16 insets, a ghost close on the left and the Medium
+   buttons on the right, 12 apart. Form controls are the DS COMPACT sizes
+   (40 inputs, Bold 16 labels, mono 16 values, 14 messages): Eric's frames
+   were left on the library's default (Comfortable) density, which the
+   Foundations page says is not the LMS mode — see
+   specs/skillcat-ds-exceptions.md. */
+html[data-ds="skillcat"] .wizard-nav {
+  width: 320px;
+  padding: 40px 32px 32px;
+  border-right: 1px solid var(--sc-border-default);
+}
+html[data-ds="skillcat"] .wizard-brand {
+  gap: 8px;
+  margin-bottom: 16px;
+}
+html[data-ds="skillcat"] .wizard-brand-eyebrow {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 20px;
+  color: var(--sc-primary);
+}
+html[data-ds="skillcat"] .wizard-brand-name {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 29px;
+  letter-spacing: 0;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .wizard-steps {
+  gap: 4px;
+}
+html[data-ds="skillcat"] .wizard-step {
+  gap: 12px;
+  padding: 6px 8px;
+  margin: 0 -8px;
+  border-radius: 8px;
+}
+html[data-ds="skillcat"] .wizard-step-rail,
+html[data-ds="skillcat"] .wizard-step-glyph {
+  width: 16px;
+  min-width: 16px;
+}
+html[data-ds="skillcat"] .wizard-step-num {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  color: var(--sc-text-tertiary);
+}
+html[data-ds="skillcat"] .wizard-step-title {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--sc-text-tertiary);
+}
+html[data-ds="skillcat"] .wizard-step.done .wizard-step-title {
+  color: var(--sc-text-tertiary);
+}
+html[data-ds="skillcat"] .wizard-step.active .wizard-step-num,
+html[data-ds="skillcat"] .wizard-step.active .wizard-step-title {
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .wizard-step.active .wizard-step-title {
+  font-weight: 600;
+}
+html[data-ds="skillcat"] .wizard-content {
+  padding: 40px;
+}
+html[data-ds="skillcat"] .wizard-content .tasks-title {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 29px;
+}
+html[data-ds="skillcat"] .wizard-desc {
+  margin: 4px 0 24px;
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .wizard .form-group {
+  margin-bottom: 24px;
+}
+/* Field, Compact: label Bold 16 / 20 grey, 8 above; control 40, mono 16 /
+   24; message Regular 14 / 20 grey, 8 below. */
+html[data-ds="skillcat"] .wizard .form-label,
+html[data-ds="skillcat"] .wizard .form-sub-label,
+html[data-ds="skillcat"] .wizard .prm-label {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 20px;
+  color: var(--sc-text-secondary);
+  margin-bottom: 8px;
+}
+html[data-ds="skillcat"] .wizard .form-label .req,
+html[data-ds="skillcat"] .wizard .prm-req {
+  color: var(--sc-primary);
+}
+html[data-ds="skillcat"] .wizard .form-input,
+html[data-ds="skillcat"] .wizard .form-select {
+  min-height: 40px;
+  padding: 8px 12px;
+  font-size: 16px;
+  line-height: 24px;
+}
+html[data-ds="skillcat"] .wizard textarea.form-input {
+  min-height: 142px;
+}
+html[data-ds="skillcat"] .wizard .form-help {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--sc-text-secondary);
+}
+/* Bilingual box: 42 rows on a 1px divider, mono Bold 12 tag, mono 14 value,
+   the 12 grey counter at the right. */
+html[data-ds="skillcat"] .lang-field-row {
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 12px;
+}
+html[data-ds="skillcat"] .lang-field .lang-tag {
+  padding-right: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 16px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .lang-field-input {
+  padding: 8px 0;
+  font-size: 16px;
+  line-height: 24px;
+}
+html[data-ds="skillcat"] .lang-field-divider {
+  background: var(--sc-border-default);
+}
+html[data-ds="skillcat"] .lang-field-count {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--sc-text-tertiary);
+}
+/* Time to complete: one 44 box, the unit after a 1px divider, mono 14. */
+html[data-ds="skillcat"] .time-field {
+  width: 420px;
+  min-height: 40px;
+  border: 1px solid var(--sc-border-default);
+  border-radius: 8px;
+}
+html[data-ds="skillcat"] .time-field:focus-within,
+html[data-ds="skillcat"] .time-field.is-open {
+  border-color: var(--sc-border-focus);
+}
+html[data-ds="skillcat"] .time-field-value {
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--sc-text-primary);
+  caret-color: var(--sc-primary);
+}
+html[data-ds="skillcat"] .time-field-value::placeholder {
+  color: var(--sc-text-placeholder);
+}
+html[data-ds="skillcat"] .time-field-unit {
+  width: 138px;
+  gap: 12px;
+  padding: 8px 12px 8px 16px;
+  border-left: 1px solid var(--sc-border-default);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--sc-text-on-color);
+}
+html[data-ds="skillcat"] .time-field-caret svg {
+  width: 16px;
+  height: 16px;
+}
+/* Segmented control (Choice / Segmented Control, Comfortable as drawn): 44
+   tall, 5 inset, radius 10; options 36, radius 8, Bold 12; the chosen one on
+   a 30% grey tint over #0d0d0d in white, the rest grey. */
+html[data-ds="skillcat"] .seg-control {
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--sc-border-default);
+  border-radius: 10px;
+}
+html[data-ds="skillcat"] .seg-btn {
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 15.6px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .seg-btn.active,
+html[data-ds="skillcat"] .seg-btn.active.accent {
+  background: linear-gradient(var(--sc-surface-control-hover), var(--sc-surface-control-hover)), rgba(13, 13, 13, 0.75);
+  box-shadow: none;
+  color: var(--sc-text-on-color);
+}
+html[data-ds="skillcat"] .seg-btn:hover:not(.active) {
+  color: var(--sc-text-primary);
+}
+/* Choice / Description, Card style: 5% grey fill, 1px #404040, 12 inset,
+   radius 8, 12 gap; radio 20 on a #7A7A7A ring; label Regular 16 / 20 white,
+   description Regular 14 / 18 grey, 4 apart. Selected: orange edge + 10%
+   orange tint. */
+html[data-ds="skillcat"] .radio-card-group {
+  gap: 8px;
+}
+html[data-ds="skillcat"] .radio-card {
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  background: var(--sc-surface-row-hover-subtle);
+  border: 1px solid var(--sc-border-default);
+  border-radius: 8px;
+}
+html[data-ds="skillcat"] .radio-card.selected {
+  background: var(--sc-primary-subtle);
+  border-color: var(--sc-primary);
+}
+html[data-ds="skillcat"] .radio-dot {
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--sc-border-muted);
+}
+html[data-ds="skillcat"] .radio-card.selected .radio-dot {
+  border-color: var(--sc-primary);
+}
+html[data-ds="skillcat"] .radio-card-title {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .radio-card-desc {
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--sc-text-secondary);
+}
+/* Footer: #1B1B1B on a #404040 line, 24 / 16 insets; a ghost close icon on
+   the left in place of the "Cancel" text; Medium buttons, 12 apart, their
+   shortcuts in 20 keycaps. A disabled Create reads #404040 on a 15% fill. */
+html[data-ds="skillcat"] .wizard-footer {
+  min-height: 65px;
+  padding: 16px 24px;
+  background: var(--sc-bg-surface);
+  border-top: 1px solid var(--sc-border-default);
+}
+html[data-ds="skillcat"] .wizard-cancel {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  font-size: 0;
+  color: var(--sc-text-secondary);
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%23a8a8a8' stroke-width='1.33' stroke-linecap='square'%3E%3Cpath d='M3.5 3.5l9 9M12.5 3.5l-9 9'/%3E%3C/svg%3E") center no-repeat;
+}
+html[data-ds="skillcat"] .wizard-cancel:hover {
+  background-color: var(--sc-surface-row-hover);
+}
+html[data-ds="skillcat"] .wizard-actions {
+  gap: 12px;
+}
+html[data-ds="skillcat"] .wizard-footer .cta-kbd-group {
+  gap: 0;
+}
+html[data-ds="skillcat"] .wizard-footer .cta-kbd-group .cta-kbd {
+  min-width: 0;
+  padding: 0 2px;
+  background: none;
+}
+html[data-ds="skillcat"] .wizard-footer .cta-kbd-group {
+  height: 20px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+}
+/* Confirm dialog CTAs: Medium 32 Primary, or Destructive (20% red tint). */
+html[data-ds="skillcat"] .prm-cta {
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 8px;
+  background: var(--sc-fill-primary);
+  border: 0.5px solid var(--sc-primary-border-subtle);
+  color: var(--sc-text-on-color);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+}
+html[data-ds="skillcat"] .prm-cta--danger {
+  background: linear-gradient(rgba(255, 31, 23, 0.2), rgba(255, 31, 23, 0.2)), #0d0d0d;
+  border-color: rgba(255, 31, 23, 0.15);
+}
+html[data-ds="skillcat"] .prm-cta--danger:hover:not(:disabled) {
+  background: linear-gradient(rgba(255, 31, 23, 0.3), rgba(255, 31, 23, 0.3)), #0d0d0d;
+}
+html[data-ds="skillcat"] .prm-cta--go {
+  background: linear-gradient(rgba(41, 182, 115, 0.2), rgba(41, 182, 115, 0.2)), #0d0d0d;
+  border-color: rgba(41, 182, 115, 0.15);
+}
+
+/* ===== Create task, steps 2–5 (1:1797 … 1:1970) ===== */
+/* Rail: a finished step shows a grey check in the number's slot. */
+html[data-ds="skillcat"] .wizard-step.done .wizard-step-rail svg {
+  width: 16px;
+  height: 16px;
+  stroke: var(--sc-text-secondary);
+}
+/* Stepper (Input / Text, Type Stepper): 44 tall, 40 buttons, 64 value in
+   mono 14, 1px #404040 lines between. */
+html[data-ds="skillcat"] .stepper {
+  height: 40px;
+  border: 1px solid var(--sc-border-default);
+  border-radius: 8px;
+}
+html[data-ds="skillcat"] .stepper-btn {
+  width: 40px;
+  padding: 0;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .stepper-btn:hover:not(:disabled) {
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .stepper-btn svg {
+  width: 16px;
+  height: 16px;
+}
+html[data-ds="skillcat"] .stepper-value {
+  width: 64px;
+  padding: 0 8px;
+  border-left: 1px solid var(--sc-border-default);
+  border-right: 1px solid var(--sc-border-default);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+  color: var(--sc-text-primary);
+}
+/* Select (Input / Select): the text control with a 16 chevron. The shell is
+   the `.select-field` button — `.selectfield` is only SelectField's wrapper,
+   which also holds the borderless rows of composite fields (Address, Phone,
+   Time + unit), so it must never draw a box of its own. */
+html[data-ds="skillcat"] .select-field {
+  box-sizing: border-box;
+  min-height: 40px;
+  padding: 7px 12px;
+  grid-template-columns: minmax(0, 1fr) 16px;
+  gap: 8px;
+  border: 1px solid var(--sc-border-default);
+  border-radius: 8px;
+  background: transparent;
+  line-height: 24px;
+}
+html[data-ds="skillcat"] .select-field:hover:not(:disabled) {
+  border-color: var(--sc-border-muted);
+}
+html[data-ds="skillcat"] .select-field.is-open,
+html[data-ds="skillcat"] .select-field:focus-visible {
+  border-color: var(--sc-border-focus);
+}
+html[data-ds="skillcat"] .select-field.has-error {
+  border-color: var(--field-error);
+}
+html[data-ds="skillcat"] .select-field-value {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .selectfield.is-placeholder .select-field-value,
+html[data-ds="skillcat"] .select-field-value.is-placeholder {
+  color: var(--sc-text-placeholder);
+}
+html[data-ds="skillcat"] .field-chevron svg {
+  width: 16px;
+  height: 16px;
+}
+/* Multi-select (Input / Select, multiple): the same 40 shell; the chosen
+   values are Compact chips (label 14, 24 tall) inside it. */
+html[data-ds="skillcat"] .multiselect-field {
+  box-sizing: border-box;
+  min-height: 40px;
+  padding: 0 12px;
+  gap: 8px;
+  border-color: var(--sc-border-default);
+}
+html[data-ds="skillcat"] .multiselect-field:hover:not(.is-disabled) {
+  border-color: var(--sc-border-muted);
+}
+html[data-ds="skillcat"] .multiselect-field.is-open {
+  border-color: var(--sc-border-focus);
+}
+html[data-ds="skillcat"] .multiselect-field.has-error {
+  border-color: var(--field-error);
+}
+html[data-ds="skillcat"] .multiselect-placeholder {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--sc-text-placeholder);
+}
+html[data-ds="skillcat"] .multiselect-tag {
+  padding: 2px 8px;
+  gap: 4px;
+  font-size: 14px;
+  line-height: 20px;
+}
+/* Toggle (Checkbox › Switch, Compact 41 × 24). */
+html[data-ds="skillcat"] .toggle {
+  width: 41px;
+  height: 24px;
+  background: var(--sc-border-default);
+}
+html[data-ds="skillcat"] .toggle.on {
+  background: var(--sc-primary);
+}
+/* The boxed option tables inside wizard steps (Media file types, Force app
+   update…): the DS card table — 1px #404040 on radius 8, a 40 header in
+   Regular 12 grey, rows on 50% dividers, name SemiBold 14 white, line 14
+   grey. */
+html[data-ds="skillcat"] .wizard .qsec {
+  border: 1px solid var(--sc-border-default);
+  border-radius: 8px;
+  overflow: hidden;
+}
+html[data-ds="skillcat"] .wizard .qsec-hd {
+  min-height: 32px;
+  padding: 8px 12px;
+  background: var(--sc-surface-row-hover-subtle);
+  border-bottom: 1px solid var(--sc-border-default);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .wizard .qsec-row {
+  padding: 12px;
+  border-bottom: 1px solid var(--sc-border-divider);
+}
+html[data-ds="skillcat"] .wizard .qsec-row:last-child {
+  border-bottom: none;
+}
+html[data-ds="skillcat"] .wizard .qsec-secname,
+html[data-ds="skillcat"] .wizard .qsec-name {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .wizard .qsec-revsub,
+html[data-ds="skillcat"] .wizard .qsec-sub {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--sc-text-secondary);
+}
+/* Dual-language upload: one bordered card holding an EN and an ES column,
+   each a dashed drop zone — icon 16, "Drag and drop, or click to upload" 14
+   white, the accepted-types line 12 grey. */
+html[data-ds="skillcat"] .upload-lang-tag {
+  align-self: flex-start;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 20px;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .drop-slim,
+html[data-ds="skillcat"] .drop-big {
+  flex-direction: column;
+  gap: 8px;
+  min-height: 154px;
+  padding: 24px;
+  border: 1px dashed var(--sc-border-default);
+  border-radius: 8px;
+  color: var(--sc-text-primary);
+  font-size: 14px;
+  line-height: 20px;
+}
+html[data-ds="skillcat"] .drop-slim:hover,
+html[data-ds="skillcat"] .drop-big:hover {
+  border-color: var(--sc-border-muted);
+}
+html[data-ds="skillcat"] .drop-slim svg,
+html[data-ds="skillcat"] .drop-big-icon svg {
+  width: 16px;
+  height: 16px;
+}
+html[data-ds="skillcat"] .drop-big-title {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .drop-big-hint {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--sc-text-secondary);
+}
+
+/* ===== Eric's "Skills" (1:2021) and "Question bank" (1:2165) ===== */
+/* Breadcrumbs over list titles show as in the Play Area (Eric's screens
+   draw none; Eshwar kept them, 2026-11-03). Under a crumb the title row drops
+   its top inset so the title sits the crumb's 4px below it, as in the Play
+   Area. */
+html[data-ds="skillcat"] .rvc-crumbs + .tasks-header:has(> .rvc-pagehead),
+html[data-ds="skillcat"] .rvc-crumbs + .tasks-header:has(> div > .tasks-title) {
+  min-height: 0;
+  padding-top: 0;
+}
+/* Pages whose title sits inside the header (`.tasks-header > .rvc-pagehead`
+   — Skills, Question bank, Users, Companies…): the same title row, drawn on
+   the header itself. */
+html[data-ds="skillcat"] .tasks-header:has(> .rvc-pagehead) {
+  align-items: flex-end;
+  min-height: 0;
+  padding: 16px 0 0;
+  margin: 0 0 24px;
+}
+html[data-ds="skillcat"] .tasks-header > .rvc-pagehead {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+html[data-ds="skillcat"] .tasks-header > .rvc-pagehead > .tasks-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 29px;
+  white-space: nowrap;
+}
+html[data-ds="skillcat"] .tasks-header > .rvc-pagehead > .tasks-subtitle {
+  display: flex;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+  color: var(--sc-text-secondary);
+  white-space: nowrap;
+}
+html[data-ds="skillcat"] .tasks-content > .toolbar,
+html[data-ds="skillcat"] .qb-content > .toolbar {
+  margin: 0 0 12px;
+}
+html[data-ds="skillcat"] .tasks-content > .toolbar + .filters {
+  padding-bottom: 24px;
+  min-height: 28px;
+}
+html[data-ds="skillcat"] .qb-content > .toolbar + .qbl-recent {
+  max-height: none;
+  opacity: 1;
+  margin-bottom: 24px;
+}
+/* Recent searches: a 12 grey label, then Default chips (28, 12 inset, Bold
+   14 white on the 15% grey fill). */
+html[data-ds="skillcat"] .lm-quick-label {
+  max-width: none;
+  margin-right: 0;
+  opacity: 1;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .lm-quick-pill {
+  height: 28px;
+  padding: 0 12px;
+  background: var(--sc-surface-control);
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 15.6px;
+  color: var(--sc-text-on-color);
+}
+html[data-ds="skillcat"] .lm-quick-pill:hover {
+  background: var(--sc-surface-control-hover);
+}
+/* Categories index: "Categories · 67" Bold 16 / 20 with a ghost 32 add
+   button at the right; four 310 columns, 24 apart; letter heads mono 12
+   grey, no rule; rows 30 tall — SemiBold 14 white, the count 14 grey. */
+html[data-ds="skillcat"] .qbl-index-head {
+  padding: 0;
+}
+html[data-ds="skillcat"] .qbl-index-head-row {
+  padding: 0 0 16px;
+  border-bottom: none;
+}
+html[data-ds="skillcat"] .qbl-index-head-label {
+  margin: 0;
+  padding: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 20px;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .qbl-index {
+  padding: 0;
+  gap: 0 24px;
+}
+html[data-ds="skillcat"] .qbl-index-group {
+  margin-bottom: 24px;
+}
+html[data-ds="skillcat"] .qbl-index-letter {
+  padding: 0;
+  margin: 0;
+  border-bottom: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  color: var(--sc-text-tertiary);
+}
+html[data-ds="skillcat"] .qbl-index-row {
+  gap: 12px;
+  height: 30px;
+  padding: 5px 0;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .qbl-index-row:hover {
+  background: var(--sc-surface-row-hover);
+}
+html[data-ds="skillcat"] .qbl-index-count {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--sc-text-secondary);
+}
+
+/* ===== Eric's "Certifications" (1:2425) ===== */
+/* The setup banner sits between the title row and the search (DS Banner):
+   20% orange tint on a 0.5 orange-15% edge, radius 8, 16 / 20 insets; the
+   count Bold 32, title Bold 16 white, the names Regular 14 grey; a Secondary
+   "Continue setup" with its keycap and a ghost close at the right. In the
+   head grid it takes row 3 (under the title + summary) and pushes the search
+   and chips down one. */
+html[data-ds="skillcat"] :has(> .tasks-title):has(> .toolbar + .filters) > .clh-banner {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  margin: 0;
+  padding-top: 24px;
+}
+html[data-ds="skillcat"] :has(> .tasks-title):has(> .clh-banner) > .toolbar {
+  grid-row: 4;
+}
+html[data-ds="skillcat"] :has(> .tasks-title):has(> .clh-banner) > .toolbar + .filters {
+  grid-row: 5;
+}
+html[data-ds="skillcat"] .tasks.clh .clh-head > .tasks-note {
+  display: none;
+}
+html[data-ds="skillcat"] .tasks.clh .clh-banner > .lm-banner,
+html[data-ds="skillcat"] .lm-banner {
+  box-sizing: border-box;
+  height: auto;
+  min-height: 70px;
+  gap: 24px;
+  padding: 16px 20px;
+  background: linear-gradient(rgba(240, 85, 35, 0.2), rgba(240, 85, 35, 0.2)), #0d0d0d;
+  border: 0.5px solid var(--sc-primary-border-subtle);
+  border-radius: 8px;
+}
+html[data-ds="skillcat"] .lm-banner-count {
+  padding-right: 20px;
+  border-right: 0.5px solid rgba(255, 255, 255, 0.12);
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 38px;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .lm-banner .note-card-title {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 20px;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .lm-banner .note-card-body {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .lm-banner .cs-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .lm-banner .cs-close:hover {
+  background: var(--sc-surface-row-hover);
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .lm-banner .cs-close svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ===== Eric's "Exam reviews list" (1:2834) and "Hands-on submissions list" (1:3060) ===== */
+/* The list head on pages whose title sits straight in `.tasks-header`. */
+html[data-ds="skillcat"] .tasks-header > .rvc-pagehead:only-child,
+html[data-ds="skillcat"] .tasks-header:has(> .tasks-title),
+html[data-ds="skillcat"] .tasks-header:has(> div:not([class]) > .tasks-title) {
+  align-items: flex-end;
+  min-height: 0;
+  padding: 16px 0 0;
+  margin: 0 0 24px;
+}
+/* Exam Reviews, Hands-On and Spotlight wrap the title in a bare <div>. */
+html[data-ds="skillcat"] .tasks-header > .tasks-title,
+html[data-ds="skillcat"] .tasks-header > div:not([class]) > .tasks-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 29px;
+}
+/* The run cards: four across, equal widths, 16 apart, 64 tall on bg/surface,
+   radius 8, 16 / 20 insets — count Bold 24, title SemiBold 14 white, line 12
+   grey, a 16 chevron at the right. Selected: the 10% tint + white edge. */
+html[data-ds="skillcat"] .rr {
+  height: auto;
+  margin-bottom: 24px;
+}
+html[data-ds="skillcat"] .rr-row {
+  gap: 16px;
+}
+html[data-ds="skillcat"] .rr-card {
+  height: 64px;
+  gap: 16px;
+  padding: 12px 20px;
+  background: var(--sc-bg-surface);
+  box-shadow: none;
+  border-radius: 8px;
+}
+html[data-ds="skillcat"] .rr-card:hover {
+  background: var(--sc-bg-raised);
+}
+html[data-ds="skillcat"] .rr-card.selected {
+  background: var(--sc-surface-row-selected);
+  box-shadow: inset 0 0 0 1px var(--sc-border-muted);
+}
+html[data-ds="skillcat"] .rr-count {
+  padding-right: 0;
+  box-shadow: none;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 29px;
+}
+html[data-ds="skillcat"] .rr-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .rr-sub {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .rr-chevron {
+  color: var(--sc-text-secondary);
+}
+/* Rows that open a record end in a 16 chevron. */
+html[data-ds="skillcat"] .row-chevron {
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .row-chevron svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ===== Eric's "Exam review" (1:2990) and "Hands-on review" (1:3218) consoles ===== */
+/* Head: the crumb in Bold 12 grey, the name Bold 24 / 29, its line 16 / 24
+   grey; 32 insets. */
+/* Not in the split layout (`.rvc-hor`): there the column owns the gutter and
+   the head keeps the Play Area's 0 0 24, so it lines up with the write-up. */
+html[data-ds="skillcat"] .rvc-root:not(.rvc-hor) .rvc-header {
+  padding: 32px 40px 24px;
+}
+html[data-ds="skillcat"] .rvc-root .rvc-crumbs,
+html[data-ds="skillcat"] .rvc-root .rvc-crumb {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 16px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .rvc-root .tasks-title {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 29px;
+}
+html[data-ds="skillcat"] .rvc-root .tasks-subtitle {
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--sc-text-secondary);
+}
+/* Section heads: Bold 20 / 24 on a 1px #404040 rule. */
+html[data-ds="skillcat"] .prc-rail-title {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 24px;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .prc-stat-label {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .prc-stat-value {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 20px;
+}
+html[data-ds="skillcat"] .prc-stat {
+  box-shadow: none;
+  padding: 0;
+}
+/* Footage frames: bg/surface tiles on radius 8, 16 apart; a flagged frame
+   takes a 1px red edge and its reason in a Status Label. */
+html[data-ds="skillcat"] .pr-frame-grid {
+  gap: 16px;
+}
+html[data-ds="skillcat"] .pr-frame {
+  background: var(--sc-bg-surface);
+  border-radius: 8px;
+}
+html[data-ds="skillcat"] .pr-frame-tag {
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 8px;
+  background: var(--sc-status-error);
+  color: var(--sc-error);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 24px;
+}
+/* Hands-on review: the record column keeps the canvas, the reviewer's rail
+   sits on bg/surface behind a 1px line; "Learner's notes" Bold 16 white, the
+   notes Regular 16 / 24; checklist bullets 16 / 24 grey; the ten score boxes
+   are 40 × 40 Secondary chips, Bold 14. */
+html[data-ds="skillcat"] .rvc-railcol {
+  background: var(--sc-bg-surface);
+  border-left: 1px solid var(--sc-border-default);
+}
+html[data-ds="skillcat"] .rvc-notes-label {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 20px;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .rvc-desc {
+  font-size: 16px;
+  line-height: 24px;
+}
+html[data-ds="skillcat"] .rvc-checklist {
+  padding: 0;
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .rvc-rail-rule {
+  margin: 24px 0;
+  background: var(--sc-border-default);
+}
+html[data-ds="skillcat"] .rvc-score {
+  width: 40px;
+  height: 40px;
+  border: 0.5px solid var(--sc-border-control);
+  border-radius: 8px;
+  background: var(--sc-fill-secondary);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .rvc-score:hover {
+  background: var(--sc-fill-secondary-hover);
+}
+html[data-ds="skillcat"] .rvc-score.selected,
+html[data-ds="skillcat"] .rvc-score.active,
+html[data-ds="skillcat"] .rvc-score[aria-pressed="true"] {
+  background: linear-gradient(var(--sc-primary-subtle), var(--sc-primary-subtle)), #0d0d0d;
+  border: 1px solid var(--sc-primary-border);
+  color: var(--sc-text-on-color);
+}
+html[data-ds="skillcat"] .rvc-qhint {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--sc-text-secondary);
+}
+/* Console footer: #1B1B1B on a #404040 line; "Back" as a Link button, Skip
+   as Secondary with its keycap, then Destructive and Positive. */
+html[data-ds="skillcat"] .rvc-footer,
+html[data-ds="skillcat"] .rvc-hor .rvc-footer {
+  gap: 12px;
+  padding: 16px 24px;
+  background: var(--sc-bg-surface);
+  border-top: 1px solid var(--sc-border-default);
+  box-shadow: none;
+}
+html[data-ds="skillcat"] .rvc-footer .wizard-cancel {
+  width: auto;
+  height: 32px;
+  padding: 0 8px;
+  background: none;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .rvc-footer .wizard-cancel:hover {
+  background: none;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .rvc-skip,
+html[data-ds="skillcat"] .rvc-back-current {
+  font-weight: 700;
+}
+html[data-ds="skillcat"] .btn-publish--danger {
+  background: linear-gradient(rgba(255, 31, 23, 0.2), rgba(255, 31, 23, 0.2)), #0d0d0d;
+  border-color: rgba(255, 31, 23, 0.15);
+}
+html[data-ds="skillcat"] .btn-publish--danger:hover:not(:disabled) {
+  background: linear-gradient(rgba(255, 31, 23, 0.3), rgba(255, 31, 23, 0.3)), #0d0d0d;
+}
+html[data-ds="skillcat"] .btn-publish--go {
+  background: linear-gradient(rgba(41, 182, 115, 0.2), rgba(41, 182, 115, 0.2)), #0d0d0d;
+  border-color: rgba(41, 182, 115, 0.15);
+}
+html[data-ds="skillcat"] .btn-publish--go:hover:not(:disabled) {
+  background: linear-gradient(rgba(41, 182, 115, 0.3), rgba(41, 182, 115, 0.3)), #0d0d0d;
+}
+
+/* ===== Eric's "Users" (1:3273) and "Companies, date range" (1:3401) ===== */
+/* Copy (summary lines included) reads exactly as in the Play Area — no
+   sentence case, no CSS text-transform overrides. */
+/* Date range panel (DS Date Picker): 12 inset, Start / End fields — Bold 14
+   label, 44 mono control — over two months; days 32 on radius 8, the chosen
+   span on the 20% orange tint with the ends ringed in orange. */
+html[data-ds="skillcat"] .drp {
+  padding: 4px;
+}
+html[data-ds="skillcat"] .drp-field-label {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 20px;
+}
+html[data-ds="skillcat"] .drp-input {
+  min-height: 40px;
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 16px;
+  line-height: 24px;
+  caret-color: var(--sc-primary);
+}
+html[data-ds="skillcat"] .drp-input:focus {
+  border-color: var(--sc-border-focus);
+}
+html[data-ds="skillcat"] .drp-my-btn {
+  font-size: 14px;
+  font-weight: 700;
+}
+html[data-ds="skillcat"] .drp-weekdays {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .drp-day {
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px;
+}
+html[data-ds="skillcat"] .drp-day:hover:not(.drp-day--empty) {
+  background: var(--sc-surface-row-hover);
+}
+html[data-ds="skillcat"] .drp-day.in-range {
+  border-radius: 0;
+  background: var(--sc-primary-tint, rgba(240, 85, 35, 0.2));
+  box-shadow: none;
+}
+html[data-ds="skillcat"] .drp-day.is-start,
+html[data-ds="skillcat"] .drp-day.is-end,
+html[data-ds="skillcat"] .drp-day.is-selected,
+html[data-ds="skillcat"] .drp-day.is-solo {
+  border-radius: 999px;
+  background: var(--sc-primary-subtle);
+  box-shadow: inset 0 0 0 1px var(--sc-primary);
+  font-weight: 700;
+  color: var(--sc-text-on-color);
+}
+/* Preset-first menu: the shortcuts as Menu rows, "Custom range" last. */
+html[data-ds="skillcat"] .drp-presets--menu {
+  padding: 8px;
+  border-right: none;
+}
+html[data-ds="skillcat"] .drp-presets--menu .drp-presets-list {
+  gap: 0;
+  align-items: stretch;
+  min-width: 224px;
+}
+html[data-ds="skillcat"] .drp-presets--menu .drp-preset {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 36px;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--sc-text-primary);
+  text-align: left;
+}
+html[data-ds="skillcat"] .drp-presets--menu .drp-preset:hover {
+  background: var(--sc-surface-row-hover);
+}
+html[data-ds="skillcat"] .drp-presets--menu .drp-preset.is-active {
+  font-weight: 600;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .drp-presets--menu .drp-preset.is-active::after {
+  content: "";
+  width: 16px;
+  height: 16px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%23f05523' stroke-width='1.33' stroke-linecap='square'%3E%3Cpath d='M3 8.5l3 3 7-7'/%3E%3C/svg%3E") center no-repeat;
+}
+html[data-ds="skillcat"] .drp-preset--custom {
+  margin-top: 4px;
+  border-top: 1px solid var(--sc-border-default);
+  border-radius: 0 0 8px 8px;
+  padding-top: 12px !important;
+}
+html[data-ds="skillcat"] .drp-preset--custom::after {
+  content: "";
+  width: 16px;
+  height: 16px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%23a8a8a8' stroke-width='1.33' stroke-linecap='square'%3E%3Cpath d='M6 3l5 5-5 5'/%3E%3C/svg%3E") center no-repeat;
+}
+/* The Users banner (name changes) is the same static DS Banner here — the
+   card-into-note morph is off with the rest of the collapse. */
+html[data-ds="skillcat"] .tasks.clh .clh-head > .clh-banner {
+  margin-bottom: 0;
+  pointer-events: auto;
+}
+html[data-ds="skillcat"] .tasks.clh.clh--banner .clh-banner > .lm-banner::before {
+  display: none;
+}
+html[data-ds="skillcat"] .tasks.clh.clh--banner .clh-banner > .lm-banner {
+  height: auto;
+  overflow: visible;
+}
+html[data-ds="skillcat"] .tasks.clh.clh--banner .clh-banner > .lm-banner > * {
+  opacity: 1;
+  transform: none;
+}
+/* (Specificity: these outrank the banner-less row placements above.) */
+html[data-ds="skillcat"] :has(> .tasks-title):has(> .toolbar + .filters):has(> .clh-banner) > .toolbar {
+  grid-row: 4;
+}
+html[data-ds="skillcat"] :has(> .tasks-title):has(> .toolbar + .filters):has(> .clh-banner) > .toolbar + .filters {
+  grid-row: 5;
+}
+html[data-ds="skillcat"] .tasks.clh.clh--banner .clh-banner > .lm-banner,
+html[data-ds="skillcat"] .tasks.clh .clh-banner > .lm-banner {
+  background: linear-gradient(rgba(240, 85, 35, 0.2), rgba(240, 85, 35, 0.2)), #0d0d0d;
+  border: 0.5px solid var(--sc-primary-border-subtle);
+  border-radius: 8px;
+  padding: 16px 20px;
+}
+/* Everything inside the banner stays put (its pieces otherwise ride the
+   collapse timeline into the note). */
+html[data-ds="skillcat"] .tasks.clh .clh-banner *,
+html[data-ds="skillcat"] .tasks.clh .clh-banner *::before,
+html[data-ds="skillcat"] .tasks.clh .clh-banner *::after {
+  animation: none !important;
+  transform: none !important;
+  opacity: 1 !important;
+  clip-path: none !important;
+}
+
+/* ===== Eric's "Spotlight" (1:3544) ===== */
+html[data-ds="skillcat"] .sp-search {
+  margin-bottom: 24px;
+}
+html[data-ds="skillcat"] .sp-thumb {
+  width: 96px;
+  height: 44px;
+  border-radius: 8px;
+  background: var(--sc-bg-raised);
+}
+html[data-ds="skillcat"] .sp-cell-name {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .sp-cell-desc {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--sc-text-secondary);
+}
+/* Approve / Reject in the row: Positive and Destructive Medium buttons with
+   a 16 icon, side by side. */
+html[data-ds="skillcat"] .sp-decide {
+  flex-direction: row;
+  gap: 8px;
+  width: auto;
+}
+html[data-ds="skillcat"] .sp-decide-btn {
+  width: auto;
+  height: 32px;
+  gap: 8px;
+  padding: 0 16px;
+  border-radius: 8px;
+  border: 0.5px solid transparent;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+}
+html[data-ds="skillcat"] .sp-decide-btn svg {
+  width: 16px;
+  height: 16px;
+}
+html[data-ds="skillcat"] .sp-decide-btn--approve {
+  background: linear-gradient(rgba(41, 182, 115, 0.2), rgba(41, 182, 115, 0.2)), #0d0d0d;
+  border-color: rgba(41, 182, 115, 0.15);
+}
+html[data-ds="skillcat"] .sp-decide-btn--approve:hover {
+  background: linear-gradient(rgba(41, 182, 115, 0.3), rgba(41, 182, 115, 0.3)), #0d0d0d;
+}
+html[data-ds="skillcat"] .sp-decide-btn--reject {
+  background: linear-gradient(rgba(255, 31, 23, 0.2), rgba(255, 31, 23, 0.2)), #0d0d0d;
+  border-color: rgba(255, 31, 23, 0.15);
+}
+html[data-ds="skillcat"] .sp-decide-btn--reject:hover {
+  background: linear-gradient(rgba(255, 31, 23, 0.3), rgba(255, 31, 23, 0.3)), #0d0d0d;
+}
+
+/* ===== Eric's "Create spotlight" (1:3683) ===== */
+html[data-ds="skillcat"] .spc-preview-title {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 29px;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .spc-rail {
+  border-left: 1px solid var(--sc-border-default);
+}
+
+/* ===== Eric's "Product config" (1:3731) =====
+   Eshwar's comment: the boxed tables (Force app update, App deep links…)
+   are the DS card table — the same card the wizard's option tables use. */
+html[data-ds="skillcat"] .pc-page .tasks-header,
+html[data-ds="skillcat"] .pc-page .tasks-header:has(> .tasks-title) {
+  min-height: 0;
+  padding: 0;
+  margin: 0 0 24px;
+  border-bottom: none;
+}
+html[data-ds="skillcat"] .pc-tabs {
+  margin: 0 0 24px;
+  padding: 0;
+}
+html[data-ds="skillcat"] .pc-page .form-label,
+html[data-ds="skillcat"] .pc-page .form-sub-label {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 20px;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .pc-page .form-help {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .pc-page .qsec,
+html[data-ds="skillcat"] .pc-page .ct-prop {
+  border: 1px solid var(--sc-border-default);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+html[data-ds="skillcat"] .pc-page .qsec-hd {
+  min-height: 40px;
+  padding: 10px 12px;
+  background: var(--sc-surface-row-hover-subtle);
+  border-bottom: 1px solid var(--sc-border-default);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .pc-page .qsec-row {
+  min-height: 40px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--sc-border-divider);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .pc-page .qsec-row:last-child {
+  border-bottom: none;
+}
+html[data-ds="skillcat"] .pc-page .qsec-row .pc-strong,
+html[data-ds="skillcat"] .pc-page .qsec-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .pc-page .qsec-foot {
+  padding: 8px 12px;
+  border-top: 1px solid var(--sc-border-divider);
+}
+html[data-ds="skillcat"] .pc-page .qsec-add {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .pc-page .qsec-add svg {
+  width: 16px;
+  height: 16px;
+}
+html[data-ds="skillcat"] .pc-page .qsec-x {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .pc-page .qsec-x svg {
+  width: 16px;
+  height: 16px;
+}
+html[data-ds="skillcat"] .pc-page .deeplink-slug {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .sp-table thead th {
+  height: 48px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sc-text-primary);
+  border-bottom: 1px solid var(--sc-border-default);
+}
+html[data-ds="skillcat"] .sp-table tbody td {
+  height: 64px;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .sp-table tbody tr {
+  border-bottom: 1px solid var(--sc-border-divider);
+}
+
+/* ===== DS validation pass (2026-11-02) ===== */
+/* Controls are 40 tall INCLUDING their 1px edge. */
+html[data-ds="skillcat"] .form-input,
+html[data-ds="skillcat"] .form-select,
+html[data-ds="skillcat"] .wizard .form-input,
+html[data-ds="skillcat"] .wizard .form-select {
+  box-sizing: border-box;
+  min-height: 40px;
+  padding: 7px 12px;
+}
+html[data-ds="skillcat"] textarea.form-input,
+html[data-ds="skillcat"] .wizard textarea.form-input {
+  min-height: 142px;
+  padding: 8px 12px;
+}
+/* The composite Address box: one 1px #404040 card, 40 rows on 1px lines,
+   mono 16 values with #8A8A8A placeholders, 16 chevrons. */
+html[data-ds="skillcat"] .address-field {
+  border: 1px solid var(--sc-border-default);
+  border-radius: 8px;
+}
+html[data-ds="skillcat"] .address-field:focus-within {
+  border-color: var(--sc-border-focus);
+}
+/* Every row is 40 including the hairline above it. */
+html[data-ds="skillcat"] .address-field > * {
+  height: 40px;
+  box-sizing: border-box;
+}
+html[data-ds="skillcat"] .address-field > .selectfield > .dropdown-wrap,
+html[data-ds="skillcat"] .address-field .address-row,
+html[data-ds="skillcat"] .address-split > .address-cell {
+  height: 100%;
+  box-sizing: border-box;
+}
+html[data-ds="skillcat"] .address-row,
+html[data-ds="skillcat"] .address-input,
+html[data-ds="skillcat"] .address-cell,
+html[data-ds="skillcat"] .address-select {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--sc-text-primary);
+}
+/* The Country / State rows: the row is the 40 button (8 + 24 + 8) and the
+   value span inside it is bare text — padding on both stacked to 64. */
+html[data-ds="skillcat"] .address-row {
+  gap: 8px;
+  padding: 0 12px;
+}
+html[data-ds="skillcat"] .address-input,
+html[data-ds="skillcat"] .address-cell input {
+  padding: 0 12px;
+  caret-color: var(--sc-primary);
+}
+html[data-ds="skillcat"] .address-input::placeholder,
+html[data-ds="skillcat"] .address-cell input::placeholder,
+html[data-ds="skillcat"] .address-select.is-placeholder {
+  color: var(--sc-text-placeholder);
+}
+html[data-ds="skillcat"] .address-chevron svg {
+  width: 16px;
+  height: 16px;
+}
+html[data-ds="skillcat"] .time-field,
+html[data-ds="skillcat"] .stepper,
+html[data-ds="skillcat"] .lang-field {
+  box-sizing: border-box;
+}
+html[data-ds="skillcat"] .time-field {
+  height: 40px;
+}
+
+/* ===== Compact everywhere (2026-11-03) =====
+   The composite and specialty controls the first passes didn't reach — they
+   still drew the Play Area's 45 shells in Fira Sans. Each is the DS Input:
+   40 tall including its 1px edge, value / placeholder mono 16 / 24, 12 side
+   inset, #8A8A8A placeholder. */
+/* Deep link (Prefix + text): host prefix | slug + Copy link. */
+html[data-ds="skillcat"] .deeplink-input {
+  box-sizing: border-box;
+  height: 40px;
+  border-color: var(--sc-border-default);
+}
+html[data-ds="skillcat"] .deeplink-base,
+html[data-ds="skillcat"] .deeplink-cell {
+  padding: 0 12px;
+}
+html[data-ds="skillcat"] .deeplink-base {
+  border-right-color: var(--sc-border-default);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .deeplink-slug {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--sc-text-primary);
+  caret-color: var(--sc-primary);
+}
+html[data-ds="skillcat"] .deeplink-slug::placeholder {
+  color: var(--sc-text-placeholder);
+}
+/* Date field: the 40 trigger, mono value, 16 calendar glyph. */
+html[data-ds="skillcat"] .date-field-trigger {
+  box-sizing: border-box;
+  height: 40px;
+  border-color: var(--sc-border-default);
+}
+html[data-ds="skillcat"] .date-field-trigger:hover {
+  border-color: var(--sc-border-muted);
+}
+html[data-ds="skillcat"] .date-field-trigger.is-open {
+  border-color: var(--sc-border-focus);
+}
+html[data-ds="skillcat"] .date-field-trigger.has-error {
+  border-color: var(--field-error);
+}
+html[data-ds="skillcat"] .date-field-box {
+  gap: 8px;
+  padding: 0 12px;
+  font-family: var(--font-mono);
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .date-field-placeholder {
+  color: var(--sc-text-placeholder);
+}
+/* Rich text: the multiline Input — mono 16 / 24 body, 8 / 12 inset; the
+   toolbar stays Fira (it is a Menu, not a value). */
+html[data-ds="skillcat"] .rte-field {
+  border-color: var(--sc-border-default);
+}
+html[data-ds="skillcat"] .rte-area {
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 16px;
+  line-height: 24px;
+  min-height: 24px;
+  color: var(--sc-text-primary);
+  caret-color: var(--sc-primary);
+}
+html[data-ds="skillcat"] .rte-area::placeholder {
+  color: var(--sc-text-placeholder);
+}
+html[data-ds="skillcat"] .rte-lang-row {
+  gap: 8px;
+}
+html[data-ds="skillcat"] .rte-lang-row .rte-area {
+  padding: 8px 0;
+}
+html[data-ds="skillcat"] .rte-lang-row .lang-tag {
+  padding-top: 12px;
+  line-height: 16px;
+}
+/* Price (currency prefix + amount). */
+html[data-ds="skillcat"] .price-input {
+  box-sizing: border-box;
+  height: 40px;
+  background: transparent;
+  border-color: var(--sc-border-default);
+  border-radius: 8px;
+}
+html[data-ds="skillcat"] .price-input-prefix,
+html[data-ds="skillcat"] .price-input input {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  line-height: 24px;
+}
+
+/* Manage completions' dual search (one shell, two halves): the DS
+   `.usearch-bar` rule above outranks the halves' own reset, so each half drew
+   a second 40 box inside the shell. The shell is the Input / Search; the
+   halves stay bare, split by the one hairline. */
+html[data-ds="skillcat"] .mc-scopebar {
+  box-sizing: border-box;
+  height: 40px;
+  background: linear-gradient(var(--sc-surface-control), var(--sc-surface-control)), var(--sc-bg-canvas);
+  border: 1px solid var(--sc-border-default);
+  border-radius: 8px;
+}
+html[data-ds="skillcat"] .mc-scopebar:has(.usearch-bar:hover) {
+  border-color: var(--sc-border-muted);
+}
+html[data-ds="skillcat"] .mc-scopebar:has(.usearch.is-open),
+html[data-ds="skillcat"] .mc-scopebar:focus-within {
+  border-color: var(--sc-border-focus);
+}
+html[data-ds="skillcat"] .mc-scopebar .usearch-bar,
+html[data-ds="skillcat"] .mc-scopebar .usearch-bar:hover,
+html[data-ds="skillcat"] .mc-scopebar .usearch-bar:focus-within,
+html[data-ds="skillcat"] .mc-scopebar .usearch.is-open .usearch-bar {
+  height: 100%;
+  padding: 0 12px;
+  background: none;
+  border: none;
+  border-radius: 0;
+}
+html[data-ds="skillcat"] .mc-scopebar > .mc-search:first-child .usearch-bar {
+  border-right: 1px solid var(--sc-border-default);
+}
+
+/* Seat price (currency | amount, one shell). */
+html[data-ds="skillcat"] .cw-price-field {
+  box-sizing: border-box;
+  height: 40px;
+  border-color: var(--sc-border-default);
+}
+html[data-ds="skillcat"] .cw-price-cur,
+html[data-ds="skillcat"] .cw-price-cell {
+  padding: 0 12px;
+  font-family: var(--font-mono);
+  font-size: 16px;
+  line-height: 24px;
+}
+html[data-ds="skillcat"] .cw-price-cur {
+  border-right-color: var(--sc-border-default);
+}
+
+/* Toast (17013:360), Success tone with the Status check: 360 wide, min 48,
+   16 side inset, radius 8; 15% green over #0d0d0d inside a 10% green edge;
+   the message Bold at the Compact chip label (14 / 20), one 16 icon last. */
+html[data-ds="skillcat"] .pl-copied-toast {
+  box-sizing: border-box;
+  width: 360px;
+  min-height: 48px;
+  gap: 8px;
+  padding: 10px 16px;
+  border-color: rgba(41, 182, 115, 0.1);
+  background: linear-gradient(rgba(41, 182, 115, 0.15), rgba(41, 182, 115, 0.15)), var(--sc-bg-canvas);
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--sc-text-on-color);
+}
+/* Tooltip (18839:2937): the Menu surface — #1D1D1D, 1px #404040, radius 8,
+   8 / 12 inset, Regular 14 / 20 white, heading Medium; max 240, no arrow. */
+html[data-ds="skillcat"] {
+  --tip-bg: var(--sc-surface-menu);
+  --tip-border: var(--sc-border-default);
+  --tip-text: var(--sc-text-on-color);
+  --tip-shadow: 0 8px 12px rgba(0, 0, 0, 0.4);
+}
+html[data-ds="skillcat"] .hover-tip {
+  max-width: 240px;
+  padding: 7px 11px;
+  line-height: 20px;
+}
+
+/* Certification builder (Add tasks / Completion): the tree's course, lesson
+   and task rows and the dashed "Add course" / "Add condition set" buttons
+   were the Play Area's 45. Rows sit at the Compact control height, 40, names
+   SemiBold 16 / 20; the dashed adds are Compact buttons — 40, radius 8,
+   Bold 14 / 20. */
+html[data-ds="skillcat"] .ctb-item {
+  box-sizing: border-box;
+  min-height: 40px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+html[data-ds="skillcat"] .ctb-item-name {
+  line-height: 20px;
+}
+html[data-ds="skillcat"] .ctb-add-primary,
+html[data-ds="skillcat"] .cc-add-set {
+  box-sizing: border-box;
+  min-height: 40px;
+  padding: 0 12px;
+  gap: 8px;
+  border-color: var(--sc-border-default);
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+}
+html[data-ds="skillcat"] .ctb-add-primary svg,
+html[data-ds="skillcat"] .cc-add-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Price ID matrix: the label column repeats the input rows' height so the
+   two stay level — the inputs are Compact 40 now, so the labels are too
+   (the Stripe rows' two lines at 14 / 16). */
+html[data-ds="skillcat"] .price-idm-label {
+  height: 40px;
+  font-size: 14px;
+  line-height: 16px;
+}
+html[data-ds="skillcat"] .price-idm-head {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+/* Disabled buttons — every primary / secondary / confirm CTA, not only the
+   wizard footer's Create. The fills above (`html[data-ds] .prm-cta` …) outrank
+   the shared disabled rule in index.css, so a disabled button kept its orange
+   at rest and only greyed out on hover. Last in the file and one step more
+   specific than the `:hover:not(:disabled)` fills, which `.is-disabled` (the
+   aria-disabled twin that keeps its tooltip) still matches. */
+html[data-ds="skillcat"] :is(.btn-publish, .btn-save-draft, .prm-cta, .prm-quiet, .btn-apply, .new-task, .cta-primary, .cta-quiet, .btn-primary):is(:disabled, .is-disabled),
+html[data-ds="skillcat"] :is(.btn-publish, .btn-save-draft, .prm-cta, .prm-quiet, .btn-apply, .new-task, .cta-primary, .cta-quiet, .btn-primary):is(:disabled, .is-disabled):is(:hover, :active) {
+  background: linear-gradient(var(--sc-surface-control), var(--sc-surface-control)), #0d0d0d;
+  border-color: rgba(122, 122, 122, 0.05);
+  color: #404040;
+  filter: none;
+  cursor: not-allowed;
+}
+html[data-ds="skillcat"] :is(.btn-publish, .btn-save-draft, .prm-cta, .prm-quiet, .btn-apply, .new-task, .cta-primary, .cta-quiet, .btn-primary):is(:disabled, .is-disabled) .cta-kbd {
+  color: #404040;
+}

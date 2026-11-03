@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 /* Shared table chrome for the two Award tables — the Awards list on the Awards
    page and the Award Templates tab on Product Config. They were one page with
    two tabs until the Templates tab moved to Product Config; these parts are
@@ -46,10 +47,11 @@ export function SortableHeader({
   toggle: (k: string) => void;
   sortable?: boolean;
 }) {
+  const t = useDsText();
   if (!sortable) {
     return (
       <th className={`${className ?? ""} no-sort`.trim()}>
-        <span className="th-content">{label}</span>
+        <span className="th-content">{t(label)}</span>
       </th>
     );
   }
@@ -57,7 +59,7 @@ export function SortableHeader({
   return (
     <th className={className} onClick={() => toggle(col)}>
       <span className="th-content">
-        {label}
+        {t(label)}
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>
@@ -78,6 +80,7 @@ export function ActionsMenu({
   onDelete: () => void;
   onViewRecipients?: () => void;
 }) {
+  const t = useDsText();
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
 
@@ -110,7 +113,7 @@ export function ActionsMenu({
       onClick={(e) => { e.stopPropagation(); onPick(); onClose(); }}
     >
       <span className="u-menu-item-icon">{icon}</span>
-      {label}
+      {t(label)}
     </button>
   );
 

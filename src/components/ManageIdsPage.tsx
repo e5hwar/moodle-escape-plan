@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useMemo, useState } from "react";
 import {
   SEEDED_ID_USERS,
@@ -45,6 +46,7 @@ function compareRows(a: IdRecord, b: IdRecord, key: SortKey): number {
 }
 
 export function ManageIdsPage({ onBack }: { onBack: () => void }) {
+  const t = useDsText();
   /* The review queue's documents, with each person read off the live roster
      and every decision from the shared ID store (manageIds.ts). */
   const roster = useUsers();
@@ -107,9 +109,9 @@ export function ManageIdsPage({ onBack }: { onBack: () => void }) {
             <button
               className="rvc-crumb"
               onClick={onBack}
-              title="Back to Exam Reviews"
+              title={t("Back to Exam Reviews")}
             >
-              Exam Reviews
+              {t("Exam Reviews")}
             </button>
           </nav>
           <header className="tasks-header">
@@ -145,11 +147,11 @@ export function ManageIdsPage({ onBack }: { onBack: () => void }) {
                   <MidColGroup />
                   <thead>
                     <tr>
-                      <SortableHeader col="name" label="User's Name" className="col-name" sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="name" label={t("User's Name")} className="col-name" sort={sort} toggle={toggleSort} />
                       <SortableHeader col="email" label="Email" className="pr-col-email" sort={sort} toggle={toggleSort} />
                       <SortableHeader col="phone" label="Phone" className="pr-col-phone" sort={sort} toggle={toggleSort} />
                       <SortableHeader col="status" label="Status" className="col-status" sort={sort} toggle={toggleSort} />
-                      <SortableHeader col="uploadedAt" label="Uploaded On" className="pr-col-date" sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="uploadedAt" label={t("Uploaded On")} className="pr-col-date" sort={sort} toggle={toggleSort} />
                     </tr>
                   </thead>
                 </table>
@@ -253,11 +255,12 @@ function SortableHeader({
   sort: { key: SortKey; dir: SortDir };
   toggle: (k: SortKey) => void;
 }) {
+  const t = useDsText();
   const activeCol = sort.key === col;
   return (
     <th className={className} onClick={() => toggle(col)}>
       <span className="th-content">
-        {label}
+        {t(label)}
         <SortIcon active={activeCol} dir={activeCol ? sort.dir : undefined} />
       </span>
     </th>

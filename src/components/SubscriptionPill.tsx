@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { subscriptionText, type User } from "../data/users";
 import type { StatusPillTone } from "../data/companies";
 
@@ -32,7 +33,8 @@ function subscriptionPill(user: User): { tone: StatusPillTone; label: string } |
 }
 
 export function SubscriptionPill({ user }: { user: User }) {
+  const t = useDsText();
   const pill = subscriptionPill(user);
   if (!pill) return <>—</>;
-  return <span className={`co-status-pill co-status-pill--${pill.tone}`}>{pill.label}</span>;
+  return <span className={`co-status-pill co-status-pill--${pill.tone}`}>{t(pill.label)}</span>;
 }

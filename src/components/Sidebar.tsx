@@ -4,6 +4,7 @@ import { submissions } from "../data/proctoring";
 import { usePendingHandsOnCount } from "../data/reviewSubmissions";
 import { isInReview, useLiveSpotlights } from "../data/spotlights";
 import { pendingCount, useNameChangeRequests } from "../data/nameChangeRequests";
+import { useDesignSystem, useDsText } from "../designSystem";
 
 type IconProps = { className?: string };
 
@@ -80,6 +81,13 @@ const I = {
   productConfig: (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.36" strokeLinecap="round" strokeLinejoin="round">
       <path d="M4.65193 6.09281H6.89281V3.85193L4.27845 1.23756C5.11477 0.838144 6.05435 0.707823 6.9678 0.864548C7.88126 1.02127 8.72366 1.45733 9.37901 2.11268C10.0344 2.76803 10.4704 3.61044 10.6271 4.52389C10.7839 5.43735 10.6536 6.37693 10.2541 7.21325L14.7359 11.695C15.0331 11.9922 15.2 12.3952 15.2 12.8155C15.2 13.2357 15.0331 13.6387 14.7359 13.9359C14.4387 14.2331 14.0357 14.4 13.6155 14.4C13.1952 14.4 12.7922 14.2331 12.495 13.9359L8.01325 9.45413C7.17693 9.85355 6.23735 9.98387 5.32389 9.82715C4.41044 9.67042 3.56803 9.23436 2.91268 8.57901C2.25733 7.92366 1.82127 7.08126 1.66455 6.1678C1.50782 5.25435 1.63814 4.31477 2.03756 3.47845L4.65193 6.09281Z" />
+    </svg>
+  ),
+  // SkillCat DS "Icon/user-outline" (17020:122) — the rail's Account slot.
+  account: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="square">
+      <path d="M8 8.66667C9.84095 8.66667 11.3333 7.17428 11.3333 5.33333C11.3333 3.49238 9.84095 2 8 2C6.15905 2 4.66667 3.49238 4.66667 5.33333C4.66667 7.17428 6.15905 8.66667 8 8.66667Z" />
+      <path d="M2.66667 14C2.66667 11.7909 5.05448 10 8 10C10.9455 10 13.3333 11.7909 13.3333 14" />
     </svg>
   ),
   // Figma 421:1450 — the footer collapse control ("tdesign:terminal-window").
@@ -169,8 +177,12 @@ type Props = {
 };
 
 export function Sidebar({ active = "tasks", onNavigate }: Props) {
+  const t = useDsText();
   const [collapsed, setCollapsed] = useState(true);
   const [hovered, setHovered] = useState(false);
+  /* SkillCat DS Sidebar (18945:4167): the collapsed rail has no logo — the
+     expand control sits in its top row and the Account icon at the bottom. */
+  const dsRail = useDesignSystem() === "skillcat";
   const activeKey = ACTIVE_MAP[active] ?? active;
   const pendingHandsOn = cap(usePendingHandsOnCount());
   // No badge at all once nothing is waiting.
@@ -198,13 +210,23 @@ export function Sidebar({ active = "tasks", onNavigate }: Props) {
       <div className={hostClass} onMouseEnter={onEnter} onMouseLeave={onLeave}>
         <aside className="sidebar sidebar--collapsed">
           <div className="sidebar__top-collapsed">
-            <button
-              className="sidebar__logo-btn"
-              aria-label="Expand sidebar"
-              onClick={() => setCollapsed(false)}
-            >
-              <HardHatLogo size={33} />
-            </button>
+            {dsRail ? (
+              <button
+                className="sidebar__collapse-icon"
+                aria-label="Expand sidebar"
+                onClick={() => setCollapsed(false)}
+              >
+                {I.panel}
+              </button>
+            ) : (
+              <button
+                className="sidebar__logo-btn"
+                aria-label="Expand sidebar"
+                onClick={() => setCollapsed(false)}
+              >
+                <HardHatLogo size={33} />
+              </button>
+            )}
           </div>
           <nav className="sidebar__nav-collapsed">
             {sections.map((section, idx) => (
@@ -227,13 +249,19 @@ export function Sidebar({ active = "tasks", onNavigate }: Props) {
             ))}
           </nav>
           <div className="sidebar__footer">
-            <button
-              className="sidebar__collapse-icon"
-              aria-label="Expand sidebar"
-              onClick={() => setCollapsed(false)}
-            >
-              {I.panel}
-            </button>
+            {dsRail ? (
+              <button className="sidebar__icon-btn sidebar__account" aria-label="Account" title="Account">
+                {I.account}
+              </button>
+            ) : (
+              <button
+                className="sidebar__collapse-icon"
+                aria-label="Expand sidebar"
+                onClick={() => setCollapsed(false)}
+              >
+                {I.panel}
+              </button>
+            )}
           </div>
         </aside>
       </div>
@@ -260,7 +288,7 @@ export function Sidebar({ active = "tasks", onNavigate }: Props) {
                     onClick={() => onNavigate?.(item.navKey ?? item.key)}
                   >
                     <span className="sidebar__link-icon">{I[item.icon]}</span>
-                    <span className="sidebar__link-label">{item.label}</span>
+                    <span className="sidebar__link-label">{t(item.label)}</span>
                     {badgeOf(item) !== undefined && (
                       <span className="sidebar__link-badge">{badgeOf(item)}</span>
                     )}

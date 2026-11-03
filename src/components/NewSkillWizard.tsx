@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DropdownCaretIcon, AlertCircleFilledIcon, CrumbChevronIcon, WarnTriangleIcon } from "./icons";
@@ -127,6 +128,7 @@ function initialData(p: Props): Data {
 }
 
 export function NewSkillWizard(props: Props) {
+  const t = useDsText();
   const { onClose } = props;
   const isEditing = !!(props.editingSkill || props.editingMastery);
   /* One page, one form, both kinds: `kind` comes from which Create button was
@@ -253,18 +255,18 @@ export function NewSkillWizard(props: Props) {
                     full trail above this page — Skills hangs off Tasks — and
                     every step navigates. It never names the page itself. */}
                 <nav className="rvc-crumbs" aria-label="Breadcrumb">
-                  <button className="rvc-crumb" onClick={() => guard(props.onBackToTasks)} title="Back to Tasks">
+                  <button className="rvc-crumb" onClick={() => guard(props.onBackToTasks)} title={t("Back to Tasks")}>
                     Tasks
                   </button>
                   <CrumbChevronIcon />
-                  <button className="rvc-crumb" onClick={requestClose} title="Back to Skills">
+                  <button className="rvc-crumb" onClick={requestClose} title={t("Back to Skills")}>
                     Skills
                   </button>
                 </nav>
                 <div className="rvc-pagehead">
-                  <h1 className="tasks-title">{title}</h1>
+                  <h1 className="tasks-title">{t(title)}</h1>
                 </div>
-                <p className="tasks-subtitle wizard-desc">{COPY[props.kind].pageSub}</p>
+                <p className="tasks-subtitle wizard-desc">{t(COPY[props.kind].pageSub)}</p>
 
                 <DetailsStep data={data} update={update} isMastery={isMastery} nameMissing={nameMissing} imageMissing={imageMissing} touch={touch} />
 
@@ -281,7 +283,7 @@ export function NewSkillWizard(props: Props) {
 
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
-          <button className="wizard-cancel" onClick={requestClose}>Cancel</button>
+          <button className="wizard-cancel" onClick={requestClose}>{t("Cancel")}</button>
         </div>
         <div className="wizard-actions">
           {/* `aria-disabled` rather than `disabled`, the same way the Task
@@ -294,7 +296,7 @@ export function NewSkillWizard(props: Props) {
             data-tip={blockedTip}
             onClick={() => { if (canSave) handleSave(); else if (!fieldsValid) setAttempted(true); }}
           >
-            {isEditing ? "Save Changes" : `Create ${noun}`}
+            {t(isEditing ? "Save Changes" : `Create ${noun}`)}
             <WizardKeyHint />
           </button>
         </div>
@@ -322,6 +324,7 @@ function DetailsStep({
   /** A blocked save found no icon. */
   imageMissing?: boolean;
 }) {
+  const t = useDsText();
   const noun = isMastery ? "Mastery Skill" : "Skill";
   const copy = COPY[isMastery ? "mastery" : "skill"];
 
@@ -330,7 +333,7 @@ function DetailsStep({
       <div className="form-group" onBlur={leave(() => touch("name"))}>
         <label className="form-label">
           Name<span className="req">*</span>
-          {nameMissing && <span className="form-label-error">Name cannot be left empty</span>}
+          {nameMissing && <span className="form-label-error">{t("Name cannot be left empty")}</span>}
           <LimitError max={NAME_MAX} values={[data.nameEn, data.nameEs]} />
         </label>
         <LangField
@@ -338,17 +341,17 @@ function DetailsStep({
           es={data.nameEs}
           onChangeEn={(v) => update({ nameEn: v })}
           onChangeEs={(v) => update({ nameEs: v })}
-          placeholderEn="Name..."
-          placeholderEs="Nombre..."
+          placeholderEn={t("Name...")}
+          placeholderEs={t("Nombre...")}
           error={nameMissing}
           maxLength={NAME_MAX}
         />
-        <p className="form-help">{copy.name}</p>
+        <p className="form-help">{t(copy.name)}</p>
       </div>
 
       <div className="form-group">
         <label className="form-label">
-          Description
+          {t("Description")}
           <LimitError max={DESCRIPTION_MAX} values={[data.descEn, data.descEs]} />
         </label>
         <RichTextField
@@ -356,11 +359,11 @@ function DetailsStep({
           es={data.descEs}
           onChangeEn={(v) => update({ descEn: v })}
           onChangeEs={(v) => update({ descEs: v })}
-          placeholderEn="Description..."
-          placeholderEs="Descripción..."
+          placeholderEn={t("Description...")}
+          placeholderEs={t("Descripci\u00f3n...")}
           maxLength={DESCRIPTION_MAX}
         />
-        <p className="form-help">{copy.desc}</p>
+        <p className="form-help">{t(copy.desc)}</p>
       </div>
 
       <div className="form-group">
@@ -369,7 +372,7 @@ function DetailsStep({
           {imageMissing && <span className="form-label-error">{noun} Icon cannot be left empty</span>}
         </label>
         <ImageUploadField value={data.image} onChange={(image) => update({ image })} error={imageMissing} />
-        <p className="form-help">{copy.icon}</p>
+        <p className="form-help">{t(copy.icon)}</p>
       </div>
     </>
   );
@@ -389,19 +392,19 @@ function CriteriaStep({
   /** A blocked save found no Task chosen. */
   missing?: boolean;
 }) {
+  const t = useDsText();
   const selected = data.taskIds;
 
   return (
     <>
       <div className="form-group" onBlur={leave(() => touch("criteria"))}>
         <label className="form-label">
-          Awarding Tasks<span className="req">*</span>
-          {missing && <span className="form-label-error">Awarding Tasks cannot be left empty</span>}
+          {t("Awarding Tasks")}<span className="req">*</span>
+          {missing && <span className="form-label-error">{t("Awarding Tasks cannot be left empty")}</span>}
         </label>
         <TaskPicker selected={selected} onChange={(ids) => update({ taskIds: ids })} error={missing} onLeave={() => touch("criteria")} />
         <p className="form-help">
-          Choose the Tasks that award this Skill. A Task counts as soon as it’s marked complete,
-          whatever its completion criteria. The same Task can award more than one Skill.
+          {t("Choose the Tasks that award this Skill. A Task counts as soon as it\u2019s marked complete, whatever its completion criteria. The same Task can award more than one Skill.")}
         </p>
       </div>
 
@@ -410,7 +413,7 @@ function CriteriaStep({
           and "All selected Tasks" is the default either way. With one Task
           picked the two options mean the same thing, which is harmless. */}
       <div className="form-group">
-        <label className="form-label">Award This Skill After</label>
+        <label className="form-label">{t("Award This Skill After")}</label>
         {/* Both segments take the accent-active variant (Figma 639:895): either
             rule is a real choice, so neither should read as the quieter one. */}
         <div className="seg-control">
@@ -419,14 +422,14 @@ function CriteriaStep({
             className={`seg-btn accent ${data.rule === "any" ? "active" : ""}`}
             onClick={() => update({ rule: "any" })}
           >
-            Any One Task is Complete
+            {t("Any One Task is Complete")}
           </button>
           <button
             type="button"
             className={`seg-btn accent ${data.rule === "all" ? "active" : ""}`}
             onClick={() => update({ rule: "all" })}
           >
-            All Selected Tasks are Complete
+            {t("All Selected Tasks are Complete")}
           </button>
         </div>
       </div>
@@ -456,6 +459,7 @@ function TaskPicker({
    *  open-and-close rather than a blur. */
   onLeave?: () => void;
 }) {
+  const t = useDsText();
   const [open, setOpen] = useState(false);
   const pool = tasks;
   const chosen = selected
@@ -467,7 +471,7 @@ function TaskPicker({
       <div className="multiselect">
         <div className={`multiselect-field${error ? " has-error" : ""}`} onClick={() => setOpen(true)}>
           {chosen.length === 0 ? (
-            <span className="multiselect-placeholder">Select Tasks</span>
+            <span className="multiselect-placeholder">{t("Select Tasks")}</span>
           ) : (
             <MultiSelectTags
               tags={chosen.map((t) => ({
@@ -488,7 +492,7 @@ function TaskPicker({
         <SelectTasksModal
           value={selected}
           allUsersOnly
-          description="Only All-User Tasks created by SkillCat are shown and can be selected here"
+          description={t("Only All-User Tasks created by SkillCat are shown and can be selected here")}
           onCancel={() => { setOpen(false); onLeave?.(); }}
           onConfirm={(ids) => {
             onChange(ids);
@@ -522,6 +526,7 @@ function LinkedSkillsStep({
   /** A blocked save found no Skill chosen. */
   missing?: boolean;
 }) {
+  const t = useDsText();
   const selected = data.skillIds;
 
   const [open, setOpen] = useState(false);
@@ -535,13 +540,13 @@ function LinkedSkillsStep({
     <>
       <div className="form-group" onBlur={leave(() => touch("criteria"))}>
         <label className="form-label">
-          Linked Skills<span className="req">*</span>
-          {missing && <span className="form-label-error">Linked Skills cannot be left empty</span>}
+          {t("Linked Skills")}<span className="req">*</span>
+          {missing && <span className="form-label-error">{t("Linked Skills cannot be left empty")}</span>}
         </label>
         <div className="multiselect">
           <div className={`multiselect-field${missing ? " has-error" : ""}`} onClick={() => setOpen(true)}>
             {chosen.length === 0 ? (
-              <span className="multiselect-placeholder">Select Skills</span>
+              <span className="multiselect-placeholder">{t("Select Skills")}</span>
             ) : (
               <MultiSelectTags
                 tags={chosen.map((s) => ({
@@ -570,8 +575,7 @@ function LinkedSkillsStep({
           document.body,
         )}
         <p className="form-help">
-          Choose the Skills that make up this job. Holding all of them should mean the user can do
-          it. Awarded automatically once a user holds every one.
+          {t("Choose the Skills that make up this job. Holding all of them should mean the user can do it. Awarded automatically once a user holds every one.")}
         </p>
       </div>
 
@@ -580,7 +584,7 @@ function LinkedSkillsStep({
           tone="danger"
           icon={<WarnTriangleIcon />}
           title={`This Mastery Skill includes ${archivedChosen.length} archived Skill${archivedChosen.length === 1 ? "" : "s"}.`}
-          body="New users can’t earn an archived Skill, so they won’t be able to earn this Mastery Skill. Existing holders are unaffected."
+          body={t("New users can’t earn an archived Skill, so they won’t be able to earn this Mastery Skill. Existing holders are unaffected.")}
         />
       )}
 
@@ -594,10 +598,11 @@ function LinkedSkillsStep({
 /* Figma 1121:1671 "Skills - Creation": the retroactive-award note is a DS
    callout card — 16px filled alert circle, SemiBold title, muted 14px body. */
 function RetroNote({ noun }: { noun: string }) {
+  const t = useDsText();
   return (
     <NoteCard
       icon={<AlertCircleFilledIcon />}
-      title="Applies to Existing Users"
+      title={t("Applies to Existing Users")}
       body={`Anyone who already meets the criteria gets this ${noun} when you save, without a notification or email.`}
     />
   );

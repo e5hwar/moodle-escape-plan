@@ -1,5 +1,6 @@
 /* Every Certification's panel shows a thumbnail: its own, else this sample
    (Figma 1585:1620) as a placeholder until the seed carries real ones. */
+import { useDsText } from "../designSystem";
 import certThumbPlaceholder from "../assets/cert-thumb-sample.jpg";
 import { contentLinksFor, type Link } from "../data/contentLinks";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
@@ -315,6 +316,7 @@ export function CertificationsPage({
    *  Certification: the form it fires (its done Setup step). */
   onOpenFeedback?: (cert?: Certification) => void;
 }) {
+  const t = useDsText();
   // Re-render when an Industry is renamed, so the Industries column follows.
   const liveInds = useLiveIndustries();
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
@@ -776,11 +778,11 @@ export function CertificationsPage({
                         to one Certification, so it is reached from that row's menu. */}
                     <div className="tasks-header-actions">
                       <button className="cta-quiet" onClick={() => onOpenIndustries?.()}>
-                        Industries
-                      </button>
+{t("Industries")}
+</button>
                       <button className="cta-quiet" onClick={() => onOpenFeedback?.()}>
-                        Feedback
-                      </button>
+{t("Feedback")}
+</button>
                       {/* The three creation methods used to be cards on a full-page
                           chooser between this button and the wizard. They are rows in
                           the CTA's menu now, on the Tasks page's Create Task shell
@@ -794,7 +796,7 @@ export function CertificationsPage({
                         trigger={({ toggle }) => (
                           <button className="new-task" onClick={toggle}>
                             <AddIcon />
-                            Create Certification
+                            {t("Create Certification")}
                             <span className="cta-kbd">C</span>
                           </button>
                         )}
@@ -810,7 +812,7 @@ export function CertificationsPage({
                                   close();
                                 }}
                               >
-                                <span className="ct-menu-label">{label}</span>
+                                <span className="ct-menu-label">{t(label)}</span>
                                 <span className="cta-kbd">{shortcut}</span>
                               </button>
                             ))}
@@ -819,7 +821,7 @@ export function CertificationsPage({
                       </Dropdown>
                     </div>
                   </header>
-                  <h1 className="tasks-title">Certifications</h1>
+                  <h1 className="tasks-title">{t("Certifications")}</h1>
                   {/* The setup banner's collapsed form: one accent line under
                       the collapsed title. Its count and text are the twins the
                       card's pieces travel to, so the count span carries
@@ -831,11 +833,11 @@ export function CertificationsPage({
                       line in Figma 1356:1864 ("3210 Tasks · Across 230
                       Certifications"). It fades as the header collapses. */}
                   <p className="tasks-subtitle clh-sub">
-                    {`${plural(catalog.certs, "Certification", "Certifications")} · Across ${plural(
+                    {t(`${plural(catalog.certs, "Certification", "Certifications")} · Across ${plural(
                       catalog.industries,
                       "Industry",
                       "Industries",
-                    )}`}
+                    )}`)}
                   </p>
 
                   {/* Certifications still being set up announce themselves
@@ -983,8 +985,8 @@ export function CertificationsPage({
 
       {deleting && (
         <PrmModal
-          title="Delete Certification"
-          confirmLabel="Delete Certification"
+          title={t("Delete Certification")}
+          confirmLabel={t("Delete Certification")}
           danger
           doubleConfirm={
             <>
@@ -1093,6 +1095,7 @@ function SetupBanner({
   onContinue: () => void;
   onLater: () => void;
 }) {
+  const t = useDsText();
   return (
     <div
       className="note-card note-card--accent lm-banner cs-banner"
@@ -1124,7 +1127,7 @@ function SetupBanner({
           onContinue();
         }}
       >
-        Continue Setup
+        {t("Continue Setup")}
         <span className="cta-kbd">S</span>
       </button>
       <button
@@ -1151,6 +1154,7 @@ function SetupNote({
   pending: Certification[];
   onClick: () => void;
 }) {
+  const t = useDsText();
   // The no-break space: a flex item drops a trailing space (the Users note
   // does the same).
   const lead = `${pending.length}\u00a0`;
@@ -1159,7 +1163,7 @@ function SetupNote({
     <button className="tasks-note" aria-label={`${lead}${title}`} onClick={onClick}>
       <span className="tasks-note-count">{lead}</span>
       <span className="tasks-note-text">
-        <span className="nc-shared">{title}</span>
+        <span className="nc-shared">{t(title)}</span>
       </span>
       <NoteChevronIcon />
     </button>
@@ -1181,14 +1185,15 @@ function SetupCard({
   onRun: (key: SetupStepKey) => void;
   onClose: () => void;
 }) {
+  const t = useDsText();
   return (
     <section className="cs-card" aria-label="Setup">
       <div className="cs-top">
         <div className="cs-head">
-          <h3 className="cs-title">Setup Pending</h3>
+          <h3 className="cs-title">{t("Setup Pending")}</h3>
           <button className="btn-dialog" onClick={onClose}>
             <SetupCheckIcon size={14} />
-            Mark As Done
+            {t("Mark As Done")}
           </button>
         </div>
         <div className="cs-progress" aria-hidden="true">
@@ -1333,6 +1338,7 @@ function HideCertModal({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const t = useDsText();
   // PrmModal has no key handling of its own, so the owner closes on Escape.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -1345,12 +1351,12 @@ function HideCertModal({
   return (
     <PrmModal
       title={`Hide “${cert.name}”`}
-      confirmLabel="Hide Certification"
+      confirmLabel={t("Hide Certification")}
       onCancel={onCancel}
       onConfirm={onConfirm}
     >
       <p className="prm-content">
-        Hiding the Certification temporarily removes it for all users.
+        {t("Hiding the Certification temporarily removes it for all users.")}
       </p>
       {cert.industries.length > 0 && (
         <div className="prm-content">
@@ -1571,6 +1577,7 @@ function CertActionsMenu({
   onManageProgress: () => void;
   onArchive: () => void;
 }) {
+  const t = useDsText();
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
 
@@ -1628,11 +1635,11 @@ function CertActionsMenu({
       <span className="u-menu-item-icon">{icon}</span>
       {reason ? (
         <span className="u-menu-item-text">
-          <span>{label}</span>
+          <span>{t(label)}</span>
           <span className="u-menu-item-sub">{reason}</span>
         </span>
       ) : (
-        label
+        t(label)
       )}
     </button>
   );
@@ -1731,10 +1738,11 @@ function SortableHeader({
   toggle: (k: SortKey) => void;
   sortable?: boolean;
 }) {
+  const t = useDsText();
   if (!sortable) {
     return (
       <th className={`${className ?? ""} no-sort`.trim()}>
-        <span className="th-content">{label}</span>
+        <span className="th-content">{t(label)}</span>
       </th>
     );
   }
@@ -1742,7 +1750,7 @@ function SortableHeader({
   return (
     <th className={className} onClick={() => toggle(col)}>
       <span className="th-content">
-        {label}
+        {t(label)}
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>

@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   useUsers,
@@ -239,6 +240,7 @@ export function UsersPage({
   flash?: string | null;
   onFlashDone?: () => void;
 }) {
+  const t = useDsText();
   // The live roster (users.ts): every learner and every company's employees,
   // with this session's edits — the Full Profile tab writes to the same one.
   const list = useUsers();
@@ -404,7 +406,7 @@ export function UsersPage({
                       </button>
                     </div>
                   </header>
-                  <h1 className="tasks-title">Users</h1>
+                  <h1 className="tasks-title">{t("Users")}</h1>
                   {/* The landing banner's collapsed form (Figma 1268:1736): one
                       accent line under the title that opens the queue. Its count,
                       label and chevron are separate pieces so each can arrive from
@@ -420,7 +422,7 @@ export function UsersPage({
                     >
                       <span className="tasks-note-count">{pendingNames}{" "}</span>
                       <span className="tasks-note-text">
-                        <span className="nc-shared">Name Changes Pending Review</span>
+                        <span className="nc-shared">{t("Name Changes Pending Review")}</span>
                       </span>
                       <NoteChevronIcon />
                     </button>
@@ -429,11 +431,11 @@ export function UsersPage({
                       1356:1864 ("3210 Tasks · Across 230 Certifications"). It
                       fades as the header collapses. */}
                   <p className="tasks-subtitle clh-sub">
-                    {`${plural(catalog.users, "User", "Users")} · ${plural(
+                    {t(`${plural(catalog.users, "User", "Users")} · ${plural(
                       catalog.subscribers,
                       "Subscriber",
                       "Subscribers",
-                    )}`}
+                    )}`)}
                   </p>
 
                   {/* Pending name changes announce themselves above the hero
@@ -461,7 +463,7 @@ export function UsersPage({
                                 (bar the count), so the morph holds the whole
                                 line and nothing has to hand over. */}
                             <p className="note-card-title">
-                              <span className="nc-shared">Name Changes Pending Review</span>
+                              <span className="nc-shared">{t("Name Changes Pending Review")}</span>
                             </p>
                             <p className="note-card-body">Check against their ID saved on SkillCat</p>
                           </div>
@@ -473,7 +475,7 @@ export function UsersPage({
                             onOpenNameChanges?.();
                           }}
                         >
-                          Review Names
+                          {t("Review Names")}
                           <span className="cta-kbd">N</span>
                         </button>
                       </div>
@@ -636,10 +638,11 @@ function SortableHeader({
   toggle: (k: SortKey) => void;
   sortable?: boolean;
 }) {
+  const t = useDsText();
   if (!sortable) {
     return (
       <th className={`${className ?? ""} no-sort`.trim()}>
-        <span className="th-content">{label}</span>
+        <span className="th-content">{t(label)}</span>
       </th>
     );
   }
@@ -647,7 +650,7 @@ function SortableHeader({
   return (
     <th className={className} onClick={() => toggle(col)}>
       <span className="th-content">
-        {label}
+        {t(label)}
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>
@@ -670,6 +673,7 @@ function UserRow({
   /** This row's 3-dot menu is open — hold the hover treatment. */
   menuOpen: boolean;
 }) {
+  const t = useDsText();
   const { u, f } = row;
   return (
     /* No preview panel for Users (user, 2026-10-07): the row itself opens
@@ -692,10 +696,10 @@ function UserRow({
         {/* The two quick actions (the user, 2026-10-13): View Profile and
             Login As, each the menu item's own glyph (386:269 bar). */}
         <div className="row-action-bar">
-          <button className="row-action-btn" aria-label="View Profile" onClick={(e) => { e.stopPropagation(); openProfile(u); }}>
+          <button className="row-action-btn" aria-label={t("View Profile")} onClick={(e) => { e.stopPropagation(); openProfile(u); }}>
             <MenuProfileIcon />
           </button>
-          <button className="row-action-btn" aria-label="Login As" onClick={(e) => { e.stopPropagation(); loginAs(u); }}>
+          <button className="row-action-btn" aria-label={t("Login As")} onClick={(e) => { e.stopPropagation(); loginAs(u); }}>
             <MenuEnterIcon />
           </button>
           <button
@@ -744,6 +748,7 @@ function UserActionsMenu({
    *  reason line under its label (Figma 668:942). */
   cancelSubscriptionBlock?: string;
 }) {
+  const t = useDsText();
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
 
@@ -796,7 +801,7 @@ function UserActionsMenu({
       }}
     >
       <span className="u-menu-item-icon">{icon}</span>
-      {label}
+      {t(label)}
     </button>
   );
 
@@ -824,7 +829,7 @@ function UserActionsMenu({
           <button className="u-menu-item u-menu-item--danger" disabled>
             <span className="u-menu-item-icon"><MenuCardOffIcon /></span>
             <span className="u-menu-item-text">
-              Cancel Subscription
+              {t("Cancel Subscription")}
               <span className="u-menu-item-sub">{cancelSubscriptionBlock}</span>
             </span>
           </button>
@@ -852,6 +857,7 @@ function PageActionsMenu({
   onTransferSubscription?: () => void;
   onOpenScholarships?: () => void;
 }) {
+  const t = useDsText();
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
 
@@ -894,7 +900,7 @@ function PageActionsMenu({
       }}
     >
       <span className="u-menu-item-icon">{icon}</span>
-      {label}
+      {t(label)}
     </button>
   );
 

@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useRef, useState } from "react";
 import { UploadTrayIcon } from "./icons";
 import { PrmModal } from "./PrmModal";
@@ -35,6 +36,7 @@ export function CertImportModal({
    *  from the backup's record. */
   onConfirm: (cert: Certification) => void;
 }) {
+  const t = useDsText();
   const [fileName, setFileName] = useState<string | null>(null);
   // The parsed backup, or why the picked file isn't one.
   const [restored, setRestored] = useState<Certification | null>(null);
@@ -56,9 +58,9 @@ export function CertImportModal({
 
   return (
     <PrmModal
-      title="Upload Backup"
-      description="Restore from a Certification backup file exported from the ⋯ menu."
-      confirmLabel="Restore & Continue"
+      title={t("Upload Backup")}
+      description={t("Restore from a Certification backup file exported from the \u22ef menu.")}
+      confirmLabel={t("Restore & Continue")}
       confirmDisabled={!restored}
       onCancel={onClose}
       onConfirm={() => restored && onConfirm(restored)}
@@ -94,8 +96,8 @@ export function CertImportModal({
           {error
             ? error
             : fileName
-            ? "Click to choose a different file."
-            : "Accepts a .json or .cert backup · Courses, Lessons, and Tasks are restored as exported"}
+            ? t("Click to choose a different file.")
+            : t("Accepts a .json or .cert backup \u00b7 Courses, Lessons, and Tasks are restored as exported")}
         </div>
       </div>
       <input

@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   getCompanyBilling,
@@ -292,6 +293,7 @@ type Props = {
 };
 
 export function CompaniesPage({ companies, initialQuery = "", pinnedIds = [], restore = null, onSaveState, onNewCompany, onEditCompany, onManageSubscription, onUpdateCompany, onDeleteCompany, onViewEmployees, onNavigateToProductConfig, flash, onFlashDone }: Props) {
+  const t = useDsText();
   const [query, setQuery] = useState(initialQuery || restore?.query || "");
   /* Opens UNFILTERED — every company is listed until the user narrows it. The
      table used to default to Status: Active, which quietly hid trials, grants
@@ -506,20 +508,23 @@ export function CompaniesPage({ companies, initialQuery = "", pinnedIds = [], re
                     <div className="tasks-header-actions">
                       <button className="new-task" onClick={onNewCompany}>
                         <AddIcon />
-                        Create Company
+                        {t("Create Company")}
                         <span className="cta-kbd">C</span>
                       </button>
                     </div>
                   </header>
-                  <h1 className="tasks-title">Companies</h1>
+                  <h1 className="tasks-title">{t("Companies")}</h1>
                   {/* The landing's summary line, in the shape of Figma
                       1356:1864 ("3210 Tasks · Across 230 Certifications"). The
                       Past Due half drops out when nothing is overdue. It fades
                       as the header collapses. */}
                   <p className="tasks-subtitle clh-sub">
-                    {plural(catalog.companies, "Company", "Companies")}
-                    {catalog.pastDue > 0 &&
-                      ` · ${plural(catalog.pastDue, "Subscription", "Subscriptions")} Past Due`}
+                    {t(
+                      plural(catalog.companies, "Company", "Companies") +
+                        (catalog.pastDue > 0
+                          ? ` · ${plural(catalog.pastDue, "Subscription", "Subscriptions")} Past Due`
+                          : ""),
+                    )}
                   </p>
 
                   <div className="toolbar">
@@ -671,8 +676,8 @@ export function CompaniesPage({ companies, initialQuery = "", pinnedIds = [], re
 
       {deleteModal && (
         <PrmModal
-          title="Delete Company?"
-          confirmLabel="Delete Company"
+          title={t("Delete Company?")}
+          confirmLabel={t("Delete Company")}
           cancelLabel="Cancel"
           danger
           doubleConfirm={
@@ -750,6 +755,7 @@ function SortableHeader({
      the calendar glyph ahead of the label, same treatment as Feedback Forms. */
   dateScoped?: boolean;
 }) {
+  const t = useDsText();
   const thTip = tip ?? (dateScoped ? "Counted within the selected date range" : undefined);
   const mark = dateScoped ? (
     <span className="th-date-icon"><CalendarIcon /></span>
@@ -757,7 +763,7 @@ function SortableHeader({
   if (!sortable) {
     return (
       <th className={`${className ?? ""} no-sort`.trim()} data-tip={thTip}>
-        <span className="th-content">{mark}{label}</span>
+        <span className="th-content">{mark}{t(label)}</span>
       </th>
     );
   }
@@ -766,7 +772,7 @@ function SortableHeader({
     <th className={className} onClick={() => toggle(col)} data-tip={thTip}>
       <span className="th-content">
         {mark}
-        {label}
+        {t(label)}
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>
@@ -858,13 +864,14 @@ function SeatChangesCell({ change }: { change: number }) {
 }
 
 function StatusPill({ billing }: { billing: CompanyBilling }) {
+  const t = useDsText();
   const { tone, label } = getStatusPill(billing);
   // Why it was cancelled / how long until access is cut — the shared `data-tip`
   // tooltip picks this up; statuses with nothing to add render a bare pill.
   const tip = getStatusTip(billing);
   return (
     <span className={`co-status-pill co-status-pill--${tone}`} data-tip={tip ?? undefined}>
-      {label}
+      {t(label)}
     </span>
   );
 }
@@ -909,6 +916,7 @@ function CompanyRow({
   /** This row's 3-dot menu is open — hold the hover treatment. */
   menuOpen: boolean;
 }) {
+  const t = useDsText();
   const billing = getCompanyBilling(company);
   /* View Company Dashboard is the bar's only quick action, shown exactly when
      the menu offers it — a company waiting on its payment method has neither,
@@ -939,7 +947,7 @@ function CompanyRow({
         </button>
         <div className="row-action-bar">
           {!pendingSetup && (
-            <button className="row-action-btn" aria-label="View company dashboard" title="View Company Dashboard" onClick={(e) => { e.stopPropagation(); viewDashboard(company); }}>
+            <button className="row-action-btn" aria-label="View company dashboard" title={t("View Company Dashboard")} onClick={(e) => { e.stopPropagation(); viewDashboard(company); }}>
               <MenuEnterIcon />
             </button>
           )}
@@ -974,6 +982,7 @@ function CompanyActionsMenu({
   onCopyPaymentLink: () => void;
   onDeleteCompany: () => void;
 }) {
+  const t = useDsText();
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
   const billing = getCompanyBilling(company);
@@ -1039,7 +1048,7 @@ function CompanyActionsMenu({
       onClick={(e) => { e.stopPropagation(); onPick(); onClose(); }}
     >
       <span className="u-menu-item-icon">{icon}</span>
-      {label}
+      {t(label)}
     </button>
   );
 
@@ -1120,6 +1129,7 @@ function EditAccountHolderModal({
    *  "change" keeps them on as an Admin, "replace" removes them. */
   onSave: (newHolderId: string, mode: HolderMode) => void;
 }) {
+  const t = useDsText();
   const original = useMemo(() => currentHolder(company), [company]);
   // The company's employees — the pool the new account holder is chosen from.
   // A holder must already belong to the company (see the field subtext).
@@ -1154,7 +1164,7 @@ function EditAccountHolderModal({
 
   return (
     <PrmModal
-      title="Change Account Holder"
+      title={t("Change Account Holder")}
       description={
         <>
           Current:{" "}
@@ -1178,38 +1188,38 @@ function EditAccountHolderModal({
           </UserDetailsHover>
         </>
       }
-      confirmLabel="Save Changes"
+      confirmLabel={t("Save Changes")}
       confirmDisabled={!selected}
       onCancel={onClose}
       onConfirm={save}
     >
       <div className="prm-stack">
         <div className="prm-field">
-          <span className="prm-label">What would you like to do?</span>
+          <span className="prm-label">{t("What would you like to do?")}</span>
           <div className="radio-card-group">
             <RadioCard
               selected={mode === "change"}
               onSelect={() => setMode("change")}
-              title="Change the Account Holder"
+              title={t("Change the Account Holder")}
               desc={`Hand ownership to another employee. ${original.name} stays in the cohort as an Admin.`}
             />
             <RadioCard
               selected={mode === "replace"}
               onSelect={() => setMode("replace")}
-              title="Remove from Company & Replace"
+              title={t("Remove from Company & Replace")}
               desc={`Remove ${original.name} from the company entirely and assign a new account holder.`}
             />
           </div>
         </div>
 
         <div className="prm-field">
-          <span className="prm-label">New Account Holder<span className="prm-req">*</span></span>
+          <span className="prm-label">{t("New Account Holder")}<span className="prm-req">*</span></span>
           <SelectField
             value={selectedLabel}
             options={optionLabels}
             onChange={setSelectedLabel}
-            placeholder="Select an Employee..."
-            searchPlaceholder="Search Employees..."
+            placeholder={t("Select an Employee...")}
+            searchPlaceholder={t("Search Employees...")}
             popupMenu
             /* Five rows then scroll, like the country/state pickers — a company
                with a long roster otherwise opens a menu taller than the modal. */
@@ -1227,8 +1237,7 @@ function EditAccountHolderModal({
             }}
           />
           <p className="form-help">
-            If the employee isn't in the company yet, they need to be added in before they can be
-            set as the Account Holder.
+            {t("If the employee isn't in the company yet, they need to be added in before they can be set as the Account Holder.")}
           </p>
         </div>
       </div>
@@ -1239,6 +1248,7 @@ function EditAccountHolderModal({
 /* ─────────────── Manage Billing Emails modal ─────────────── */
 
 function AddBillingEmailsModal({ company, onClose }: { company: Company; onClose: () => void }) {
+  const t = useDsText();
   const customerId = getStripeCustomerId(company);
   // Placeholder for the Stripe customer page, opened the same way as View
   // Invoices' — its own tab, the Stripe customer id as a URL parameter.
@@ -1253,7 +1263,7 @@ function AddBillingEmailsModal({ company, onClose }: { company: Company; onClose
 
   return (
     <PrmModal
-      title="Manage Billing Emails"
+      title={t("Manage Billing Emails")}
       description="Add/Remove emails that receive invoices"
       confirmLabel="Open Stripe"
       confirmHref={stripeUrl}
@@ -1274,6 +1284,7 @@ function AddBillingEmailsModal({ company, onClose }: { company: Company; onClose
 /* ─────────────── View Invoices modal ─────────────── */
 
 function ViewInvoicesModal({ company, onClose }: { company: Company; onClose: () => void }) {
+  const t = useDsText();
   const customerId = getStripeCustomerId(company);
   // Placeholder for the real Stripe dashboard invoices view — carries the
   // Stripe customer id as a URL parameter, same shape a real redirect would use.
@@ -1281,7 +1292,7 @@ function ViewInvoicesModal({ company, onClose }: { company: Company; onClose: ()
 
   return (
     <PrmModal
-      title="View Invoices"
+      title={t("View Invoices")}
       confirmLabel="Open Stripe"
       confirmHref={stripeUrl}
       onCancel={onClose}
@@ -1332,6 +1343,7 @@ function CancelSubscriptionModal({
   onConfirm: (reason: string) => void;
   onNavigateToProductConfig?: () => void;
 }) {
+  const t = useDsText();
   const billing = getCompanyBilling(company);
   const sym = CURRENCY_SYMBOL[billing.currency];
   /* More than one reason can apply, so this is the shared MultiSelect rather
@@ -1356,7 +1368,7 @@ function CancelSubscriptionModal({
 
   return (
     <PrmModal
-      title="Cancel Subscription"
+      title={t("Cancel Subscription")}
       description={company.name}
       cancelLabel="Back"
       confirmLabel="Continue"
@@ -1364,7 +1376,7 @@ function CancelSubscriptionModal({
       onConfirm={() => onConfirm(reasonText)}
       /* Continue asks once more in the app's standard stacked confirm, the way
          every Delete / Archive / Revoke does — no separate summary step. */
-      doubleConfirmLabel="Yes, Cancel Subscription"
+      doubleConfirmLabel={t("Yes, Cancel Subscription")}
       doubleConfirm={
         <>
           The subscription ends with the current billing cycle ({effectiveDate}) and{" "}
@@ -1397,18 +1409,18 @@ function CancelSubscriptionModal({
         )}
 
         <div className="prm-field">
-          <span className="prm-label">Cancellation Reason</span>
+          <span className="prm-label">{t("Cancellation Reason")}</span>
           {/* `popupMenu` puts the panel on the popup-context surface, the way
               the Change Account Holder picker does inside the same shell. */}
           <MultiSelect
             options={cancelReasons}
             value={reasons}
             onChange={setReasons}
-            placeholder="Select a reason…"
+            placeholder={t("Select a reason…")}
             popupMenu
           />
           <p className="form-help co-w-manage-link">
-            Manage Cancellation Reasons on{" "}
+            {t("Manage Cancellation Reasons on")}{" "}
             <a
               href="#"
               className="text-link"
@@ -1417,7 +1429,7 @@ function CancelSubscriptionModal({
                 onNavigateToProductConfig?.();
               }}
             >
-              Product Config
+              {t("Product Config")}
             </a>
           </p>
         </div>

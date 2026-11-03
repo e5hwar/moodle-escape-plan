@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useRef, useState } from "react";
 import { FileNameLink } from "./FileNameLink";
 import { CloseXIcon, MoveIcon, SmallXIcon, UploadTrayIcon } from "./icons";
@@ -104,6 +105,7 @@ const STEPS = [
 const LAST_STEP = STEPS.length - 1;
 
 export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queue, startPosition }: Props) {
+  const t = useDsText();
   const seed = editing;
   const [step, setStep] = useState(0);
   // Fields clicked into and out of, and the furthest step opened — what lets
@@ -274,7 +276,7 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
       : editing.status
     : "pending";
   const self = {
-    title: headingEn.trim() || "Untitled Spotlight",
+    title: headingEn.trim() || t("Untitled Spotlight"),
     description: descriptionEn.trim(),
     status,
     imageUrl: image?.url,
@@ -315,7 +317,7 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
               {enabling ? "Enabling" : editing ? "Editing" : "Creating"}
             </span>
             <span className="wizard-brand-name">
-              {editing ? editing.headingEn : "New Spotlight"}
+              {editing ? editing.headingEn : t("New Spotlight")}
             </span>
           </div>
 
@@ -330,7 +332,7 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
                 >
                   <WizardStepRail status={st} num={i + 1} />
                   <div className="wizard-step-text">
-                    <div className="wizard-step-title">{s.label}</div>
+                    <div className="wizard-step-title">{t(s.label)}</div>
                   </div>
                 </li>
               );
@@ -348,11 +350,11 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
           <div className="wizard-content spc-form" ref={gate.scrollRef}>
             <div className="wizard-paneout" ref={gate.paneOutRef}>
               <div className="wizard-pane" key={step}>
-                <h1 className="tasks-title">{STEPS[step].label}</h1>
+                <h1 className="tasks-title">{t(STEPS[step].label)}</h1>
                 <p className="tasks-subtitle wizard-desc">
-                  {step === 0 && enabling
+                  {t(step === 0 && enabling
                     ? "Set a new end date to put this Spotlight back on the SkillCat Home Page."
-                    : STEPS[step].desc}
+                    : STEPS[step].desc)}
                 </p>
 
                 {step === 1 ? (
@@ -373,7 +375,7 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
                             *Use {SPOTLIGHT_TITLE_MAX} characters or lesser
                           </span>
                         ) : titleMissing ? (
-                          <span className="form-label-error">Title cannot be left empty</span>
+                          <span className="form-label-error">{t("Title cannot be left empty")}</span>
                         ) : null}
                       </label>
                       <LangField
@@ -387,8 +389,7 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
                         error={titleMissing}
                       />
                       <p className="form-help">
-                        English is required. If Spanish is empty, Spanish-language users
-                        see the English version.
+                        {t("English is required. If Spanish is empty, Spanish-language users see the English version.")}
                       </p>
                     </div>
 
@@ -414,7 +415,7 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
 
                     <div className="form-group">
                       <label className="form-label">
-                        Background Image
+                        {t("Background Image")}
                         {imageError && <span className="form-label-error">{imageError}</span>}
                       </label>
                       {image ? (
@@ -464,21 +465,20 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
                                 Drag and drop, or click to upload
                               </div>
                               <div className="drop-big-hint">
-                                <div>Accepted File Types: JPEG, PNG, HEIC, HEIF</div>
-                                <div>Maximum File Size: 20MB</div>
+                                <div>{t("Accepted File Types: JPEG, PNG, HEIC, HEIF")}</div>
+                                <div>{t("Maximum File Size: 20MB")}</div>
                               </div>
                             </button>
                           )}
                         </ImagePicker>
                       )}
                       <p className="form-help">
-                        If blank, the default image for Spotlights is used (Shown on the
-                        Preview)
+                        {t("If blank, the default image for Spotlights is used (Shown on the Preview)")}
                       </p>
                     </div>
 
                     <div className="form-group">
-                      <label className="form-label">Add Re-Direct Button to Spotlight</label>
+                      <label className="form-label">{t("Add Re-Direct Button to Spotlight")}</label>
                       <div className="seg-control">
                         <button
                           className={`seg-btn${ctaEnabled ? "" : " active"}`}
@@ -503,9 +503,9 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
                       <>
                         <div className="form-group" onBlur={leave(() => touch("ctaText"))}>
                           <label className="form-label">
-                            Button Name<span className="req">*</span>
+                            {t("Button Name")}<span className="req">*</span>
                             {ctaTextMissing && (
-                              <span className="form-label-error">Button Name cannot be left empty</span>
+                              <span className="form-label-error">{t("Button Name cannot be left empty")}</span>
                             )}
                           </label>
                           <LangField
@@ -513,7 +513,7 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
                             es={ctaTextEs}
                             onEn={setCtaTextEn}
                             onEs={setCtaTextEs}
-                            placeholderEn="Button Name"
+                            placeholderEn={t("Button Name")}
                             error={ctaTextMissing}
                             placeholderEs="Nombre del Botón"
                           />
@@ -521,9 +521,9 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
 
                         <div className="form-group" onBlur={leave(() => touch("ctaUrl"))}>
                           <label className="form-label">
-                            Button Destination<span className="req">*</span>
+                            {t("Button Destination")}<span className="req">*</span>
                             {ctaUrlMissing && (
-                              <span className="form-label-error">Button Destination cannot be left empty</span>
+                              <span className="form-label-error">{t("Button Destination cannot be left empty")}</span>
                             )}
                           </label>
                           {/* The Deep Link field's shell (Figma 699:1071) without
@@ -534,7 +534,7 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
                             <div className="deeplink-cell">
                               <input
                                 className="deeplink-slug"
-                                placeholder="Add URL or DeepLink"
+                                placeholder={t("Add URL or DeepLink")}
                                 value={ctaUrl}
                                 aria-invalid={ctaUrlMissing || undefined}
                                 onChange={(e) => setCtaUrl(e.target.value)}
@@ -548,19 +548,19 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
                                     window.open(ctaUrl.trim(), "_blank", "noopener,noreferrer")
                                   }
                                 >
-                                  Test It Out
+                                  {t("Test It Out")}
                                 </button>
                               )}
                             </div>
                           </div>
                           <p className="form-help">
-                            Need help finding a Deep Link?{" "}
+                            {t("Need help finding a Deep Link?")}{" "}
                             <button
                               type="button"
                               className="text-link"
                               onClick={() => setDeepLinksOpen(true)}
                             >
-                              Click Here
+                              {t("Click Here")}
                             </button>
                           </p>
                         </div>
@@ -569,22 +569,22 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
 
                     <div className="form-group" onBlur={leave(() => touch("endDate"))}>
                       <label className="form-label">
-                        End Date<span className="req">*</span>
+                        {t("End Date")}<span className="req">*</span>
                         {endDateMissing && (
-                          <span className="form-label-error">End Date cannot be left empty</span>
+                          <span className="form-label-error">{t("End Date cannot be left empty")}</span>
                         )}
                       </label>
                       <DateField
                         value={endDate}
                         onChange={setEndDate}
-                        placeholder="Select End Date"
+                        placeholder={t("Select End Date")}
                         hasError={endDateMissing}
                         min={minEnd}
                         max={maxEnd}
                         shortcuts={shortcuts}
                       />
                       <p className="form-help">
-                        Maximum duration for a Spotlight is 6 months
+                        {t("Maximum duration for a Spotlight is 6 months")}
                         {seed && !enabling ? `, counted from when it was created (latest ${formatShortDate(maxEnd)})` : ""}
                       </p>
                     </div>
@@ -613,8 +613,8 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
           <button className="wizard-cancel" onClick={() => guard(onClose)}>
-            Cancel
-          </button>
+{t("Cancel")}
+</button>
         </div>
         <div className="wizard-actions">
           {step > 0 && (
@@ -627,7 +627,7 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
             <button className="btn-publish wizard-gate-btn" onClick={next}>
               <span className="wizard-gate-fill" ref={gate.nextFillRef} />
               <span className="wizard-gate-btn-inner">
-                Next: {STEPS[step + 1].label}
+                {t(`Next: ${STEPS[step + 1].label}`)}
                 <WizardKeyHint />
               </span>
             </button>
@@ -641,7 +641,7 @@ export function CreateSpotlightPage({ onClose, onSubmit, editing, enabling, queu
               data-tip={ctaTooltip || undefined}
               onClick={next}
             >
-              {finalLabel}
+              {t(finalLabel)}
               <WizardKeyHint />
             </button>
           )}
@@ -767,6 +767,7 @@ function QueuePositionStep({
   position: number;
   onMove: (position: number) => void;
 }) {
+  const t = useDsText();
   const [dragging, setDragging] = useState(false);
   const [over, setOver] = useState<number | null>(null);
   const rowRefs = useRef(new Map<number, HTMLDivElement>());
@@ -879,7 +880,7 @@ function QueuePositionStep({
                 <span className="co-status-pill co-status-pill--accent">New</span>
               ) : (
                 <span className={`co-status-pill co-status-pill--${pending ? "yellow" : "green"}`}>
-                  {pending ? "In-Review" : "Active"}
+                  {pending ? t("In-Review") : t("Active")}
                 </span>
               )}
             </span>

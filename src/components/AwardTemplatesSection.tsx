@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 /* Award Templates — the reusable Card/Certificate designs an Award is built
    from. This was the "Design Templates" tab of the Awards page; it lives on
    Product Config now, since a template is platform configuration rather than a
@@ -44,6 +45,7 @@ export function AwardTemplatesSection({
    *  stands down while one is up. */
   onModalChange?: (open: boolean) => void;
 }) {
+  const t = useDsText();
   // Kept for the session (spec review 2026-10-09: every list restores).
   const [sort, setSort] = useListState<{ key: string; dir: SortDir }>("award-templates:sort", { key: "name", dir: "asc" });
   const [page, setPage] = useListState("award-templates:page", 1);
@@ -84,11 +86,11 @@ export function AwardTemplatesSection({
               <TemplateColGroup />
               <thead>
                 <tr>
-                  <SortableHeader col="name" label="Template Name" className="col-name" {...header} />
+                  <SortableHeader col="name" label={t("Template Name")} className="col-name" {...header} />
                   <SortableHeader col="preview" label="Preview" sortable={false} {...header} />
-                  <SortableHeader col="usage" label="Used By" className="col-used" {...header} />
-                  <SortableHeader col="dateModified" label="Date Modified" className="col-date" {...header} />
-                  <SortableHeader col="dateCreated" label="Date Created" className="col-date" {...header} />
+                  <SortableHeader col="usage" label={t("Used By")} className="col-used" {...header} />
+                  <SortableHeader col="dateModified" label={t("Date Modified")} className="col-date" {...header} />
+                  <SortableHeader col="dateCreated" label={t("Date Created")} className="col-date" {...header} />
                   <th className="col-actions" />
                 </tr>
               </thead>
@@ -154,8 +156,8 @@ export function AwardTemplatesSection({
 
       {deleting && (
         <ConfirmModal
-          title="Delete this Design Template?"
-          confirmLabel="Delete Template"
+          title={t("Delete this Design Template?")}
+          confirmLabel={t("Delete Template")}
           danger
           doubleConfirm={
             <>
@@ -205,6 +207,7 @@ function TemplateRow({
   /** This row's 3-dot menu is open — hold the hover treatment. */
   menuOpen: boolean;
 }) {
+  const t = useDsText();
   return (
     <tr className={`${selected ? "selected" : ""} ${menuOpen ? "menu-open" : ""}`} onClick={onClick}>
       <td className="col-name">{template.name}</td>
@@ -215,7 +218,7 @@ function TemplateRow({
       <td className="col-used">{usage === 0 ? "—" : `${usage} Award${usage === 1 ? "" : "s"}`}</td>
       <td className="col-date">{template.dateModified}</td>
       <td className="col-date">{template.dateCreated}</td>
-      <RowActions onEdit={onEdit} onMenu={onMenu} editTitle="Edit Template" />
+      <RowActions onEdit={onEdit} onMenu={onMenu} editTitle={t("Edit Template")} />
     </tr>
   );
 }

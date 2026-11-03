@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useRef } from "react";
 import { FileNameLink } from "./FileNameLink";
 import { DocumentIcon, SmallXIcon, UploadTrayIcon } from "./icons";
@@ -32,6 +33,7 @@ export function ImageUploadField({
    *  in the caller's label row. */
   error?: boolean;
 }) {
+  const t = useDsText();
   const inputRef = useRef<HTMLInputElement>(null);
 
   function pick(list: FileList | null) {
@@ -87,8 +89,8 @@ export function ImageUploadField({
         <span className="drop-big-icon"><UploadTrayIcon /></span>
         <div className="drop-big-title">Drag and drop, or click to upload</div>
         <div className="drop-big-hint">
-          <div>Accepted File Types: {types}</div>
-          <div>Maximum File Size: {maxSize}</div>
+          <div>{t("Accepted File Types:")} {types}</div>
+          <div>{t("Maximum File Size:")} {maxSize}</div>
         </div>
       </button>
       <input

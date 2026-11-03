@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useState } from "react";
 import { Dropdown } from "./Dropdown";
 import { CalendarIcon, ChevronDownSquareIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
@@ -51,6 +52,7 @@ export function DateField({
   /** Optional shortcut rail on the panel's left (Figma 1554:2735). */
   shortcuts?: DateShortcut[];
 }) {
+  const t = useDsText();
   const selected = value ? parseISO(value) : null;
   const [viewMonth, setViewMonth] = useState(() => selected ?? new Date());
   /* Which of the two caption dropdowns is open, if either (Figma 606:1746 —
@@ -117,7 +119,7 @@ export function DateField({
                         close();
                       }}
                     >
-                      {s.label}
+                      {t(s.label)}
                     </button>
                   ))}
                 </div>

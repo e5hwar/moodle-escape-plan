@@ -1,3 +1,4 @@
+import { useDesignSystem, useDsText } from "../designSystem";
 import { useEffect, useState } from "react";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger } from "./Filters";
@@ -181,13 +182,14 @@ function AlwaysAppliedTrigger({
   toggle: () => void;
   tip?: string;
 }) {
+  const t = useDsText();
   const hint = useTipWhileClosed(tip, open);
   return (
     <span className={`filter-applied drp-pill ${open ? "open" : ""}`}>
       <button className="filter-applied-main" onClick={toggle} data-tip={hint}>
-        <span className="label">{label}</span>
+        <span className="label">{t(label)}</span>
         <span className="sep" />
-        <span className="value">{value}</span>
+        <span className="value">{typeof value === "string" ? t(value) : value}</span>
         <span className="caret">
           <ChevronDownSquareIcon />
         </span>
@@ -311,6 +313,7 @@ export function DateRangePanel({
   applied: DateRangeState;
   onApply: (v: DateRangeState) => void;
 }) {
+  const t = useDsText();
   const today = startOfToday();
   const todayISO = toISO(today);
   const presets = buildPresets(today);
@@ -355,22 +358,58 @@ export function DateRangePanel({
 
   const nextDisabled = viewMonth >= startOfMonth(today);
 
+  /* SkillCat DS (Eshwar's comment on Eric's "Companies, date range" screen):
+     the menu opens on the shortcuts, which apply on pick; the two-month
+     calendar only appears after "Custom range", the way the B2B Dashboard
+     does it. The Play Area keeps the rail-plus-calendar panel. */
+  const presetsFirst = useDesignSystem() === "skillcat";
+  const [custom, setCustom] = useState(() => presetsFirst && !applied.preset && !!applied.start);
+  if (presetsFirst && !custom) {
+    return (
+      <div className="drp" onClick={() => setMyMenu(null)}>
+        <div className="drp-body">
+          <div className="drp-presets drp-presets--menu">
+            <div className="drp-presets-list">
+              {presets.map((p) => (
+                <button
+                  key={p.key}
+                  className={`drp-preset${applied.preset === p.key ? " is-active" : ""}`}
+                  onClick={() => {
+                    const r = p.range(today);
+                    onApply({ preset: p.key, start: toISO(r.start), end: toISO(r.end) });
+                  }}
+                >
+                  {t(p.label)}
+                </button>
+              ))}
+              <button className="drp-preset drp-preset--custom" onClick={() => setCustom(true)}>
+                Custom Range
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="drp" onClick={() => setMyMenu(null)}>
       <div className="drp-body">
-        <div className="drp-presets">
-          <div className="drp-presets-list">
-            {presets.map((p) => (
-              <button
-                key={p.key}
-                className={`drp-preset${draft.preset === p.key ? " is-active" : ""}`}
-                onClick={() => pickPreset(p)}
-              >
-                {p.label}
-              </button>
-            ))}
+        {!presetsFirst && (
+          <div className="drp-presets">
+            <div className="drp-presets-list">
+              {presets.map((p) => (
+                <button
+                  key={p.key}
+                  className={`drp-preset${draft.preset === p.key ? " is-active" : ""}`}
+                  onClick={() => pickPreset(p)}
+                >
+                  {t(p.label)}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {[0, 1].map((cal) => {
           const month = cal === 0 ? viewMonth : addMonths(viewMonth, 1);
@@ -465,6 +504,7 @@ function RangeInput({
   todayISO: string;
   onShowMonth: (d: Date) => void;
 }) {
+  const t = useDsText();
   const iso = draft[which];
   const [text, setText] = useState(() => (iso ? fmtInput(parseISO(iso)!) : ""));
   useEffect(() => setText(iso ? fmtInput(parseISO(iso)!) : ""), [iso]);
@@ -494,11 +534,11 @@ function RangeInput({
 
   return (
     <label className="drp-field">
-      <span className="drp-field-label">{label}</span>
+      <span className="drp-field-label">{t(label)}</span>
       <input
         className="drp-input"
         value={text}
-        placeholder="MM/DD/YYYY"
+        placeholder={t("MM/DD/YYYY")}
         onChange={(e) => setText(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => {

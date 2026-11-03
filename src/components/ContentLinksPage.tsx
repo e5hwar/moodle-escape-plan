@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   MAX_LINKS_PER_CERT,
@@ -196,6 +197,7 @@ export function ContentLinksPage({
   /** Save Changes hands the new graph back up. */
   onSaveLinks?: (links: Link[]) => void;
 } = {}) {
+  const t = useDsText();
   const [focusId, setFocusId] = useState<Focus>(initialFocus?.id ?? null);
   const [links, setLinks] = useState<Link[]>(savedLinks);
   // Last-saved snapshot; the Save / Discard footer diffs the working set against it.
@@ -358,11 +360,10 @@ export function ContentLinksPage({
           <header className="tasks-header">
             <div className="rvc-pagehead">
               {/* The focused Certification is named in the search bar, not here. */}
-              <h1 className="tasks-title">Content Links</h1>
+              <h1 className="tasks-title">{t("Content Links")}</h1>
               {/* What each section means lives under its own panel now. */}
               <div className="tasks-subtitle">
-                Suggest what a user should study before, after, or alongside
-                this Certification.
+                {t("Suggest what a user should study before, after, or alongside this Certification.")}
               </div>
             </div>
           </header>
@@ -370,7 +371,7 @@ export function ContentLinksPage({
           <div className="toolbar">
             <SearchField
               value={focused ? focused.name : query}
-              placeholder="Search Certifications..."
+              placeholder={t("Search Certifications...")}
               onChange={(v) => {
                 setQuery(v);
                 setFocusId(null);
@@ -444,7 +445,7 @@ export function ContentLinksPage({
               edits are still there to save or discard. */}
           {changed && (
             <footer className="sp-save-footer">
-              <div className="sp-save-footer-text">Unsaved Changes</div>
+              <div className="sp-save-footer-text">{t("Unsaved Changes")}</div>
               <div className="sp-save-footer-actions">
                 <button className="btn-save-draft" onClick={cancelChanges}>
                   Discard
@@ -462,7 +463,7 @@ export function ContentLinksPage({
                   }
                   onClick={saveChanges}
                 >
-                  Save Changes
+                  {t("Save Changes")}
                 </button>
               </div>
             </footer>
@@ -571,6 +572,7 @@ function SearchField({
   onClose: () => void;
   inputRef: React.RefObject<HTMLInputElement>;
 }) {
+  const t = useDsText();
   const [active, setActive] = useState(-1);
   const root = useRef<HTMLDivElement>(null);
 
@@ -658,7 +660,7 @@ function SearchField({
 
       {open && (
         <div className="usearch-panel" onMouseDown={(e) => e.preventDefault()}>
-          <ResultsHead query={query} label="All Certifications" />
+          <ResultsHead query={query} label={t("All Certifications")} />
           {results.length === 0 ? (
             <SearchNoResults />
           ) : (
@@ -692,13 +694,14 @@ function SearchField({
  *  panels the page is about to load drawn as a ghost backdrop, with the
  *  question centred over it and a CTA that opens the search (⌘K does too). */
 function EmptyState({ dull, onSearch }: { dull: boolean; onSearch: () => void }) {
+  const t = useDsText();
   return (
     <div className="mc-empty lc-empty">
       <LinksGhost />
       <SkeletonOverlay
-        title="Select a Certification"
-        sub="Its prerequisites, recommended next steps, and related Certifications load here — with the strength of every link."
-        cta="Search Certifications"
+        title={t("Select a Certification")}
+        sub={t("Its prerequisites, recommended next steps, and related Certifications load here \u2014 with the strength of every link.")}
+        cta={t("Search Certifications")}
         onCta={onSearch}
         dull={dull}
       />
@@ -841,6 +844,7 @@ function LinkRow({
   onRemove: () => void;
   onPick: () => void;
 }) {
+  const t = useDsText();
   return (
     <div className="lc-row">
       {/* The name ellipsises in a narrow column, so the tooltip carries it. */}
@@ -865,10 +869,10 @@ function LinkRow({
             const raw = e.target.value.trim();
             onStrength(raw === "" ? NaN : Number(raw));
           }}
-          aria-label="Link Strength"
+          aria-label={t("Link Strength")}
           aria-invalid={!validStrength(strength)}
         />
-        <button className="lc-row-remove" title="Remove Link" onClick={onRemove}>
+        <button className="lc-row-remove" title={t("Remove Link")} onClick={onRemove}>
           <RowCloseIcon />
         </button>
       </div>

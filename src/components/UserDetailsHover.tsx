@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { RowExternalLinkIcon, CopyIcon, PencilIcon } from "./icons";
@@ -256,6 +257,7 @@ function EditNameModal({
   onCancel: () => void;
   onSave: (name: string) => void;
 }) {
+  const t = useDsText();
   const [value, setValue] = useState(initial);
   const trimmed = value.trim();
   // Unchanged (whitespace aside) means nothing to save — Save Changes stays off.
@@ -279,9 +281,9 @@ function EditNameModal({
 
   return (
     <PrmModal
-      title="Edit Name"
+      title={t("Edit Name")}
       description="The name shown on this user's profile and submissions."
-      confirmLabel="Save Changes"
+      confirmLabel={t("Save Changes")}
       confirmDisabled={!isValid}
       confirmTip={trimmed === initial.trim() ? NO_CHANGES_TIP : undefined}
       onCancel={onCancel}

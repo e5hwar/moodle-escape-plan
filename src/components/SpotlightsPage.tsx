@@ -1,3 +1,4 @@
+import { useDesignSystem, useDsText } from "../designSystem";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   daysUntil,
@@ -87,13 +88,17 @@ const CrossIcon = () => (
    fixed layout spreads the slack across all of them in proportion to these
    widths. A bare <col /> would make one column swallow all of it. */
 const SP_TEXT_W = 300 + 24;
-const SP_COL_WIDTHS = [72, 144 + 24, SP_TEXT_W, 84 + 24, 103 + 24, 96 + 24, 103 + 24, 16 + 24];
+/* The SkillCat look sets Approve / Reject side by side (111 + 8 + 98), so its
+   Actions column is that pair's width instead of the stacked 103. */
+const spColWidths = (sideBySide: boolean) => [
+  72, 144 + 24, SP_TEXT_W, 84 + 24, 103 + 24, 96 + 24, (sideBySide ? 217 : 103) + 24, 16 + 24,
+];
+const SP_COL_COUNT = spColWidths(false).length;
 /* The last width is the kebab gutter: it stays fixed, the rest take the slack. */
-const SpColGroup = () => (
-  <TableCols data={SP_COL_WIDTHS.slice(0, -1)} trail={SP_COL_WIDTHS.slice(-1)} />
-);
-
-const SP_TABLE_MIN = SP_COL_WIDTHS.reduce((a, b) => a + b, 0);
+const SpColGroup = () => {
+  const widths = spColWidths(useDesignSystem() === "skillcat");
+  return <TableCols data={widths.slice(0, -1)} trail={widths.slice(-1)} />;
+};
 
 
 /* Active or In-Review — a Spotlight in the Home-Screen queue. */
@@ -137,6 +142,8 @@ export function SpotlightsPage({
   spotlights: Spotlight[];
   setSpotlights: React.Dispatch<React.SetStateAction<Spotlight[]>>;
 }) {
+  const t = useDsText();
+  const spTableMin = spColWidths(useDesignSystem() === "skillcat").reduce((a, b) => a + b, 0);
   // `committed` is the saved order; `list` is the working copy shown in the
   // table. Drag-reordering only touches `list`, so the order diverges until the
   // user saves — Discard (or leaving the page) restores `committed`. Every other
@@ -495,12 +502,12 @@ export function SpotlightsPage({
         <div className="tasks sp-page">
           <header className="tasks-header">
             <div>
-              <h1 className="tasks-title">Spotlight</h1>
+              <h1 className="tasks-title">{t("Spotlight")}</h1>
               <div className="tasks-subtitle sp-subtitle">
-                Home screen banners for announcements, releases, and other highlights
+                {t("Home screen banners for announcements, releases, and other highlights")}
                 <button
                   className="sp-info"
-                  aria-label="How Spotlights work"
+                  aria-label={t("How Spotlights work")}
                   aria-describedby="sp-infotip"
                 >
                   {/* The 14px cut (742:1061), same as the Skills subtext. */}
@@ -515,7 +522,7 @@ export function SpotlightsPage({
                 onClick={openCreate}
               >
                 <AddIcon />
-                Create Spotlight
+                {t("Create Spotlight")}
                 <span className="cta-kbd">C</span>
               </button>
             </div>
@@ -528,7 +535,7 @@ export function SpotlightsPage({
               </span>
               <input
                 className="search-input"
-                placeholder="Search Spotlights by Title, Description, or Creator..."
+                placeholder={t("Search Spotlights by Title, Description, or Creator...")}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
@@ -541,7 +548,7 @@ export function SpotlightsPage({
               carry the same <SpColGroup> so the columns stay aligned. */}
           <div
             className="table-xscroll"
-            style={{ "--table-min": `${SP_TABLE_MIN}px` } as React.CSSProperties}
+            style={{ "--table-min": `${spTableMin}px` } as React.CSSProperties}
           >
             <table className="sp-table table-head">
               <SpColGroup />
@@ -549,10 +556,10 @@ export function SpotlightsPage({
                 <tr>
                   <th>Order</th>
                   <th>Backdrop</th>
-                  <th>Title &amp; Description</th>
+                  <th>{t("Title & Description")}</th>
                   <th>Status</th>
-                  <th>Created By</th>
-                  <th>End Date</th>
+                  <th>{t("Created By")}</th>
+                  <th>{t("End Date")}</th>
                   <th>Actions</th>
                   {/* The 3-dot menu's column — deliberately unlabelled. */}
                   <th />
@@ -570,7 +577,7 @@ export function SpotlightsPage({
                     at the foot of the table (564:2244). */}
                 {archived.length > 0 && (
                   <tr className="sp-archive-row" ref={archiveRowRef}>
-                    <td colSpan={SP_COL_WIDTHS.length}>
+                    <td colSpan={SP_COL_COUNT}>
                       <button
                         className={`sp-archive-toggle${showArchived ? " is-open" : ""}`}
                         onClick={() => setShowArchived((v) => !v)}
@@ -617,16 +624,16 @@ export function SpotlightsPage({
               drag-reorder. */}
           {dirty ? (
             <footer className="sp-save-footer">
-              <div className="sp-save-footer-text">Order Updated</div>
+              <div className="sp-save-footer-text">{t("Order Updated")}</div>
               <div className="sp-save-footer-actions">
                 <button className="btn-save-draft" onClick={discardOrder}>
-                  Discard
-                </button>
+{t("Discard")}
+</button>
                 <button
                   className="btn-publish"
                   onClick={saveOrder}
                 >
-                  Save Changes
+                  {t("Save Changes")}
                 </button>
               </div>
             </footer>
@@ -904,23 +911,13 @@ function SpotlightRow({
    banner lands on the app's home screen. Hover-only (no links inside), so it
    stays a CSS :hover / :focus-within card rather than a positioned popover. */
 function SpotlightInfoTip() {
+  const t = useDsText();
   return (
     <span className="sp-infotip" id="sp-infotip" role="tooltip">
       <span className="sp-infotip-text">
-        <p>
-          Active Spotlight is shown to all users right now (targeting specific
-          user groups isn't supported yet).
-        </p>
-        <p>
-          New Spotlights need approval before going live, and you can set where a
-          new one should sit in the queue relative to existing ones. Approvers
-          can adjust that position before signing off.
-        </p>
-        <p>
-          Once a user dismisses a Spotlight, it won't come back for them even if
-          the queue gets reordered later. Spotlights stay active until they're
-          manually turned off or their end date passes (max 6 months out).
-        </p>
+        <p>{t("Active Spotlight is shown to all users right now (targeting specific user groups isn't supported yet).")}</p>
+        <p>{t("New Spotlights need approval before going live, and you can set where a new one should sit in the queue relative to existing ones. Approvers can adjust that position before signing off.")}</p>
+        <p>{t("Once a user dismisses a Spotlight, it won't come back for them even if the queue gets reordered later. Spotlights stay active until they're manually turned off or their end date passes (max 6 months out).")}</p>
       </span>
       <img className="sp-infotip-img" src={spotlightHomePreview} alt="" />
     </span>

@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { Fragment, useMemo, useRef, useState } from "react";
 import { useRowDrag } from "../hooks/useRowDrag";
 import { NO_CHANGES_TIP } from "./PrmModal";
@@ -536,6 +537,7 @@ export function NewQuestionWizard({
   editingQuestion,
   crumbs,
 }: Props) {
+  const t = useDsText();
   const isEditing = !!editingQuestion;
   /* The live category tree (App's), so a category made on the bank or by an
      import is pickable — and a question filed in one opens with it set. */
@@ -657,13 +659,13 @@ export function NewQuestionWizard({
                 <Fragment key={c.label}>
                   {i > 0 && <CrumbChevronIcon />}
                   <button className="rvc-crumb" onClick={() => guard(c.onClick)} title={`Back to ${c.label}`}>
-                    {c.label}
+                    {t(c.label)}
                   </button>
                 </Fragment>
               ))}
             </nav>
             <div className="rvc-pagehead qed-pagehead">
-              <h1 className="tasks-title qed-title-solo">{title}</h1>
+              <h1 className="tasks-title qed-title-solo">{t(title)}</h1>
             </div>
 
             {/* One column for every type (2026-09-29) — the settings rail
@@ -714,8 +716,8 @@ export function NewQuestionWizard({
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
           <button className="wizard-cancel" onClick={() => guard(onClose)}>
-            Cancel
-          </button>
+{t("Cancel")}
+</button>
         </div>
         <div className="wizard-actions">
           <button
@@ -724,7 +726,7 @@ export function NewQuestionWizard({
             data-tip={blockedTip}
             onClick={save}
           >
-            {isEditing ? "Save Changes" : "Create Question"}
+            {isEditing ? t("Save Changes") : t("Create Question")}
             <WizardKeyHint />
           </button>
         </div>
@@ -754,6 +756,7 @@ function SetupSection({
   gradable: boolean;
   usedInQuizzes: number;
 }) {
+  const t = useDsText();
   /* Figma 955:976 reads "<name> · <qualifier>", so a category option is
      "<sub-category> · <category>" — a sub-category name is not unique on its
      own ("Heat Pumps" sits under two parents), the pair is. A top-level
@@ -796,14 +799,15 @@ function SetupSection({
       <div className="wizard-fields">
         <div className="form-group">
           <label className="form-label">
-            Question Type<span className="req">*</span>
+            {t("Question Type")}<span className="req">*</span>
           </label>
           {/* Same single-select as Category, without the search header — six
               fixed types is a glance, not a lookup. */}
           <SelectField
             value={TYPE_LABELS[data.type]}
             disabled={isEditing}
-            options={TYPE_ORDER.map((t) => TYPE_LABELS[t])}
+            options={TYPE_ORDER.map((k) => TYPE_LABELS[k])}
+            dsCase
             onChange={(label) => {
               const t = TYPE_BY_LABEL.get(label);
               if (t) changeType(t);
@@ -811,7 +815,7 @@ function SetupSection({
             className="select-field--full"
           />
           {isEditing && (
-            <p className="form-help">Type can't change on a saved question.</p>
+            <p className="form-help">{t("Type can't change on a saved question.")}</p>
           )}
         </div>
 
@@ -819,7 +823,7 @@ function SetupSection({
           <label className="form-label">
             Category<span className="req">*</span>
             {missing.has("category") && (
-              <span className="form-label-error">Pick a Category to create this question.</span>
+              <span className="form-label-error">{t("Pick a Category to create this question.")}</span>
             )}
           </label>
           {/* Searchable single-select (Figma 668:943) — the Question Bank runs
@@ -832,13 +836,13 @@ function SetupSection({
             }
             optionPrimary={catSubOf}
             optionSecondary={catParentOf}
-            placeholder="Select a Category…"
-            searchPlaceholder="Search Categories…"
+            placeholder={t("Select a Category…")}
+            searchPlaceholder={t("Search Categories…")}
             className={`select-field--full${
               missing.has("category") ? " has-error" : ""
             }`}
           />
-          <p className="form-help">Where it goes in the Question Bank</p>
+          <p className="form-help">{t("Where it goes in the Question Bank")}</p>
         </div>
 
         <GradingField
@@ -863,6 +867,7 @@ function QuestionTextSection({
   update: (p: Partial<QuestionDraft>) => void;
   missing: ReadonlySet<string>;
 }) {
+  const t = useDsText();
   const flagged = missing.has("text");
   return (
     <div className="wizard-fields">
@@ -870,7 +875,7 @@ function QuestionTextSection({
         <label className="form-label">
           Question<span className="req">*</span>
           {flagged && (
-            <span className="form-label-error">Write the question to create it.</span>
+            <span className="form-label-error">{t("Write the question to create it.")}</span>
           )}
           <LimitError max={DESCRIPTION_MAX} values={[data.text, data.textEs]} />
         </label>
@@ -881,7 +886,7 @@ function QuestionTextSection({
           es={data.textEs}
           onChangeEn={(v) => update({ text: v })}
           onChangeEs={(v) => update({ textEs: v })}
-          placeholderEn="Question Text…"
+          placeholderEn={t("Question Text\u2026")}
           placeholderEs="Texto de la pregunta…"
           error={flagged}
           maxLength={DESCRIPTION_MAX}
@@ -904,6 +909,7 @@ function McqSection({
   grading: boolean;
   missing: ReadonlySet<string>;
 }) {
+  const t = useDsText();
   const choices = data.choices;
 
   const setChoice = (id: string, patch: Partial<Choice>) =>
@@ -940,14 +946,14 @@ function McqSection({
         <label className="form-label">
           Options<span className="req">*</span>
           {belowFloor ? (
-            <span className="form-label-error">A MCQ must have at least 2 options</span>
+            <span className="form-label-error">{t("A MCQ must have at least 2 options")}</span>
           ) : missing.has("options") ? (
             <span className="form-label-error">
-              Fill in at least two options to create this question.
+              {t("Fill in at least two options to create this question.")}
             </span>
           ) : missing.has("answer") ? (
             <span className="form-label-error">
-              Grade one option above 0% so the question has a correct answer.
+              {t("Grade one option above 0% so the question has a correct answer.")}
             </span>
           ) : missing.has("gradeTotal") ? (
             <span className="form-label-error">
@@ -1047,7 +1053,7 @@ function McqSection({
               disabled={choices.length >= MAX_OPTIONS}
             >
               <PlusThinIcon />
-              Add Option
+              {t("Add Option")}
             </button>
           </div>
         </div>
@@ -1072,11 +1078,12 @@ function TrueFalseSection({
   data: QuestionDraft;
   update: (p: Partial<QuestionDraft>) => void;
 }) {
+  const t = useDsText();
   return (
     <div className="wizard-fields">
       <div className="form-group">
         <label className="form-label">
-          Correct Answer<span className="req">*</span>
+          {t("Correct Answer")}<span className="req">*</span>
         </label>
         {/* Radio cards (Figma 134:1790 / 136:294), title only — the subtext
             under the group already says how the two values are scored, so a
@@ -1092,7 +1099,7 @@ function TrueFalseSection({
             />
           ))}
         </div>
-        <p className="form-help">The correct value is graded +100%, the other 0%.</p>
+        <p className="form-help">{t("The correct value is graded +100%, the other 0%.")}</p>
       </div>
     </div>
   );
@@ -1109,6 +1116,7 @@ function MatchSection({
   update: (p: Partial<QuestionDraft>) => void;
   missing: ReadonlySet<string>;
 }) {
+  const t = useDsText();
   const pairs = data.pairs;
   const flagged = missing.has("pairs");
   const halfFlagged = missing.has("pairsHalf");
@@ -1140,16 +1148,16 @@ function MatchSection({
     <div className="wizard-fields">
       <div className="form-group" onBlur={leave(() => { touch("pairs"); touch("pairsHalf"); })}>
         <label className="form-label">
-          Questions &amp; Answers<span className="req">*</span>
+          {t("Questions & Answers")}<span className="req">*</span>
           {belowFloor ? (
-            <span className="form-label-error">A match needs at least three rows</span>
+            <span className="form-label-error">{t("A match needs at least three rows")}</span>
           ) : flagged ? (
             <span className="form-label-error">
-              Add at least two questions and three answers to create this question.
+              {t("Add at least two questions and three answers to create this question.")}
             </span>
           ) : halfFlagged ? (
             <span className="form-label-error">
-              Every question needs an answer — add one or clear the row.
+              {t("Every question needs an answer — add one or clear the row.")}
             </span>
           ) : null}
           <LimitError
@@ -1225,7 +1233,7 @@ function MatchSection({
               disabled={pairs.length >= MAX_OPTIONS}
             >
               <PlusThinIcon />
-              Add Question-Answer Pair
+              {t("Add Question-Answer Pair")}
             </button>
           </div>
         </div>
@@ -1248,23 +1256,24 @@ function MatchScoringSection({
   data: QuestionDraft;
   update: (p: Partial<QuestionDraft>) => void;
 }) {
+  const t = useDsText();
   /* Scoring reads as an ordinary field in the rail (same label as Category /
      Question Type), not as a section heading over the cards. */
   return (
     <div className="wizard-fields">
       <div className="form-group">
-        <label className="form-label">Scoring</label>
+        <label className="form-label">{t("Scoring")}</label>
         <div className="radio-card-group">
           <RadioCard
             selected={data.matchGrading === "all-or-nothing"}
             onSelect={() => update({ matchGrading: "all-or-nothing" })}
-            title="All or Nothing"
+            title={t("All or Nothing")}
             desc="Every pair must be correct to score. A single wrong match gives 0% for the whole question."
           />
           <RadioCard
             selected={data.matchGrading === "partial"}
             onSelect={() => update({ matchGrading: "partial" })}
-            title="Partial Credit"
+            title={t("Partial Credit")}
             desc="Each correct match earns a proportional share of the mark."
           />
         </div>
@@ -1297,6 +1306,7 @@ function FileRulesSection({
   data: QuestionDraft;
   update: (p: Partial<QuestionDraft>) => void;
 }) {
+  const t = useDsText();
   /* Two ordinary rail fields now — the same searchless SelectField as Question
      Type, at full width — so they don't need a heading over them: the wizards'
      rule is a flat label / control / subtext stack. Both open on the
@@ -1307,7 +1317,7 @@ function FileRulesSection({
   return (
     <div className="wizard-fields">
       <div className="form-group">
-        <label className="form-label">Maximum Files Allowed</label>
+        <label className="form-label">{t("Maximum Files Allowed")}</label>
         <SelectField
           value={limitValue(FILE_COUNT_STEPS, data.maxFiles, defFiles)}
           options={FILE_COUNT_STEPS}
@@ -1317,7 +1327,7 @@ function FileRulesSection({
         <p className="form-help">Default: {defFiles}</p>
       </div>
       <div className="form-group">
-        <label className="form-label">Maximum File Size</label>
+        <label className="form-label">{t("Maximum File Size")}</label>
         <SelectField
           value={sizeLabel(limitValue(FILE_SIZE_STEPS, data.maxSizeMb, defSize))}
           options={FILE_SIZE_STEPS.map(sizeLabel)}
@@ -1339,6 +1349,7 @@ function ScaleRangeSection({
   data: QuestionDraft;
   update: (p: Partial<QuestionDraft>) => void;
 }) {
+  const t = useDsText();
   /* The shared dropdown (Figma 591:1382), same control as Category and
      Question Type above it. Both ends take `select-field--full` and an even
      share of the row (`.qed-inline-fields`), so the pair fills the rail like
@@ -1349,7 +1360,7 @@ function ScaleRangeSection({
   return (
     <div className="wizard-fields">
       <div className="form-group">
-        <label className="form-label">Scale Range</label>
+        <label className="form-label">{t("Scale Range")}</label>
         <div className="qed-inline-fields">
           <SelectField
             value={String(data.scaleMin)}
@@ -1365,7 +1376,7 @@ function ScaleRangeSection({
             className="select-field--full"
           />
         </div>
-        <p className="form-help">Maximum and minimum value a user can pick</p>
+        <p className="form-help">{t("Maximum and minimum value a user can pick")}</p>
       </div>
     </div>
   );
@@ -1382,6 +1393,7 @@ function ScaleLabelsSection({
   update: (p: Partial<QuestionDraft>) => void;
   missing: ReadonlySet<string>;
 }) {
+  const t = useDsText();
   /* Both labels are optional together — the gap is the half-labelled scale, so
      the flag lands on the end that is still blank. */
   const flagged = missing.has("scaleLabels");
@@ -1401,12 +1413,12 @@ function ScaleLabelsSection({
           es={data.scaleMinLabelEs}
           onEn={(v) => update({ scaleMinLabel: v })}
           onEs={(v) => update({ scaleMinLabelEs: v })}
-          placeholder="e.g. Extremely disappointed"
+          placeholder={t("e.g. Extremely disappointed")}
           esPlaceholder="p. ej. Muy decepcionado"
           error={minBlank}
           maxLength={NAME_MAX}
         />
-        <p className="form-help">Optional — shown at the low end of the scale.</p>
+        <p className="form-help">{t("Optional — shown at the low end of the scale.")}</p>
       </div>
 
       <div className="form-group" onBlur={leave(() => touch("scaleLabels"))}>
@@ -1420,12 +1432,12 @@ function ScaleLabelsSection({
           es={data.scaleMaxLabelEs}
           onEn={(v) => update({ scaleMaxLabel: v })}
           onEs={(v) => update({ scaleMaxLabelEs: v })}
-          placeholder="e.g. Extremely satisfied"
+          placeholder={t("e.g. Extremely satisfied")}
           esPlaceholder="p. ej. Muy satisfecho"
           error={maxBlank}
           maxLength={NAME_MAX}
         />
-        <p className="form-help">Optional — shown at the high end of the scale.</p>
+        <p className="form-help">{t("Optional — shown at the high end of the scale.")}</p>
       </div>
     </div>
   );
@@ -1446,22 +1458,23 @@ function GradingField({
   gradable: boolean;
   usedInQuizzes: number;
 }) {
+  const t = useDsText();
   const grading = data.grading && gradable;
   // Grading can't be disabled while the question is in a quiz. Turning it on
   // drops the "Other" option, which only an ungraded MCQ offers.
   const lockedByQuizzes = grading && usedInQuizzes > 0;
   const locked = !gradable || lockedByQuizzes;
-  const sub = !gradable
+  const sub = t(!gradable
     ? "Grading not supported"
     : lockedByQuizzes
       ? `Used in ${usedInQuizzes} quiz${usedInQuizzes === 1 ? "" : "zes"} — remove it from them first`
-      : "Required for use in Quizzes";
+      : "Required for use in Quizzes");
 
   return (
     <SegField
       label="Grading"
       value={grading}
-      offLabel="Not Graded"
+      offLabel={t("Not Graded")}
       onLabel="Graded"
       onChange={(v) =>
         update(
@@ -1492,6 +1505,7 @@ function OptionTogglesSection({
   update: (p: Partial<QuestionDraft>) => void;
   grading: boolean;
 }) {
+  const t = useDsText();
   const canRandomise = data.type === "mcq" || data.type === "match";
   // Ungraded MCQs only: a typed-in answer can't be scored.
   const canOther = data.type === "mcq" && !grading;
@@ -1506,15 +1520,15 @@ function OptionTogglesSection({
         <SegField
           label="Answers"
           value={data.multiSelect}
-          offLabel="Single Answer"
-          onLabel="Multiple Answers"
+          offLabel={t("Single Answer")}
+          onLabel={t("Multiple Answers")}
           onChange={(v) => update({ multiSelect: v })}
           sub="How many options a user can pick"
         />
       )}
       {canRandomise && (
         <SegField
-          label="Randomize Options"
+          label={t("Randomize Options")}
           value={data.randomise}
           onChange={(v) => update({ randomise: v })}
           sub="New order on every attempt"
@@ -1527,7 +1541,7 @@ function OptionTogglesSection({
       )}
       {canOther && (
         <SegField
-          label="“Other” Free-Text Option"
+          label={t("\u201cOther\u201d Free-Text Option")}
           value={data.otherOption}
           onChange={(v) => update({ otherOption: v })}
           /* Ungraded only — a typed answer matches no option, so there is
@@ -1547,6 +1561,7 @@ function FeedbackSection({
   data: QuestionDraft;
   update: (p: Partial<QuestionDraft>) => void;
 }) {
+  const t = useDsText();
   /* Partial credit needs more than one correct answer to divide, so the row is
      dead on a True/False question — it drops out rather than sitting there
      explaining itself. A single-answer MCQ keeps the disabled row: grading a
@@ -1559,22 +1574,22 @@ function FeedbackSection({
     <div className="wizard-fields">
       <div className="form-group">
         <label className="form-label">
-          Combined Feedback
+          {t("Combined Feedback")}
           <LimitError max={DESCRIPTION_MAX} values={feedbackValues(data)} />
         </label>
         <div className="qed-tbl">
           <FeedbackRow
-            label="For Correct Response"
+            label={t("For Correct Response")}
             en={data.fbCorrect}
             es={data.fbCorrectEs}
             onEn={(v) => update({ fbCorrect: v })}
             onEs={(v) => update({ fbCorrectEs: v })}
-            placeholder="Shown for a correct response…"
+            placeholder={t("Shown for a correct response…")}
             esPlaceholder="Se muestra en una respuesta correcta…"
           />
           {!noPartial && (
             <FeedbackRow
-              label="For Partially Correct Response"
+              label={t("For Partially Correct Response")}
               en={singleAnswer ? "" : data.fbPartial}
               es={singleAnswer ? "" : data.fbPartialEs}
               onEn={(v) => update({ fbPartial: v })}
@@ -1583,28 +1598,28 @@ function FeedbackSection({
               /* Figma 1481:3600 copy, both languages. */
               placeholder={
                 singleAnswer
-                  ? "Only Available for MCQs with Multiple Correct Answers"
-                  : "Shown for a partially correct response…"
+                  ? t("Only Available for MCQs with Multiple Correct Answers")
+                  : t("Shown for a partially correct response…")
               }
               esPlaceholder={
                 singleAnswer
-                  ? "Solo Disponible para Preguntas de Opción Múltiple con Varias Respuestas Correctas"
-                  : "Se muestra en una respuesta parcialmente correcta…"
+                  ? t("Solo Disponible para Preguntas de Opción Múltiple con Varias Respuestas Correctas")
+                  : t("Se muestra en una respuesta parcialmente correcta…")
               }
             />
           )}
           <FeedbackRow
-            label="For Incorrect Response"
+            label={t("For Incorrect Response")}
             en={data.fbIncorrect}
             es={data.fbIncorrectEs}
             onEn={(v) => update({ fbIncorrect: v })}
             onEs={(v) => update({ fbIncorrectEs: v })}
-            placeholder="Shown for an incorrect response…"
+            placeholder={t("Shown for an incorrect response…")}
             esPlaceholder="Se muestra en una respuesta incorrecta…"
           />
         </div>
         <p className="form-help">
-          Combined feedback shown to the user when reviewing their Quiz Attempt
+          {t("Combined feedback shown to the user when reviewing their Quiz Attempt")}
         </p>
       </div>
     </div>
@@ -1630,11 +1645,12 @@ function FeedbackRow({
   esPlaceholder?: string;
   disabled?: boolean;
 }) {
+  const t = useDsText();
   return (
     <div className="qed-tbl-row">
       {/* The label dims with the field it names, so a row that can't be filled
           in reads as one control rather than a live label over a dead box. */}
-      <span className={`qed-fb-label${disabled ? " is-disabled" : ""}`}>{label}</span>
+      <span className={`qed-fb-label${disabled ? " is-disabled" : ""}`}>{t(label)}</span>
       <div className="qed-tbl-field">
         <RichTextField
           en={en}
@@ -1666,6 +1682,7 @@ function RadioCard({
   desc?: string;
   disabled?: boolean;
 }) {
+  const t = useDsText();
   return (
     <button
       type="button"
@@ -1678,8 +1695,8 @@ function RadioCard({
     >
       <span className="radio-dot" />
       <div className="radio-card-text">
-        <div className="radio-card-title">{title}</div>
-        {desc && <div className="radio-card-desc">{desc}</div>}
+        <div className="radio-card-title">{(typeof title === "string" ? t(title) : title)}</div>
+        {desc && <div className="radio-card-desc">{t(desc)}</div>}
       </div>
     </button>
   );
@@ -1710,9 +1727,10 @@ function SegField({
   info?: string;
   disabled?: boolean;
 }) {
+  const t = useDsText();
   return (
     <div className="form-group">
-      <label className="form-label">{label}</label>
+      <label className="form-label">{t(label)}</label>
       <div className={`seg-control${disabled ? " is-disabled" : ""}`}>
         <button
           type="button"
@@ -1721,7 +1739,7 @@ function SegField({
           disabled={disabled}
           onClick={() => onChange(false)}
         >
-          {offLabel}
+          {t(offLabel)}
         </button>
         <button
           type="button"
@@ -1730,7 +1748,7 @@ function SegField({
           disabled={disabled}
           onClick={() => onChange(true)}
         >
-          {onLabel}
+          {t(onLabel)}
         </button>
       </div>
       {sub && (

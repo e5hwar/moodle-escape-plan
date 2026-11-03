@@ -1,4 +1,4 @@
-import { certifications, type Certification } from "./certifications";
+import { certifications, seedDaysAgo, type Certification } from "./certifications";
 import { buildData, liveCells, progress } from "./certLookup";
 import { completionsStore } from "./completions";
 
@@ -146,7 +146,7 @@ export const awards: Award[] = [
   A("AW-112", "C-0405", "Bronze", "DT-03", undefined, 612, "Jan 22, 2024", "Apr 02, 2026"),   // Refrigerant Safety Bundle
   // Confined Space Entry's Award — the one setup step it has done (its
   // Certification is still mid-setup, see data/certifications.ts).
-  A("AW-114", "C-0624", "Bronze", "DT-03", undefined, 0, "Sep 24, 2026", "Sep 24, 2026"),
+  A("AW-114", "C-0624", "Bronze", "DT-03", undefined, 0, seedDaysAgo(9), seedDaysAgo(9)),
   // Archived Award — its Certification is archived; existing holders keep it.
   A("AW-113", "C-0265", "Bronze", "DT-03", undefined, 96, "Mar 12, 2023", "Oct 08, 2025", { status: "Archived" }),
 ];

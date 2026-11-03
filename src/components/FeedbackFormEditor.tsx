@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -42,6 +43,7 @@ const TYPE_LABEL: Record<QuestionType, string> = {
  * the POINTS column becomes a MANDATORY toggle (810:1285), and the menu drops
  * "Add Random Set". */
 export function FeedbackFormEditor({ form, bank, onUpdate, onCreateQuestion, flagged = false, blocked = false }: Props) {
+  const t = useDsText();
   const [picking, setPicking] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const addWrapRef = useRef<HTMLDivElement>(null);
@@ -213,7 +215,7 @@ export function FeedbackFormEditor({ form, bank, onUpdate, onCreateQuestion, fla
 
         {actives.length === 0 && (
           <div className="qz-empty">
-            No Questions Added Yet
+            {t("No Questions Added Yet")}
           </div>
         )}
 
@@ -281,16 +283,16 @@ export function FeedbackFormEditor({ form, bank, onUpdate, onCreateQuestion, fla
             aria-expanded={menuOpen}
           >
             <TreeAddIcon />
-            Add Questions
+            {t("Add Questions")}
           </button>
           {menuOpen && (
             <div className="u-menu qz-menu" role="menu">
               <button className="u-menu-item qz-menu-item" role="menuitem" onClick={openCreate}>
-                <span className="qz-menu-label">Create New Question</span>
+                <span className="qz-menu-label">{t("Create New Question")}</span>
                 <span className="cta-kbd">C</span>
               </button>
               <button className="u-menu-item qz-menu-item" role="menuitem" onClick={openBank}>
-                <span className="qz-menu-label">Add from Question Bank</span>
+                <span className="qz-menu-label">{t("Add from Question Bank")}</span>
                 <span className="cta-kbd">Q</span>
               </button>
             </div>
@@ -333,6 +335,7 @@ export function FeedbackInactiveQuestions({
   bank: Question[];
   onUpdate: (links: FormQuestionLink[]) => void;
 }) {
+  const t = useDsText();
   const byId = useMemo(() => new Map(bank.map((q) => [q.id, q])), [bank]);
   const actives = form.questions.filter((l) => l.status === "active");
   const inactives = form.questions.filter((l) => l.status === "inactive");
@@ -362,14 +365,14 @@ export function FeedbackInactiveQuestions({
             <div className="qz-q">
               {/* Two lines at most; the full question tips only when cut. */}
               <div className="qz-q-title qz-q-title--clamp" data-tip={title} data-tip-overflow="">
-                {title}
+                {t(title)}
               </div>
               <div className="qz-q-type">{q ? TYPE_LABEL[q.type] : ""}</div>
             </div>
             <span className="qz-since">{l.deactivatedAt ? formatDate(l.deactivatedAt) : "—"}</span>
             <span className="qz-reactivate">
               <button type="button" className="btn-save-draft" onClick={() => makeActive(l.questionId)}>
-                Make Active
+                {t("Make Active")}
               </button>
             </span>
           </div>

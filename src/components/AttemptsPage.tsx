@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   attemptDuration,
@@ -176,6 +177,7 @@ export function AttemptsPage({
   /** Pre-fills the Status filter — used to land straight on rejected attempts. */
   initialStatusFilter?: AttemptStatus;
 }) {
+  const t = useDsText();
   const [toast, toastNode] = useToast();
   /* The one attempts store Who Paid reads too, so a delete here shows there.
      A deep link's own rows (built from Manage User Progress data) ride on
@@ -392,20 +394,20 @@ export function AttemptsPage({
               1356:1828), so there is no crumb row at all. */}
           {onBack && (
             <nav className="rvc-crumbs" aria-label="Breadcrumb">
-              <button className="rvc-crumb" onClick={onBack} title="Back to Tasks">
+              <button className="rvc-crumb" onClick={onBack} title={t("Back to Tasks")}>
                 Tasks
               </button>
             </nav>
           )}
           <header className="tasks-header">
             <div className="rvc-pagehead">
-              <h1 className="tasks-title">Quiz Attempts</h1>
+              <h1 className="tasks-title">{t("Quiz Attempts")}</h1>
             </div>
             {canGrantHere && (
               <div className="tasks-header-actions">
                 <button className="new-task" onClick={() => setGranting(true)}>
                   <AddIcon />
-                  Additional Attempts
+                  {t("Additional Attempts")}
                 </button>
               </div>
             )}
@@ -419,7 +421,7 @@ export function AttemptsPage({
                     below, exactly as Company: feeds the Users company pill. */}
                 <EntitySearch
                   scopes={scopes}
-                  placeholder="Search Users by Name, Email, or Phone..."
+                  placeholder={t("Search Users by Name, Email, or Phone...")}
                   query={search}
                   onCommit={setSearch}
                 />
@@ -427,12 +429,12 @@ export function AttemptsPage({
 
               <div className="filters">
                 <MultiPill
-                  label="Quiz Name"
+                  label={t("Quiz Name")}
                   all={quizOptions}
                   value={filters.quizzes}
                   onApply={(v) => setFilters((f) => ({ ...f, quizzes: v }))}
                   searchable
-                  searchPlaceholder="Search Quizzes..."
+                  searchPlaceholder={t("Search Quizzes...")}
                   width={300}
                   tip={FILTER_TIPS.quizAttempts.quiz}
                 />
@@ -442,7 +444,7 @@ export function AttemptsPage({
                   value={filters.certifications}
                   onApply={(v) => setFilters((f) => ({ ...f, certifications: v }))}
                   searchable
-                  searchPlaceholder="Search Certifications..."
+                  searchPlaceholder={t("Search Certifications...")}
                   width={300}
                   tip={FILTER_TIPS.quizAttempts.certification}
                 />
@@ -462,7 +464,7 @@ export function AttemptsPage({
                 />
                 {hasFilters && (
                   <button className="filter-clear-link" onClick={clearFilters}>
-                    Clear Filters
+                    {t("Clear Filters")}
                   </button>
                 )}
               </div>
@@ -545,8 +547,8 @@ export function AttemptsPage({
 
       {deleting && (
         <PrmModal
-          title="Delete Attempt"
-          confirmLabel="Delete Attempt"
+          title={t("Delete Attempt")}
+          confirmLabel={t("Delete Attempt")}
           danger
           doubleConfirm={
             deletingPaid ? (
@@ -577,8 +579,7 @@ export function AttemptsPage({
               back to Not Started, so the attempt can be retaken for free. */}
           {deletingPaid && (
             <p className="prm-content">
-              The attempt was paid for, so the purchase stays: its Who Paid row returns to
-              Not Started and they can re-attempt without paying again.
+              {t("The attempt was paid for, so the purchase stays: its Who Paid row returns to Not Started and they can re-attempt without paying again.")}
             </p>
           )}
         </PrmModal>
@@ -613,12 +614,13 @@ function MoreFiltersPill({
   count: number;
   onApply: (v: MoreFilters) => void;
 }) {
+  const t = useDsText();
   return (
     <Dropdown
       width={260}
       trigger={({ open, toggle }) => (
         <PillTrigger
-          label="More Filters"
+          label={t("More Filters")}
           value={count > 0 ? `${count} Active` : null}
           open={open}
           toggle={toggle}
@@ -703,6 +705,7 @@ function AttemptRow({
   /** This row's 3-dot menu is open — hold the hover treatment. */
   menuOpen: boolean;
 }) {
+  const t = useDsText();
   return (
     <tr className={menuOpen ? "menu-open" : ""} onClick={onView}>
       {COLS.map((c) => (
@@ -730,7 +733,7 @@ function AttemptRow({
             className="row-action-btn row-action-btn--label"
             onClick={(e) => { e.stopPropagation(); onView(); }}
           >
-            View Attempt
+            {t("View Attempt")}
             <RowExternalLinkIcon />
           </button>
           <button
@@ -837,10 +840,11 @@ function SortableHeader({
   toggle: (k: SortKey) => void;
   sortable?: boolean;
 }) {
+  const t = useDsText();
   if (!sortable) {
     return (
       <th className={`${className} no-sort`}>
-        <span className="th-content">{label}</span>
+        <span className="th-content">{t(label)}</span>
       </th>
     );
   }
@@ -848,7 +852,7 @@ function SortableHeader({
   return (
     <th className={className} onClick={() => toggle(col)}>
       <span className="th-content">
-        {label}
+        {t(label)}
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>

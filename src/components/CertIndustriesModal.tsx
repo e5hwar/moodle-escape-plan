@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useMemo, useState } from "react";
 import { PrmModal } from "./PrmModal";
 import { MultiSelect } from "./NewCompanyWizard";
@@ -32,6 +33,7 @@ export function CertIndustriesModal({
    *  `manage`: an existing Certification, opened from its Setup card. */
   mode?: "created" | "manage";
 }) {
+  const t = useDsText();
   const managing = mode === "manage";
   // Whether the Certification already had Industries when the modal opened —
   // the title holds for the whole visit rather than flipping on the first pick.
@@ -69,12 +71,11 @@ export function CertIndustriesModal({
             options={options.map((o) => o.label)}
             value={value.map(labelOf).filter((l): l is string => !!l)}
             onChange={(labels) => onChange(labels.map(keyOf).filter((k): k is string => !!k))}
-            placeholder="Select Industries"
-            searchPlaceholder="Search Industries..."
+            placeholder={t("Select Industries")}
+            searchPlaceholder={t("Search Industries...")}
           />
           <p className="form-help">
-            Used for catalog browsing and content discovery. A Certification can belong to multiple
-            Industries and Sub-Industries, and can be re-tagged any time from the Industries page.
+            {t("Used for catalog browsing and content discovery. A Certification can belong to multiple Industries and Sub-Industries, and can be re-tagged any time from the Industries page.")}
           </p>
         </div>
       </div>

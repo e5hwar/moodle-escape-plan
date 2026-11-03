@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useRef, useState } from "react";
 import {
   TIERS,
@@ -61,6 +62,7 @@ export function CompaniesSearch({
   query: string;
   onCommit: (q: string) => void;
 }) {
+  const t = useDsText();
   const [text, setText] = useState(query);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
@@ -250,7 +252,7 @@ export function CompaniesSearch({
         <input
           ref={inputRef}
           className="usearch-input"
-          placeholder="Search Companies..."
+          placeholder={t("Search Companies...")}
           value={text}
           onChange={(e) => {
             setText(e.target.value);

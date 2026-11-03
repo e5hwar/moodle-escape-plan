@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useRef, useState } from "react";
 import { UploadIcon } from "./icons";
 import { leave, useMovedPast, useTouchedKeys } from "./fieldFlags";
@@ -41,6 +42,7 @@ function initialData(p: Props): Data {
 }
 
 export function NewDesignTemplateWizard(props: Props) {
+  const t = useDsText();
   const { onClose } = props;
   const isEditing = !!props.editingTemplate;
   const [step, setStep] = useState(0);
@@ -131,7 +133,7 @@ export function NewDesignTemplateWizard(props: Props) {
                 >
                   <WizardStepRail status={status} num={i + 1} />
                   <div className="wizard-step-text">
-                    <div className="wizard-step-title">{s.label}</div>
+                    <div className="wizard-step-title">{t(s.label)}</div>
                   </div>
                 </li>
               );
@@ -149,7 +151,7 @@ export function NewDesignTemplateWizard(props: Props) {
           <div className="wizard-content" ref={gate.scrollRef}>
             <div className="wizard-paneout" ref={gate.paneOutRef}>
               <div className="wizard-pane" key={step}>
-              <h1 className="tasks-title">{STEPS[step].label}</h1>
+              <h1 className="tasks-title">{t(STEPS[step].label)}</h1>
               <p className="tasks-subtitle wizard-desc">{STEPS[step].desc}</p>
 
               {step === 0 && <DetailsStep data={data} update={update} nameMissing={nameMissing} bgMissing={bgMissing} touch={touch} />}
@@ -162,7 +164,7 @@ export function NewDesignTemplateWizard(props: Props) {
 
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
-          <button className="wizard-cancel" onClick={() => guard(onClose)}>Cancel</button>
+          <button className="wizard-cancel" onClick={() => guard(onClose)}>{t("Cancel")}</button>
         </div>
         <div className="wizard-actions">
           {step > 0 && (
@@ -184,7 +186,7 @@ export function NewDesignTemplateWizard(props: Props) {
               data-tip={detailsReady && isEditing && !dirty ? NO_CHANGES_TIP : undefined}
               onClick={handleSave}
             >
-              {isEditing ? "Save Changes" : "Create Template"}
+              {isEditing ? t("Save Changes") : t("Create Template")}
             </button>
           )}
         </div>
@@ -208,12 +210,13 @@ function DetailsStep({
   bgMissing?: boolean;
   touch: (key: string) => void;
 }) {
+  const t = useDsText();
   return (
     <>
       <div className="form-group" onBlur={leave(() => touch("name"))}>
         <label className="form-label">
           Template name<span className="req">*</span>
-          {nameMissing && <span className="form-label-error">Template name cannot be left empty</span>}
+          {nameMissing && <span className="form-label-error">{t("Template name cannot be left empty")}</span>}
           <LimitError max={NAME_MAX} values={[data.name]} warn={false} />
         </label>
         <LimitedInput
@@ -221,17 +224,17 @@ function DetailsStep({
           warn={false}
           className={`form-input${nameMissing ? " has-error" : ""}`}
           aria-invalid={nameMissing || undefined}
-          placeholder="e.g. EPA Card — 2026 Brand"
+          placeholder={t("e.g. EPA Card — 2026 Brand")}
           value={data.name}
           onChange={(e) => update({ name: e.target.value })}
         />
-        <p className="form-help">Internal name used by admins to find and reuse this template.</p>
+        <p className="form-help">{t("Internal name used by admins to find and reuse this template.")}</p>
       </div>
 
       <div className="form-group" onBlur={leave(() => touch("bg"))}>
         <label className="form-label">
           Background image<span className="req">*</span>
-          {bgMissing && <span className="form-label-error">Background image cannot be left empty</span>}
+          {bgMissing && <span className="form-label-error">{t("Background image cannot be left empty")}</span>}
         </label>
         <div className={`aw-bg-picker${bgMissing ? " has-error" : ""}`}>
           {/* A plain black placeholder with the file's name (user, 2026-10-07). */}
@@ -249,12 +252,11 @@ function DetailsStep({
             >
               <UploadIcon /> Upload image
             </button>
-            <p className="form-help">JPEG or PNG. This is the visual base of the Card or Certificate.</p>
+            <p className="form-help">{t("JPEG or PNG. This is the visual base of the Card or Certificate.")}</p>
           </div>
         </div>
         <p className="form-help">
-          Editing a template updates every Award that uses it — both Cards and Certificates,
-          including already-issued instances.
+          {t("Editing a template updates every Award that uses it \u2014 both Cards and Certificates, including already-issued instances.")}
         </p>
       </div>
     </>

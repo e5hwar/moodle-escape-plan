@@ -1,3 +1,4 @@
+import { DsText } from "./DsText";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { discoverableLabel, isIdUpload, subscriptionLabel, isPaid, taskCertifications, taskInCertifications, type Task, type TaskType } from "../data/tasks";
 // ARCHIVED: RotaryDialPreview side panel — kept for future use; re-enable by uncommenting
@@ -16,6 +17,7 @@ import { SortIcon, AddIcon, RowEditIcon, RowEyeIcon, RowEyeOffIcon, RowKebabIcon
 import { Dropdown } from "./Dropdown";
 import { PrmModal } from "./PrmModal";
 import { TasksSearch } from "./TasksSearch";
+import { useDsText } from "../designSystem";
 import type { TaskTypeKey } from "./Footer";
 import { useCollapsingHeader } from "../hooks/useCollapsingHeader";
 import { TaskSummary } from "./NewTaskWizard";
@@ -100,7 +102,7 @@ type TaskColMeta = {
 };
 
 const TASK_COLS: TaskColMeta[] = [
-  { key: "type", label: "Type", className: "col-type", width: 160, render: (t) => t.type },
+  { key: "type", label: "Type", className: "col-type", width: 160, render: (x) => <DsText s={x.type} /> },
   {
     key: "paid", label: "Paid", className: "col-type", width: 110,
     render: (t) =>
@@ -229,6 +231,7 @@ export function TasksPage({
   flash?: string | null;
   onFlashDone?: () => void;
 }) {
+  const t = useDsText();
   const [toast, toastNode] = useToast(flash, onFlashDone);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [menu, setMenu] = useState<{ task: Task; rect: DOMRect } | null>(null);
@@ -489,7 +492,7 @@ export function TasksPage({
                     Skills
                   </button>
                   <button className="cta-quiet" onClick={() => onOpenQuestionBank?.()}>
-                    Question Bank
+                    {t("Question Bank")}
                   </button>
                   {/* Figma 724:1010 "Create Task Options": label + shortcut badge, no
                       icons, on the panel's own 174px shell. */}
@@ -502,7 +505,7 @@ export function TasksPage({
                     trigger={({ toggle }) => (
                       <button className="new-task" onClick={toggle}>
                         <AddIcon />
-                        Create Task
+                        {t("Create Task")}
                         <span className="cta-kbd">C</span>
                       </button>
                     )}
@@ -518,7 +521,7 @@ export function TasksPage({
                               close();
                             }}
                           >
-                            <span className="ct-menu-label">{label}</span>
+                            <span className="ct-menu-label">{t(label)}</span>
                             <span className="cta-kbd">{shortcut}</span>
                           </button>
                         ))}
@@ -532,11 +535,11 @@ export function TasksPage({
                   ("3210 Tasks · Across 230 Certifications"). It fades as the
                   header collapses. */}
               <p className="tasks-subtitle clh-sub">
-                {`${plural(catalog.tasks, "Task", "Tasks")} · Across ${plural(
+                {t(`${plural(catalog.tasks, "Task", "Tasks")} · Across ${plural(
                   catalog.certifications,
                   "Certification",
                   "Certifications",
-                )}`}
+                )}`)}
               </p>
 
               <div className="toolbar">
@@ -553,7 +556,7 @@ export function TasksPage({
               <Filters filters={filters} setFilters={setFilters} />
             </div>
 
-            <table ref={head.theadRef} className="table table-head">
+            <table ref={head.theadRef} className="table table-head table--small">
               <ColGroup cols={visibleCols} />
               <thead>
                 <tr>
@@ -582,7 +585,7 @@ export function TasksPage({
             </table>
 
             <div className="tasks-scroll">
-              <table className="table table-body">
+              <table className="table table-body table--small">
                 <ColGroup cols={visibleCols} />
                 <tbody>
                   {paged.map((task) => (
@@ -742,6 +745,7 @@ function HideTaskModal({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const t = useDsText();
   // PrmModal has no key handling of its own, so the owner closes on Escape.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -754,11 +758,11 @@ function HideTaskModal({
   return (
     <PrmModal
       title={`Hide “${task.name}”`}
-      confirmLabel="Hide Task"
+      confirmLabel={t("Hide Task")}
       onCancel={onCancel}
       onConfirm={onConfirm}
     >
-      <p className="prm-content">Hiding the Task temporarily removes it for all users.</p>
+      <p className="prm-content">{t("Hiding the Task temporarily removes it for all users.")}</p>
       {task.usedIn.length > 0 && (
         <div className="prm-content">
           <p>
@@ -788,6 +792,7 @@ function DeleteTaskModal({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const t = useDsText();
   // PrmModal has no key handling of its own, so the owner closes on Escape.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -800,7 +805,7 @@ function DeleteTaskModal({
   return (
     <PrmModal
       title={`Delete “${task.name}”`}
-      confirmLabel="Delete Task"
+      confirmLabel={t("Delete Task")}
       danger
       doubleConfirm={
         <>
@@ -815,7 +820,7 @@ function DeleteTaskModal({
       onConfirm={onConfirm}
     >
       <p className="prm-content">
-        Deleting the Task removes it permanently. This can't be undone.
+        {t("Deleting the Task removes it permanently. This can't be undone.")}
       </p>
       {task.usedIn.length > 0 && (
         <div className="prm-content">
@@ -846,6 +851,7 @@ function ShowTaskModal({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const t = useDsText();
   // PrmModal has no key handling of its own, so the owner closes on Escape.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -858,11 +864,11 @@ function ShowTaskModal({
   return (
     <PrmModal
       title={`Make “${task.name}” Visible`}
-      confirmLabel="Make Visible"
+      confirmLabel={t("Make Visible")}
       onCancel={onCancel}
       onConfirm={onConfirm}
     >
-      <p className="prm-content">Making the Task visible restores it for all users.</p>
+      <p className="prm-content">{t("Making the Task visible restores it for all users.")}</p>
       {task.usedIn.length > 0 && (
         <div className="prm-content">
           <p>
@@ -905,10 +911,11 @@ function SortableHeader({
   toggle: (k: SortKey) => void;
   sortable?: boolean;
 }) {
+  const t = useDsText();
   if (!sortable) {
     return (
       <th className={`${className ?? ""} no-sort`.trim()}>
-        <span className="th-content">{label}</span>
+        <span className="th-content">{t(label)}</span>
       </th>
     );
   }
@@ -916,7 +923,7 @@ function SortableHeader({
   return (
     <th className={className} onClick={() => toggle(col)}>
       <span className="th-content">
-        {label}
+        {t(label)}
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>
@@ -1110,6 +1117,7 @@ function TaskActionsMenu({
   }, [onClose]);
 
   const showAttempts = ATTEMPTS_TYPES.includes(task.type);
+  const t = useDsText();
 
   /* `reason` disables the row and says why on a second line (Figma 1629:1420),
      the way Who Paid's Revoke Access does. */
@@ -1133,11 +1141,11 @@ function TaskActionsMenu({
       <span className="u-menu-item-icon">{icon}</span>
       {reason ? (
         <span className="u-menu-item-text">
-          <span>{label}</span>
+          <span>{t(label)}</span>
           <span className="u-menu-item-sub">{reason}</span>
         </span>
       ) : (
-        label
+        t(label)
       )}
     </button>
   );

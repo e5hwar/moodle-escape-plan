@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   versionHistory,
@@ -119,6 +120,7 @@ export function QuestionVersionsPage({
   /** The preview panel is up and owns Escape. */
   panelOpen?: boolean;
 }) {
+  const t = useDsText();
   const versions = useMemo(() => versionHistory(question), [question]);
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "version", dir: "desc" });
   const [page, setPage] = useState(1);
@@ -157,17 +159,17 @@ export function QuestionVersionsPage({
               it, Tasks › Question Bank, every step a way back. The subtext
               names the question this history belongs to. */}
           <nav className="rvc-crumbs" aria-label="Breadcrumb">
-            <button className="rvc-crumb" onClick={onBackToTasks} title="Back to Tasks">
+            <button className="rvc-crumb" onClick={onBackToTasks} title={t("Back to Tasks")}>
               Tasks
             </button>
             <CrumbChevronIcon />
-            <button className="rvc-crumb" onClick={onBack} title="Back to the Question Bank">
-              Question Bank
+            <button className="rvc-crumb" onClick={onBack} title={t("Back to the Question Bank")}>
+              {t("Question Bank")}
             </button>
           </nav>
           <header className="tasks-header">
             <div className="rvc-pagehead">
-              <h1 className="tasks-title">Version History</h1>
+              <h1 className="tasks-title">{t("Version History")}</h1>
               {/* The full stem is on the hover tip, so the 200-character cut
                   never hides anything. */}
               <div className="tasks-subtitle" data-tip={question.text}>
@@ -381,11 +383,12 @@ function SortableHeader({
   sort: { key: SortKey; dir: SortDir };
   toggle: (k: SortKey) => void;
 }) {
+  const t = useDsText();
   const active = sort.key === col;
   return (
     <th className={className} onClick={() => toggle(col)}>
       <span className="th-content">
-        {label}
+        {t(label)}
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>

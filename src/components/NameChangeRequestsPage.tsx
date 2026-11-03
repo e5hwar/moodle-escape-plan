@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useMemo, useState } from "react";
 import { useListState, useResetPageOnChange } from "../hooks/useListState";
 import {
@@ -84,6 +85,7 @@ function compare(a: Row, b: Row, key: SortKey): number {
 }
 
 export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
+  const t = useDsText();
   /* The queue is the open requests of the shared store (nameChangeRequests.ts):
      a decided one leaves it for good, here and in the Users banner and badge. */
   const all = useNameChangeRequests();
@@ -192,17 +194,16 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
               button (it has no sidebar entry of its own), so the crumb is the
               way back. */}
           <nav className="rvc-crumbs" aria-label="Breadcrumb">
-            <button className="rvc-crumb" onClick={onBack} title="Back to Users">
+            <button className="rvc-crumb" onClick={onBack} title={t("Back to Users")}>
               Users
             </button>
           </nav>
           <header className="tasks-header">
             <div className="rvc-pagehead">
-              <h1 className="tasks-title">Name Change Requests</h1>
+              <h1 className="tasks-title">{t("Name Change Requests")}</h1>
               <div className="tasks-subtitle">
                 <span>
-                  Requested submitted by users whose IDs have been reviewed previously and cannot
-                  change their name on their own. Option available on Profile Page.
+                  {t("Requested submitted by users whose IDs have been reviewed previously and cannot change their name on their own. Option available on Profile Page.")}
                 </span>
               </div>
             </div>
@@ -216,7 +217,7 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
                 </span>
                 <input
                   className="search-input"
-                  placeholder="Search by Name, Email, or Phone..."
+                  placeholder={t("Search by Name, Email, or Phone...")}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
@@ -264,11 +265,11 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
                   />
                   <thead>
                     <tr>
-                      <SortableHeader col="currentName" label="Current Name" sort={sort} toggle={toggleSort} />
-                      <SortableHeader col="requestedName" label="Requested Name" sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="currentName" label={t("Current Name")} sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="requestedName" label={t("Requested Name")} sort={sort} toggle={toggleSort} />
                       <SortableHeader col="email" label="Email" sort={sort} toggle={toggleSort} sortable={false} />
                       <SortableHeader col="phone" label="Phone" sort={sort} toggle={toggleSort} sortable={false} />
-                      <SortableHeader col="submittedOn" label="Submitted On" sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="submittedOn" label={t("Submitted On")} sort={sort} toggle={toggleSort} />
                       <th className="col-actions no-sort" />
                     </tr>
                   </thead>
@@ -310,7 +311,7 @@ export function NameChangeRequestsPage({ onBack }: { onBack?: () => void }) {
                               className="row-action-btn row-action-btn--label"
                               onClick={(e) => { e.stopPropagation(); setReviewing(row); }}
                             >
-                              View Request
+                              {t("View Request")}
                               <RowChevronIcon />
                             </button>
                           </div>
@@ -366,10 +367,11 @@ function SortableHeader({
   sortable?: boolean;
   className?: string;
 }) {
+  const t = useDsText();
   if (!sortable) {
     return (
       <th className={`${className ?? ""} no-sort`.trim()}>
-        <span className="th-content">{label}</span>
+        <span className="th-content">{t(label)}</span>
       </th>
     );
   }
@@ -377,7 +379,7 @@ function SortableHeader({
   return (
     <th onClick={() => toggle(col)}>
       <span className="th-content">
-        {label}
+        {t(label)}
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>
@@ -400,6 +402,7 @@ function ReviewModal({
   /** The confirmed decision, with the Requested Name as edited in the review. */
   onResolved: (decision: ReviewDecision, requestedName: string) => void;
 }) {
+  const t = useDsText();
   const request = row.r;
   const currentName = nameOf(row);
   /* The ID it is checked against is the one on file for this user — the
@@ -472,7 +475,7 @@ function ReviewModal({
       <PrmModal
         wide
         className="ncr-modal"
-        title="Review Name Change"
+        title={t("Review Name Change")}
         /* The name on the account today, as the subtitle. The ID it is
            checked against is always Approved by the time a request reaches
            review, so its status no longer earns the line. Hovering the name
@@ -480,7 +483,7 @@ function ReviewModal({
            Reviews console puts on the candidate's name. */
         description={
           <>
-            Current Name:{" "}
+            {t("Current Name:")}{" "}
             {row.u ? (
               <UserDetailsHover
                 popup
@@ -509,7 +512,7 @@ function ReviewModal({
         footerExtra={
           <>
             <button className="prm-quiet" onClick={() => setMode("proof")}>
-              Request ID Proof
+              {t("Request ID Proof")}
               <span className="cta-kbd">I</span>
             </button>
             <button className="prm-cta prm-cta--danger" onClick={() => setMode("reject")}>
@@ -540,8 +543,8 @@ function ReviewModal({
           <div className="ncr-fields">
             <div className="form-group" onBlur={leave(() => touch("name"))} style={{ marginBottom: 0, maxWidth: "none" }}>
               <label className="form-label">
-                Requested Name<span className="req">*</span>
-                {nameMissing && <span className="form-label-error">Requested Name cannot be left empty</span>}
+                {t("Requested Name")}<span className="req">*</span>
+                {nameMissing && <span className="form-label-error">{t("Requested Name cannot be left empty")}</span>}
                 <LimitError max={NAME_MAX} values={[requestedName]} />
               </label>
               <LimitedInput
@@ -564,7 +567,7 @@ function ReviewModal({
                     className="prc-mismatch-use"
                     onClick={() => setRequestedName(idRecord.docName)}
                   >
-                    Use This
+                    {t("Use This")}
                   </button>
                 </p>
               ) : (
@@ -577,10 +580,10 @@ function ReviewModal({
 
       {confirm && (
         <PrmModal
-          title={confirm.title}
+          title={t(confirm.title)}
           cancelLabel="Back"
           onCancel={() => setMode("main")}
-          confirmLabel={confirm.cta}
+          confirmLabel={t(confirm.cta)}
           danger={mode === "reject"}
           onConfirm={() => mode !== "main" && onResolved(mode, requestedName)}
         >

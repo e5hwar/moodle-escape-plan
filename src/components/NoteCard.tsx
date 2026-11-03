@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import type { CSSProperties, ReactNode } from "react";
 
 /* The shared callout (Figma 1121:1671 "Note", 1195:1690 for the green tone):
@@ -56,6 +57,7 @@ export function NoteCard({
   /** One line each for title and body, ellipsed. */
   singleLine?: boolean;
 }) {
+  const t = useDsText();
   return (
     <div
       className={`note-card${tone === "neutral" ? "" : ` note-card--${tone}`}${
@@ -70,7 +72,7 @@ export function NoteCard({
     >
       {icon && <span className="note-card-icon">{icon}</span>}
       <div className="note-card-text">
-        <p className="note-card-title">{title}</p>
+        <p className="note-card-title">{(typeof title === "string" ? t(title) : title)}</p>
         {body && <p className="note-card-body">{body}</p>}
       </div>
       {action && <span className="note-card-action">{action}</span>}

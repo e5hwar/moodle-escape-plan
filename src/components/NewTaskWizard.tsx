@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { TimeField, TIME_UNIT_BY_LABEL, TIME_UNIT_LABEL, TIME_UNIT_OPTIONS, type TimeUnit } from "./TimeField";
 import { createPortal } from "react-dom";
@@ -764,6 +765,7 @@ function poolProblem(pools: RandomPool[], statics: StaticQuestion[] = []): strin
 }
 
 export function NewTaskWizard({ taskType, onClose, editingTask, skills = seedSkills, primaryLabel, onPrimary, onCreate, onSave, onQuestionCreated }: Props) {
+  const t = useDsText();
   const isEditing = !!editingTask;
   const linkedSkills = useMemo(
     () => (editingTask ? skills.filter((s) => s.taskIds.includes(editingTask.id)) : []),
@@ -1102,7 +1104,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, skills = seedSki
      every step but the last, where it IS the primary — so both spellings read
      the same. `primaryLabel` is the host's override (the Certification
      split-screen editor calls it "Add to Certification"). */
-  const createLabel = primaryLabel ?? (isEditing ? "Save Changes" : "Create Task");
+  const createLabel = t(primaryLabel ?? (isEditing ? "Save Changes" : "Create Task"));
 
   /* ⌘/Ctrl+Enter fires the primary button (Continue, or Create Task on the
      last step); adding Shift fires Create Task from any step. The two footer
@@ -1136,7 +1138,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, skills = seedSki
               {isEditing ? `Editing ${NEW_TITLE[taskType].replace(/^New /, "")}` : "Creating"}
             </span>
             <span className="wizard-brand-name">
-              {editingTask ? editingTask.name : NEW_TITLE[taskType]}
+              {editingTask ? editingTask.name : t(NEW_TITLE[taskType])}
             </span>
           </div>
 
@@ -1151,7 +1153,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, skills = seedSki
                 >
                   <WizardStepRail status={status} num={i + 1} />
                   <div className="wizard-step-text">
-                    <div className="wizard-step-title">{s.label}</div>
+                    <div className="wizard-step-title">{t(s.label)}</div>
                   </div>
                 </li>
               );
@@ -1169,9 +1171,9 @@ export function NewTaskWizard({ taskType, onClose, editingTask, skills = seedSki
           <div className="wizard-content" ref={gate.scrollRef}>
             <div className="wizard-paneout" ref={gate.paneOutRef}>
               <div className="wizard-pane" key={step}>
-          <h1 className="tasks-title">{steps[step].label}</h1>
+          <h1 className="tasks-title">{t(steps[step].label)}</h1>
           <p className="tasks-subtitle wizard-desc">
-            {steps[step].desc}
+            {t(steps[step].desc)}
             {steps[step].tip && (
               <span
                 className="form-help-info wizard-desc-info"
@@ -1288,9 +1290,9 @@ export function NewTaskWizard({ taskType, onClose, editingTask, skills = seedSki
       {trialConfirm &&
         createPortal(
           <PrmModal
-            title="Allow access on the Free Trial?"
+            title={t("Allow access on the Free Trial?")}
             confirmLabel={`Yes, ${createLabel}`}
-            cancelLabel="Go Back"
+            cancelLabel={t("Go Back")}
             onCancel={() => setTrialConfirm(false)}
             onCancelButton={() => {
               setTrialConfirm(false);
@@ -1303,10 +1305,7 @@ export function NewTaskWizard({ taskType, onClose, editingTask, skills = seedSki
               access it during the Free Trial.
             </p>
             <p className="prm-content">
-              Are you sure this Task should be accessible during the trial? A Final Exam
-              that doesn't require a subscription lets learners complete a Certification
-              without subscribing. If you're unsure, check with the Product Team before
-              creating it.
+              {t("Are you sure this Task should be accessible during the trial? A Final Exam that doesn't require a subscription lets learners complete a Certification without subscribing. If you're unsure, check with the Product Team before creating it.")}
             </p>
           </PrmModal>,
           document.body,
@@ -1317,8 +1316,8 @@ export function NewTaskWizard({ taskType, onClose, editingTask, skills = seedSki
         createPortal(
           <PrmModal
             title={`Save changes to “${editingTask.name}”?`}
-            confirmLabel="Save Changes"
-            cancelLabel="Go Back"
+            confirmLabel={t("Save Changes")}
+            cancelLabel={t("Go Back")}
             onCancel={() => setSaveConfirm(false)}
             onConfirm={() => handlePublish(false, true)}
           >
@@ -1558,6 +1557,7 @@ function buildHandsOnSetup(d: WizardData): HandsOnSetup {
    (Figma 49:348 "Plain Text Input - Dual Language", EN Name / ES Nombre) — it
    was the last single-language name left in the wizard. */
 function XapiDetailsStep({ touch, data, update, nameError, missing }: StepProps) {
+  const t = useDsText();
   return (
     <>
       <div className="wizard-fields">
@@ -1586,9 +1586,9 @@ function XapiDetailsStep({ touch, data, update, nameError, missing }: StepProps)
 
         <div className="form-group" onBlur={leave(() => touch?.("package"))}>
           <label className="form-label">
-            xAPI Package<span className="req">*</span>
+            {t("xAPI Package")}<span className="req">*</span>
             {missing?.has("package") && (
-              <span className="form-label-error">Upload the English xAPI package to publish.</span>
+              <span className="form-label-error">{t("Upload the English xAPI package to publish.")}</span>
             )}
           </label>
           <PackageField
@@ -1622,6 +1622,7 @@ function XapiLaunchStep({ data, update }: StepProps) {
 }
 
 function XapiCompletionStep(props: StepProps) {
+  const t = useDsText();
   const { touch, data, update, missing } = props;
   const options: { key: CompletionMode; title: string; desc: string }[] = [
     { key: "none", title: "No Completion Tracking", desc: "Task is reference content only — never marked complete." },
@@ -1634,9 +1635,9 @@ function XapiCompletionStep(props: StepProps) {
     <>
       <div className="form-group" onBlur={leave(() => touch?.("completion"))}>
         <label className="form-label">
-          Completion Criteria<span className="req">*</span>
+          {t("Completion Criteria")}<span className="req">*</span>
           {missing?.has("completion") && (
-            <span className="form-label-error">Choose how this Task is completed to publish.</span>
+            <span className="form-label-error">{t("Choose how this Task is completed to publish.")}</span>
           )}
         </label>
         <CompletionCriteriaGate {...gateOf(props)}>
@@ -1664,12 +1665,13 @@ function XapiCompletionStep(props: StepProps) {
    when capture is on. Writes the same two data fields; a switched-off capture
    keeps its `scoreDisplayMode`, so turning it back on restores the choice. */
 function ScoreCaptureField({ data, update }: StepProps) {
+  const t = useDsText();
   const on = data.scoreCapture;
   const recent = data.scoreDisplayMode === "recent";
   return (
     <>
       <div className="form-group">
-        <label className="form-label">Score Capture</label>
+        <label className="form-label">{t("Score Capture")}</label>
         <div className="seg-control">
           <button
             type="button"
@@ -1677,7 +1679,7 @@ function ScoreCaptureField({ data, update }: StepProps) {
             aria-pressed={!on}
             onClick={() => update({ scoreCapture: false })}
           >
-            No: Completion Only
+            {t("No: Completion Only")}
           </button>
           <button
             type="button"
@@ -1685,18 +1687,17 @@ function ScoreCaptureField({ data, update }: StepProps) {
             aria-pressed={on}
             onClick={() => update({ scoreCapture: true })}
           >
-            Yes: Capture Score
+            {t("Yes: Capture Score")}
           </button>
         </div>
         <p className="form-help">
-          Completion only records whether the Task was finished. Capturing also
-          stores the score the xAPI/SCORM package sends.
+          {t("Completion only records whether the Task was finished. Capturing also stores the score the xAPI/SCORM package sends.")}
         </p>
       </div>
 
       {on && (
         <div className="form-group">
-          <label className="form-label">Score Shown to Learner</label>
+          <label className="form-label">{t("Score Shown to Learner")}</label>
           <div className="seg-control">
             <button
               type="button"
@@ -1704,7 +1705,7 @@ function ScoreCaptureField({ data, update }: StepProps) {
               aria-pressed={!recent}
               onClick={() => update({ scoreDisplayMode: "highest" })}
             >
-              Highest Score
+              {t("Highest Score")}
             </button>
             <button
               type="button"
@@ -1712,12 +1713,11 @@ function ScoreCaptureField({ data, update }: StepProps) {
               aria-pressed={recent}
               onClick={() => update({ scoreDisplayMode: "recent" })}
             >
-              Most Recent Score
+              {t("Most Recent Score")}
             </button>
           </div>
           <p className="form-help">
-            Highest shows their best score across all attempts; Most Recent
-            shows the score from their latest attempt.
+            {t("Highest shows their best score across all attempts; Most Recent shows the score from their latest attempt.")}
           </p>
         </div>
       )}
@@ -1734,36 +1734,38 @@ function OrientationField({
   update,
   sub = "On iPad and tablets, orientation is never locked, and on Web the layout adapts to the window — these settings have no effect there.",
 }: StepProps & { sub?: string }) {
+  const t = useDsText();
   const value = data.allowRotation ? "rotate" : data.lockedOrientation;
   return (
     <div className="form-group">
-      <label className="form-label">Orientation</label>
+      <label className="form-label">{t("Orientation")}</label>
       <div className="radio-card-group">
         <RadioCard
           selected={value === "rotate"}
           onSelect={() => update({ allowRotation: true })}
-          title="Allow Rotation"
+          title={t("Allow Rotation")}
           desc="Learner can switch between portrait and landscape"
         />
         <RadioCard
           selected={value === "portrait"}
           onSelect={() => update({ allowRotation: false, lockedOrientation: "portrait" })}
-          title="Lock to Portrait"
+          title={t("Lock to Portrait")}
           desc="Content stays locked to portrait"
         />
         <RadioCard
           selected={value === "landscape"}
           onSelect={() => update({ allowRotation: false, lockedOrientation: "landscape" })}
-          title="Locked to Landscape"
+          title={t("Locked to Landscape")}
           desc="Content stays locked to landscape"
         />
       </div>
-      <p className="form-help">{sub}</p>
+      <p className="form-help">{t(sub)}</p>
     </div>
   );
 }
 
 function UrlCompletionStep(props: StepProps) {
+  const t = useDsText();
   const { touch, data, update, missing } = props;
   const options: { key: CompletionMode; title: string; desc: string }[] = [
     { key: "none", title: "No Completion Tracking", desc: "Reference content only — the Task is never marked complete." },
@@ -1774,9 +1776,9 @@ function UrlCompletionStep(props: StepProps) {
   return (
     <div className="form-group" onBlur={leave(() => touch?.("completion"))}>
       <label className="form-label">
-        Completion Criteria<span className="req">*</span>
+        {t("Completion Criteria")}<span className="req">*</span>
         {missing?.has("completion") && (
-          <span className="form-label-error">Choose how this Task is completed to publish.</span>
+          <span className="form-label-error">{t("Choose how this Task is completed to publish.")}</span>
         )}
       </label>
       <CompletionCriteriaGate {...gateOf(props)}>
@@ -1802,6 +1804,7 @@ function UrlCompletionStep(props: StepProps) {
    a mandatory field like Name/Description (label + subtext + control), not a
    titled Section. */
 function ResourceBasicInfoStep({ touch, data, update, nameError, missing }: StepProps) {
+  const t = useDsText();
   const isFileType = data.resourceType === "file";
   return (
     <div className="wizard-fields">
@@ -1813,7 +1816,7 @@ function ResourceBasicInfoStep({ touch, data, update, nameError, missing }: Step
 
       <div className="form-group">
         <label className="form-label">
-          Resource Type<span className="req">*</span>
+          {t("Resource Type")}<span className="req">*</span>
         </label>
         <div className="radio-card-group">
           <RadioCard
@@ -1826,21 +1829,20 @@ function ResourceBasicInfoStep({ touch, data, update, nameError, missing }: Step
             selected={!isFileType}
             onSelect={() => update({ resourceType: "link" })}
             title="Link"
-            desc="Point at an external URL, or a SkillCat Deep Link to a page within the app."
+            desc={t("Point at an external URL, or a SkillCat Deep Link to a page within the app.")}
           />
         </div>
         <p className="form-help">
-          Choose whether this Resource is a file learners open, or a link to an
-          external site or somewhere within the app.
+          {t("Choose whether this Resource is a file learners open, or a link to an external site or somewhere within the app.")}
         </p>
       </div>
 
       {isFileType ? (
         <div className="form-group" onBlur={leave(() => touch?.("file"))}>
           <label className="form-label">
-            File<span className="req">*</span>
+            {t("File")}<span className="req">*</span>
             {missing?.has("file") && (
-              <span className="form-label-error">Upload the English file to publish.</span>
+              <span className="form-label-error">{t("Upload the English file to publish.")}</span>
             )}
           </label>
           <PackageField
@@ -1856,9 +1858,9 @@ function ResourceBasicInfoStep({ touch, data, update, nameError, missing }: Step
       ) : (
         <div className="form-group" onBlur={leave(() => touch?.("link"))}>
           <label className="form-label">
-            Link<span className="req">*</span>
+            {t("Link")}<span className="req">*</span>
             {missing?.has("link") && (
-              <span className="form-label-error">Enter a link to publish.</span>
+              <span className="form-label-error">{t("Enter a link to publish.")}</span>
             )}
           </label>
           <LangField
@@ -1873,9 +1875,7 @@ function ResourceBasicInfoStep({ touch, data, update, nameError, missing }: Step
             error={missing?.has("link")}
           />
           <p className="form-help">
-            An external web address (including https://) or a SkillCat Deep Link
-            to a Certification, Task, or app page. If no Spanish link is added,
-            Spanish learners open the English link.
+            {t("An external web address (including https://) or a SkillCat Deep Link to a Certification, Task, or app page. If no Spanish link is added, Spanish learners open the English link.")}
           </p>
         </div>
       )}
@@ -1889,29 +1889,28 @@ function ResourceBasicInfoStep({ touch, data, update, nameError, missing }: Step
    rotation fields are peers, with no section headings or divider between them.
    The step heading carries the only description. */
 function ResourceLaunchStep({ data, update }: StepProps) {
+  const t = useDsText();
   if (data.resourceType === "file") {
     return (
       <div className="wizard-fields">
         <div className="form-group">
-          <label className="form-label">Open In</label>
+          <label className="form-label">{t("Open In")}</label>
           <div className="radio-card-group">
             <RadioCard
               selected={data.fileOpenIn === "in-app-viewer"}
               onSelect={() => update({ fileOpenIn: "in-app-viewer" })}
-              title="In-App Viewer"
+              title={t("In-App Viewer")}
               desc="Opens in the SkillCat app's built-in file viewer. Keeps learners in the app."
             />
             <RadioCard
               selected={data.fileOpenIn === "external-app"}
               onSelect={() => update({ fileOpenIn: "external-app" })}
-              title="External Application"
+              title={t("External Application")}
               desc="Hands the file to the device's default app for that file type (e.g. a PDF reader)."
             />
           </div>
           <p className="form-help">
-            Where the file opens when a learner starts the Task. In-App Viewer is
-            the default. If a file type only supports one of these, only that
-            option is shown.
+            {t("Where the file opens when a learner starts the Task. In-App Viewer is the default. If a file type only supports one of these, only that option is shown.")}
           </p>
         </div>
       </div>
@@ -1922,25 +1921,23 @@ function ResourceLaunchStep({ data, update }: StepProps) {
   return (
     <div className="wizard-fields">
       <div className="form-group">
-        <label className="form-label">Open In</label>
+        <label className="form-label">{t("Open In")}</label>
         <div className="radio-card-group">
           <RadioCard
             selected={data.openIn === "external"}
             onSelect={() => update({ openIn: "external" })}
-            title="External Browser"
-            desc="Opens in the device's default browser, or a new tab on Web."
+            title={t("External Browser")}
+            desc={t("Opens in the device's default browser, or a new tab on Web.")}
           />
           <RadioCard
             selected={inApp}
             onSelect={() => update({ openIn: "in-app" })}
-            title="In-App Browser"
+            title={t("In-App Browser")}
             desc="Opens in a webview inside the SkillCat app. Keeps learners in the app and unlocks the orientation control below."
           />
         </div>
         <p className="form-help">
-          Where the link opens when a learner starts the Task. External Browser
-          is the default. A SkillCat Deep Link always opens the respective page
-          within the app.
+          {t("Where the link opens when a learner starts the Task. External Browser is the default. A SkillCat Deep Link always opens the respective page within the app.")}
         </p>
       </div>
 
@@ -1948,7 +1945,7 @@ function ResourceLaunchStep({ data, update }: StepProps) {
         <OrientationField
           data={data}
           update={update}
-          sub="Rotation settings only applicable for the In-App Browser. On iPad and tablets, orientation is never locked, and on Web the layout adapts to the window — these settings have no effect there."
+          sub={t("Rotation settings only applicable for the In-App Browser. On iPad and tablets, orientation is never locked, and on Web the layout adapts to the window \u2014 these settings have no effect there.")}
         />
       )}
     </div>
@@ -1970,11 +1967,12 @@ function HandsOnBasicStep({ touch, data, update, nameError, missing }: StepProps
 }
 
 function HandsOnReferenceStep({ data, update }: StepProps) {
+  const t = useDsText();
   return (
     <>
       <div className="form-group">
         <label className="form-label">
-          Tools/Materials Required
+          {t("Tools/Materials Required")}
           <LimitError max={DESCRIPTION_MAX} values={[data.hoToolsEn, data.hoToolsEs]} />
         </label>
         <RichTextField
@@ -2005,7 +2003,7 @@ function HandsOnReferenceStep({ data, update }: StepProps) {
       </div>
 
       <div className="form-group">
-        <label className="form-label">Reference Files</label>
+        <label className="form-label">{t("Reference Files")}</label>
         <PackageField
           enFiles={data.hoFilesEn}
           esFiles={data.hoFilesEs}
@@ -2022,7 +2020,7 @@ function HandsOnReferenceStep({ data, update }: StepProps) {
 
       <div className="form-group">
         <label className="form-label">
-          Reviewer's Checklist
+          {t("Reviewer's Checklist")}
           <LimitError max={DESCRIPTION_MAX} values={[data.hoReviewerChecklistEn, data.hoReviewerChecklistEs]} />
         </label>
         <RichTextField
@@ -2031,7 +2029,7 @@ function HandsOnReferenceStep({ data, update }: StepProps) {
           maxLength={DESCRIPTION_MAX}
           onChangeEn={(v) => update({ hoReviewerChecklistEn: v })}
           onChangeEs={(v) => update({ hoReviewerChecklistEs: v })}
-          placeholderEn="A list of Criteria to be used to review this activity"
+          placeholderEn={t("A list of Criteria to be used to review this activity")}
           minRows={4}
         />
         <p className="form-help">
@@ -2044,6 +2042,7 @@ function HandsOnReferenceStep({ data, update }: StepProps) {
 }
 
 function HandsOnSubmissionStep({ data, update }: StepProps) {
+  const t = useDsText();
   const types = data.hoMediaTypes;
   const setType = (k: keyof MediaTypes, v: boolean) =>
     update({ hoMediaTypes: { ...types, [k]: v } });
@@ -2065,7 +2064,7 @@ function HandsOnSubmissionStep({ data, update }: StepProps) {
   return (
     <>
       <div className="form-group">
-        <label className="form-label">Character Limit for Supporting Text</label>
+        <label className="form-label">{t("Character Limit for Supporting Text")}</label>
         <Stepper
           value={data.hoProjectDescLimit}
           min={0}
@@ -2075,12 +2074,12 @@ function HandsOnSubmissionStep({ data, update }: StepProps) {
           }}
         />
         <p className="form-help">
-          Set to 0 if the user should not be allowed to enter any text
+          {t("Set to 0 if the user should not be allowed to enter any text")}
         </p>
       </div>
 
       <div className="form-group">
-        <label className="form-label">Media Files</label>
+        <label className="form-label">{t("Media Files")}</label>
         <Stepper
           value={data.hoMediaMax}
           min={0}
@@ -2099,9 +2098,9 @@ function HandsOnSubmissionStep({ data, update }: StepProps) {
 
       <div className="form-group">
         <label className="form-label">
-          Media File Types Allowed
+          {t("Media File Types Allowed")}
           {noneSelected && (
-            <span className="form-label-error">Select at least one media type.</span>
+            <span className="form-label-error">{t("Select at least one media type.")}</span>
           )}
         </label>
         <div className={`qsec qsec--rev qsec--media${noneSelected ? " has-error" : ""}`}>
@@ -2114,7 +2113,7 @@ function HandsOnSubmissionStep({ data, update }: StepProps) {
             return (
               <div key={row.key} className={`qsec-row${noMedia ? " is-disabled" : ""}`}>
                 <span className="qsec-revtext">
-                  <span className="qsec-revname">{row.label}</span>
+                  <span className="qsec-revname">{t(row.label)}</span>
                   <span className="qsec-revsub">
                     {noMedia ? "Requires at least 1 media file." : row.sub}
                   </span>
@@ -2137,8 +2136,8 @@ function HandsOnSubmissionStep({ data, update }: StepProps) {
         </div>
         <p className="form-help">
           {noMedia
-            ? "Only for Tasks that allow media files — set Media Files above 0 to use this."
-            : "Pick one or more. At least one type must be allowed."}
+            ? t("Only for Tasks that allow media files \u2014 set Media Files above 0 to use this.")
+            : t("Pick one or more. At least one type must be allowed.")}
         </p>
       </div>
     </>
@@ -2146,6 +2145,7 @@ function HandsOnSubmissionStep({ data, update }: StepProps) {
 }
 
 function HandsOnCompletionStep(props: StepProps) {
+  const t = useDsText();
   const { touch, data, update } = props;
   const reviewerGrade = data.hoCompletion === "reviewer_grade";
 
@@ -2156,7 +2156,7 @@ function HandsOnCompletionStep(props: StepProps) {
       <MaxAttemptsField
         data={data}
         update={update}
-        help="How many times a learner can submit this Task. Admins can grant more later."
+        help={t("How many times a learner can submit this Task. Admins can grant more later.")}
       />
 
       {/* Named and marked the same way the xAPI and Resource steps name theirs —
@@ -2164,21 +2164,21 @@ function HandsOnCompletionStep(props: StepProps) {
           already say what each one means. */}
       <div className="form-group" onBlur={leave(() => touch?.("completion"))}>
         <label className="form-label">
-          Completion Criteria<span className="req">*</span>
+          {t("Completion Criteria")}<span className="req">*</span>
         </label>
         <CompletionCriteriaGate {...gateOf(props)}>
           <div className="radio-card-group">
             <RadioCard
               selected={reviewerGrade}
               onSelect={() => update({ hoCompletion: "reviewer_grade" })}
-              title="Passing Grade from Reviewer"
+              title={t("Passing Grade from Reviewer")}
               desc="Completes when the learner receives a score equal to or greater than the passing grade from the reviewer."
             />
             <RadioCard
               selected={!reviewerGrade}
               onSelect={() => update({ hoCompletion: "submission_made" })}
-              title="Submission Made"
-              desc="The Task is completed as soon as the learner makes a submission. No review or scoring is required."
+              title={t("Submission Made")}
+              desc={t("The Task is completed as soon as the learner makes a submission. No review or scoring is required.")}
             />
           </div>
         </CompletionCriteriaGate>
@@ -2187,7 +2187,7 @@ function HandsOnCompletionStep(props: StepProps) {
       {reviewerGrade && (
         <CompletionCriteriaGate {...gateOf(props)} banner={false}>
           <div className="form-group">
-            <label className="form-label">Passing Grade</label>
+            <label className="form-label">{t("Passing Grade")}</label>
             <Stepper
               value={data.hoPassingGrade}
               min={1}
@@ -2198,7 +2198,7 @@ function HandsOnCompletionStep(props: StepProps) {
                   update({ hoPassingGrade: v });
               }}
             />
-            <p className="form-help">Maximum Grade: {HANDS_ON_MAX_SCORE}</p>
+            <p className="form-help">{t("Maximum Grade:")} {HANDS_ON_MAX_SCORE}</p>
           </div>
         </CompletionCriteriaGate>
       )}
@@ -2209,32 +2209,33 @@ function HandsOnCompletionStep(props: StepProps) {
 /* Visible/Hidden itself moved to Task Details; this step keeps what's left of the
    old Visibility page — search/browse discoverability and Content Tags. */
 function HandsOnDiscoveryStep({ data, update }: StepProps) {
+  const t = useDsText();
   // A Task inside a paid Certification is never discoverable.
   const editing = useContext(EditingTaskContext);
   const paidCert = !!editing && inPaidCertification(editing);
   return (
     <>
       <div className="form-group">
-        <label className="form-label">Discoverable</label>
+        <label className="form-label">{t("Discoverable")}</label>
         <div className="radio-card-group">
           <RadioCard
             selected={data.discoverable && !paidCert}
             onSelect={() => !paidCert && update({ discoverable: true })}
             title="Yes"
-            desc="Companies can add it to their own Certifications. Only for Tasks meant for B2B companies to assign."
+            desc={t("Companies can add it to their own Certifications. Only for Tasks meant for B2B companies to assign.")}
             disabled={paidCert}
           />
           <RadioCard
             selected={!data.discoverable || paidCert}
             onSelect={() => update({ discoverable: false })}
             title="No"
-            desc="Only reachable by opening a Certification that contains it."
+            desc={t("Only reachable by opening a Certification that contains it.")}
           />
         </div>
         <p className="form-help">
           {paidCert
-            ? "This Task is in a paid Certification, so it can't be discoverable."
-            : "Set this to Yes only for Hands-On Tasks we want B2B Companies to be able to assign to their employees."}
+            ? t("This Task is in a paid Certification, so it can't be discoverable.")
+            : t("Set this to Yes only for Hands-On Tasks we want B2B Companies to be able to assign to their employees.")}
         </p>
       </div>
 
@@ -2257,6 +2258,7 @@ function listNames(names: string[]): string {
 }
 
 function ContentTagsSection({ data, update }: StepProps) {
+  const t = useDsText();
   // Product Config's saved B2B Management lists, live.
   const { trades, partnerships } = useB2BConfig();
   const linkedSkills = useContext(LinkedSkillsContext);
@@ -2305,54 +2307,49 @@ function ContentTagsSection({ data, update }: StepProps) {
       }
     >
       <div className="form-group">
-        <label className="form-label">Audience</label>
+        <label className="form-label">{t("Audience")}</label>
         <SelectField
           className="select-field--full"
           value={audience}
           disabled={lockedB2B}
           options={AUDIENCE_OPTIONS}
+          dsCase
           onChange={(v) =>
             setValues("userType", v === AUDIENCE_B2B ? [USER_TYPE_VALUES[0]] : [])
           }
         />
         <p className="form-help">
-          Choose "B2B Companies Only" to hide this Task from B2C users. "All Users" means
-          no audience restriction. B2C is still excluded if you set a Trade or Partnership
-          below.
+          {t("Choose \"B2B Companies Only\" to hide this Task from B2C users. \"All Users\" means no audience restriction. B2C is still excluded if you set a Trade or Partnership below.")}
         </p>
       </div>
 
       <div className="form-group">
-        <label className="form-label">Trade</label>
+        <label className="form-label">{t("Trade")}</label>
         <MultiSelect
           options={trades}
           value={valuesOf("trade")}
           onChange={(v) => setValues("trade", v)}
           disabled={skillLocked}
-          placeholder="Select Trades"
-          searchPlaceholder="Search Trades..."
+          placeholder={t("Select Trades")}
+          searchPlaceholder={t("Search Trades...")}
         />
         <p className="form-help">
-          Only companies tagged with a Trade you pick will see this Task. Picking more than
-          one Trade widens the audience — a company needs to match just one. Leave blank so
-          every company can see it.
+          {t("Only companies tagged with a Trade you pick will see this Task. Picking more than one Trade widens the audience \u2014 a company needs to match just one. Leave blank so every company can see it.")}
         </p>
       </div>
 
       <div className="form-group">
-        <label className="form-label">Partnership</label>
+        <label className="form-label">{t("Partnership")}</label>
         <MultiSelect
           options={partnerships}
           value={valuesOf("partnership")}
           onChange={(v) => setValues("partnership", v)}
           disabled={skillLocked}
-          placeholder="Select Partnerships"
-          searchPlaceholder="Search Partnerships..."
+          placeholder={t("Select Partnerships")}
+          searchPlaceholder={t("Search Partnerships...")}
         />
         <p className="form-help">
-          Only companies in a Partnership you pick will see this Task. Picking more than one
-          widens the audience — a company needs to match just one. Leave blank so every
-          company can see it, partnered or not.
+          {t("Only companies in a Partnership you pick will see this Task. Picking more than one widens the audience \u2014 a company needs to match just one. Leave blank so every company can see it, partnered or not.")}
         </p>
       </div>
     </LockedField>
@@ -2415,6 +2412,7 @@ function QuizStructureStep({
   locked,
   missing,
 }: StepProps) {
+  const t = useDsText();
   const sectioned = data.structure === "sectioned";
 
   const updateSection = (id: string, patch: Partial<QuizSection>) =>
@@ -2445,22 +2443,22 @@ function QuizStructureStep({
           individually. The grading model and the Quiz pass mark moved to the
           Grading & Completion step. */}
       <div className="form-group">
-        <label className="form-label">Structure</label>
+        <label className="form-label">{t("Structure")}</label>
         <LockedField
           locked={!!locked}
-          sub={
+          sub={t(
             "Adding or removing Sections, or switching between a single block and Sections, " +
             "can't be re-evaluated against past attempts, so the structure is fixed once a Quiz " +
             "is created. " +
             (sectioned ? "You can still rename and re-order Sections below. " : "") +
             "To change it, create a new Quiz Task instead."
-          }
+          )}
         >
           <div className="radio-card-group">
             <RadioCard
               selected={!sectioned}
               onSelect={() => update({ structure: "single_block", gradingModel: "quiz_level" })}
-              title="Single Block of Questions"
+              title={t("Single Block of Questions")}
               desc="One question list, one overall score. The default — best for mid-course assessments and simple final exams."
               disabled={locked}
             />
@@ -2477,8 +2475,8 @@ function QuizStructureStep({
                     : {}),
                 })
               }
-              title="Two or More Sections"
-              desc="Each Section has its own questions and can be graded independently."
+              title={t("Two or More Sections")}
+              desc={t("Each Section has its own questions and can be graded independently.")}
               disabled={locked}
             />
           </div>
@@ -2492,14 +2490,14 @@ function QuizStructureStep({
         {sectioned && (
           <div className="form-group" onBlur={leave(() => { touch?.("sections"); touch?.("sectionName"); })}>
             <label className="form-label">
-              Sections<span className="req">*</span>
+              {t("Sections")}<span className="req">*</span>
               {belowFloor ? (
                 <span className="form-label-error">
-                  A sectioned Quiz needs at least {MIN_SECTIONS} Sections
+                  {t("A sectioned Quiz needs at least")} {MIN_SECTIONS} Sections
                 </span>
               ) : missing?.has(REQUIRED_FIELD_KEYS.sectionName) &&
               data.sections.some((sec) => !sec.name.trim()) ? (
-                <span className="form-label-error">Section Names cannot be left empty</span>
+                <span className="form-label-error">{t("Section Names cannot be left empty")}</span>
               ) : (
                 <LimitError
                   max={NAME_MAX}
@@ -2547,7 +2545,7 @@ function QuizStructureStep({
                       es={sec.nameEs}
                       onChangeEn={(v) => updateSection(sec.id, { name: v })}
                       onChangeEs={(v) => updateSection(sec.id, { nameEs: v })}
-                      placeholderEn="Section Name…"
+                      placeholderEn={t("Section Name\u2026")}
                       placeholderEs="Nombre de la Sección"
                       error={!!missing?.has(REQUIRED_FIELD_KEYS.sectionName) && !sec.name.trim()}
                       maxLength={NAME_MAX}
@@ -2558,7 +2556,7 @@ function QuizStructureStep({
                       floor it still removes; the label row flags it. */}
                   <button
                     className="qsec-x"
-                    aria-label="Remove Section"
+                    aria-label={t("Remove Section")}
                     disabled={locked}
                     onClick={() => removeSection(sec.id)}
                   >
@@ -2571,13 +2569,12 @@ function QuizStructureStep({
               <div className="qsec-foot">
                 <button className="qsec-add" onClick={addSection} disabled={locked}>
                   <PlusThinIcon />
-                  Add Section
+                  {t("Add Section")}
                 </button>
               </div>
             </div>
             <p className="form-help">
-              Drag to reorder. Each Section holds its own questions; what it
-              takes to pass one is set on Grading &amp; Completion.
+              {t("Drag to reorder. Each Section holds its own questions; what it takes to pass one is set on Grading & Completion.")}
             </p>
           </div>
         )}
@@ -2586,6 +2583,7 @@ function QuizStructureStep({
 }
 
 function QuizQuestionsStep({ data, update, host, missing }: StepProps & { host: QuestionHost }) {
+  const t = useDsText();
   const sectioned = data.structure === "sectioned";
   /* Card-table error (Figma 1570:3366): a blocked publish with no questions,
      or a random set drawing more than its pool, flags the label row and
@@ -2603,7 +2601,7 @@ function QuizQuestionsStep({ data, update, host, missing }: StepProps & { host: 
     groups
       .filter((g) => g.key !== key)
       .flatMap((g) => [...g.st.map((q) => q.id), ...g.po.flatMap((p) => p.questionIds)]);
-  const emptyError = <span className="form-label-error">Questions cannot be left empty</span>;
+  const emptyError = <span className="form-label-error">{t("Questions cannot be left empty")}</span>;
 
   const updateSection = (
     id: string,
@@ -2618,7 +2616,7 @@ function QuizQuestionsStep({ data, update, host, missing }: StepProps & { host: 
       {sectioned ? (
         data.sections.length === 0 ? (
           <p className="form-help">
-            Add at least one Section in the Structure step to configure questions.
+            {t("Add at least one Section in the Structure step to configure questions.")}
           </p>
         ) : (
           data.sections.map((s, i) => (
@@ -2648,7 +2646,7 @@ function QuizQuestionsStep({ data, update, host, missing }: StepProps & { host: 
       ) : (
         <div className="form-group">
           <label className="form-label">
-            Questions<span className="req">*</span>
+            {t("Questions")}<span className="req">*</span>
             {flagEmpty && bare(data.blockStatic, data.blockPools) ? (
               emptyError
             ) : (
@@ -2683,12 +2681,12 @@ function QuizQuestionsStep({ data, update, host, missing }: StepProps & { host: 
           `questionOrder` is "shuffled"; picking a shuffle option here sets both
           at once. */}
       <div className="form-group">
-        <label className="form-label">Question Order</label>
+        <label className="form-label">{t("Question Order")}</label>
         <div className="radio-card-group">
           <RadioCard
             selected={data.questionOrder === "fixed"}
             onSelect={() => update({ questionOrder: "fixed" })}
-            title="Fixed Order"
+            title={t("Fixed Order")}
             desc="Questions appear in the order they were set in."
           />
           {sectioned ? (
@@ -2698,14 +2696,14 @@ function QuizQuestionsStep({ data, update, host, missing }: StepProps & { host: 
                 onSelect={() =>
                   update({ questionOrder: "shuffled", shuffleScope: "within_section" })
                 }
-                title="Shuffle within Section"
-                desc="Questions within each Section are shuffled, but the Sections themselves appear in the configured order."
+                title={t("Shuffle within Section")}
+                desc={t("Questions within each Section are shuffled, but the Sections themselves appear in the configured order.")}
               />
               <RadioCard
                 selected={data.questionOrder === "shuffled" && data.shuffleScope === "all"}
                 onSelect={() => update({ questionOrder: "shuffled", shuffleScope: "all" })}
-                title="Shuffle All"
-                desc="All questions across all Sections are shuffled together. Sections lose their visual grouping for the learner."
+                title={t("Shuffle All")}
+                desc={t("All questions across all Sections are shuffled together. Sections lose their visual grouping for the learner.")}
               />
             </>
           ) : (
@@ -2718,11 +2716,7 @@ function QuizQuestionsStep({ data, update, host, missing }: StepProps & { host: 
           )}
         </div>
         <p className="form-help">
-          Random pool questions are already in an unpredictable order by nature —
-          the system draws them afresh on each attempt, so learners see them
-          differently even under Fixed Order. This setting mainly affects Static
-          questions, and where Static and random pool questions sit relative to
-          each other in the final list.
+          {t("Random pool questions are already in an unpredictable order by nature \u2014 the system draws them afresh on each attempt, so learners see them differently even under Fixed Order. This setting mainly affects Static questions, and where Static and random pool questions sit relative to each other in the final list.")}
         </p>
       </div>
     </>
@@ -2766,6 +2760,7 @@ function QuestionGroupEditor({
    * page may claim it, so sectioned quizzes leave it off. */
   shortcut?: boolean;
 }) {
+  const t = useDsText();
   // Which picker is open: adding statics, building a new random set, or
   // growing an existing pool via its ADD link.
   const [picker, setPicker] = useState<
@@ -3002,7 +2997,7 @@ function QuestionGroupEditor({
 
       {items.length === 0 && (
         <div className="qz-empty">
-          No Questions Added Yet
+          {t("No Questions Added Yet")}
         </div>
       )}
 
@@ -3022,7 +3017,7 @@ function QuestionGroupEditor({
                 >
                   <MoveIcon />
                 </button>
-                <span className="qz-ord">{label}</span>
+                <span className="qz-ord">{t(label)}</span>
               </span>
               <div className="qz-q">
                 <div className="qz-q-title">{q.text}</div>
@@ -3076,7 +3071,7 @@ function QuestionGroupEditor({
                 >
                   <MoveIcon />
                 </button>
-                <span className="qz-ord">{label}</span>
+                <span className="qz-ord">{t(label)}</span>
               </span>
               <div className="qz-pool-line">
                 <span>Pick</span>
@@ -3089,7 +3084,7 @@ function QuestionGroupEditor({
                     if (v === "" || /^\d+$/.test(v)) setDraw(p.id, v);
                   }}
                 />
-                <span>Questions Randomly from {size}</span>
+                <span>{t("Questions Randomly from")} {size}</span>
                 <button
                   className="qz-pool-add"
                   onClick={() => setPicker({ mode: "pool", poolId: p.id })}
@@ -3152,20 +3147,20 @@ function QuestionGroupEditor({
           aria-expanded={menuOpen}
         >
           <TreeAddIcon />
-          Add Questions
+          {t("Add Questions")}
         </button>
         {menuOpen && (
           <div className="u-menu qz-menu" role="menu">
             <button className="u-menu-item qz-menu-item" role="menuitem" onClick={openCreate}>
-              <span className="qz-menu-label">Create New Question</span>
+              <span className="qz-menu-label">{t("Create New Question")}</span>
               <span className="cta-kbd">C</span>
             </button>
             <button className="u-menu-item qz-menu-item" role="menuitem" onClick={openBank}>
-              <span className="qz-menu-label">Add from Question Bank</span>
+              <span className="qz-menu-label">{t("Add from Question Bank")}</span>
               <span className="cta-kbd">Q</span>
             </button>
             <button className="u-menu-item qz-menu-item" role="menuitem" onClick={openRandomSet}>
-              <span className="qz-menu-label">Add Random Set</span>
+              <span className="qz-menu-label">{t("Add Random Set")}</span>
               <span className="cta-kbd">R</span>
             </button>
           </div>
@@ -3232,6 +3227,7 @@ function QuestionGroupEditor({
 }
 
 function QuizCompletionStep(props: StepProps) {
+  const t = useDsText();
   const { touch, data, update, locked, missing } = props;
   const sectioned = data.structure === "sectioned";
   const sectionLevel = data.gradingModel === "section_level";
@@ -3250,7 +3246,7 @@ function QuizCompletionStep(props: StepProps) {
           they refer to is now the field two below. */}
       <div className="form-group" onBlur={leave(() => touch?.("completion"))}>
         <label className="form-label">
-          Completion Criteria<span className="req">*</span>
+          {t("Completion Criteria")}<span className="req">*</span>
         </label>
         <CompletionCriteriaGate {...gateOf(props)}>
           {/* No Completion Tracking leads, the way it does on every other Task
@@ -3260,13 +3256,13 @@ function QuizCompletionStep(props: StepProps) {
             <RadioCard
               selected={data.quizCompletion === "none"}
               onSelect={() => update({ quizCompletion: "none" })}
-              title="No Completion Tracking"
-              desc="The Quiz is never marked complete — useful for practice or ungraded checks."
+              title={t("No Completion Tracking")}
+              desc={t("The Quiz is never marked complete \u2014 useful for practice or ungraded checks.")}
             />
             <RadioCard
               selected={data.quizCompletion === "passing_grade"}
               onSelect={() => update({ quizCompletion: "passing_grade" })}
-              title="Passing Grade"
+              title={t("Passing Grade")}
               desc={
                 sectionLevel
                   ? "Completes when the learner has Section completion for every Section in the Quiz."
@@ -3284,14 +3280,14 @@ function QuizCompletionStep(props: StepProps) {
           full-step lock card the Structure step draws. */}
       <div className="form-group">
         <label className="form-label">
-          Grading Model<span className="req">*</span>
+          {t("Grading Model")}<span className="req">*</span>
         </label>
         <div className="radio-card-group">
           <RadioCard
             selected={!sectionLevel}
             onSelect={() => update({ gradingModel: "quiz_level" })}
             title="Quiz-level"
-            desc="One overall passing threshold for the whole Quiz."
+            desc={t("One overall passing threshold for the whole Quiz.")}
             disabled={locked}
           />
           <RadioCard
@@ -3308,8 +3304,7 @@ function QuizCompletionStep(props: StepProps) {
         </div>
         {locked && (
           <p className="form-help">
-            The grading model can't be changed after a Quiz is created — past
-            attempts can't be re-scored under a different model.
+            {t("The grading model can't be changed after a Quiz is created \u2014 past attempts can't be re-scored under a different model.")}
           </p>
         )}
       </div>
@@ -3324,10 +3319,10 @@ function QuizCompletionStep(props: StepProps) {
       {sectionLevel && (
         <div className="form-group" onBlur={leave(() => touch?.("passingPct"))}>
           <label className="form-label">
-            Section Pass Marks<span className="req">*</span>
+            {t("Section Pass Marks")}<span className="req">*</span>
             {missing?.has(REQUIRED_FIELD_KEYS.passingPct) &&
               data.sections.some((sec) => !sec.passingPct.trim()) && (
-                <span className="form-label-error">Section Pass Marks cannot be left empty</span>
+                <span className="form-label-error">{t("Section Pass Marks cannot be left empty")}</span>
               )}
           </label>
           <div
@@ -3350,7 +3345,7 @@ function QuizCompletionStep(props: StepProps) {
                      every other Section pass in that attempt. The old copy
                      ("has to pass this Section to complete the Quiz") described
                      a different, weaker rule. */
-                  title="If the learner fails a Section marked Must Pass, no Section completion is recorded from that attempt — not even for the Sections they passed."
+                  title={t("If the learner fails a Section marked Must Pass, no Section completion is recorded from that attempt — not even for the Sections they passed.")}
                 >
                   <InfoIcon14 />
                 </span>
@@ -3411,8 +3406,7 @@ function QuizCompletionStep(props: StepProps) {
             })}
           </div>
           <p className="form-help">
-            Sections are named and ordered on the Structure step. Enter a
-            percentage from 0-100.
+            {t("Sections are named and ordered on the Structure step. Enter a percentage from 0-100.")}
           </p>
         </div>
       )}
@@ -3420,9 +3414,9 @@ function QuizCompletionStep(props: StepProps) {
       {!sectionLevel && (
         <div className="form-group" onBlur={leave(() => touch?.("passingPct"))}>
           <label className="form-label">
-            Quiz Passing Percentage<span className="req">*</span>
+            {t("Quiz Passing Percentage")}<span className="req">*</span>
             {missing?.has(REQUIRED_FIELD_KEYS.passingPct) && (
-              <span className="form-label-error">Quiz Passing Percentage cannot be left empty</span>
+              <span className="form-label-error">{t("Quiz Passing Percentage cannot be left empty")}</span>
             )}
           </label>
           {/* No "% to pass" beside the box — the label names the unit and the
@@ -3435,7 +3429,7 @@ function QuizCompletionStep(props: StepProps) {
             value={data.quizPassingPct}
             onChange={(e) => setPct(e.target.value, (pct) => update({ quizPassingPct: pct }))}
           />
-          <p className="form-help">Enter a percentage from 0-100.</p>
+          <p className="form-help">{t("Enter a percentage from 0-100.")}</p>
         </div>
       )}
       </CompletionCriteriaGate>
@@ -3444,6 +3438,7 @@ function QuizCompletionStep(props: StepProps) {
 }
 
 function QuizAttemptsStep({ touch, data, update, missing }: StepProps) {
+  const t = useDsText();
   return (
     <>
       {/* How many attempts a learner gets and the gap between them. The clock
@@ -3452,11 +3447,11 @@ function QuizAttemptsStep({ touch, data, update, missing }: StepProps) {
       <MaxAttemptsField
         data={data}
         update={update}
-        help="How many times a learner can attempt this Quiz. Quiz-level. Admins can grant more later."
+        help={t("How many times a learner can attempt this Quiz. Quiz-level. Admins can grant more later.")}
       />
 
       <div className="form-group">
-        <label className="form-label">Cooldown Between Attempts</label>
+        <label className="form-label">{t("Cooldown Between Attempts")}</label>
         <div className="radio-card-group">
           <RadioCard
             selected={data.cooldownMode === "none"}
@@ -3492,9 +3487,9 @@ function QuizAttemptsStep({ touch, data, update, missing }: StepProps) {
       {data.cooldownMode !== "none" && (
         <div className="form-group" onBlur={leave(() => touch?.("cooldown"))}>
           <label className="form-label">
-            Set Cooldown in Minutes<span className="req">*</span>
+            {t("Set Cooldown in Minutes")}<span className="req">*</span>
             {missing?.has(REQUIRED_FIELD_KEYS.cooldown) && (
-              <span className="form-label-error">Cooldown in Minutes cannot be left empty</span>
+              <span className="form-label-error">{t("Cooldown in Minutes cannot be left empty")}</span>
             )}
           </label>
           <Stepper
@@ -3517,12 +3512,12 @@ function QuizAttemptsStep({ touch, data, update, missing }: StepProps) {
       {data.cooldownMode === "variable" && (
         <div className="form-group" onBlur={leave(() => touch?.("cooldownPairs"))}>
           <label className="form-label">
-            Cooldown Before Specific Attempts
+            {t("Cooldown Before Specific Attempts")}
             {missing?.has(REQUIRED_FIELD_KEYS.cooldownPairs) && (
               <span className="form-label-error">
                 {data.variableCooldowns.some((c) => !c.minutes.trim())
-                  ? "Every cooldown pair needs its minutes"
-                  : "Cooldown pairs can't go past Maximum Attempts"}
+                  ? t("Every cooldown pair needs its minutes")
+                  : t("Cooldown pairs can't go past Maximum Attempts")}
               </span>
             )}
           </label>
@@ -3541,6 +3536,7 @@ function QuizAttemptsStep({ touch, data, update, missing }: StepProps) {
 }
 
 function VariableCooldownEditor({ data, update, missing }: StepProps) {
+  const t = useDsText();
   // Read in attempt order, whatever order the pairs were added in.
   const rows = [...data.variableCooldowns].sort((a, b) => a.fromAttempt - b.fromAttempt);
   /* The pairs there are to set: "1 and 2" up to the last two attempts, or —
@@ -3585,7 +3581,7 @@ function VariableCooldownEditor({ data, update, missing }: StepProps) {
       {rows.length === 0 && (
         <div className="qsec-row">
           <span className="qsec-empty">
-            No Cooldown Pairs Added Yet
+            {t("No Cooldown Pairs Added Yet")}
           </span>
         </div>
       )}
@@ -3628,7 +3624,7 @@ function VariableCooldownEditor({ data, update, missing }: StepProps) {
       <div className="qsec-foot">
         <button className="qsec-add" onClick={add} disabled={freeFor(null).length === 0}>
           <PlusThinIcon />
-          Add Cooldown Pair
+          {t("Add Cooldown Pair")}
         </button>
       </div>
     </div>
@@ -3643,6 +3639,7 @@ function VariableCooldownEditor({ data, update, missing }: StepProps) {
    Mastery Skill picks its linked Skills: a Task name is the whole decision
    here, so a table picker was more chrome than the choice needs. */
 function AutoUnlockField({ touch, data, update, missing }: StepProps) {
+  const t = useDsText();
   /* Nothing to unlock when a learner already has every attempt they want, so
      the whole field goes inert under Unlimited. The stored `autoAttempts` is
      left alone rather than forced off — switching back to a limit restores
@@ -3670,7 +3667,7 @@ function AutoUnlockField({ touch, data, update, missing }: StepProps) {
   return (
     <>
       <div className="form-group">
-        <label className="form-label">Auto-Unlock Additional Attempts</label>
+        <label className="form-label">{t("Auto-Unlock Additional Attempts")}</label>
         <div className={`seg-control${noLimit ? " is-disabled" : ""}`}>
           <button
             type="button"
@@ -3679,7 +3676,7 @@ function AutoUnlockField({ touch, data, update, missing }: StepProps) {
             disabled={noLimit}
             onClick={() => update({ autoAttempts: false })}
           >
-            No: Don't Unlock Extra Attempts
+            {t("No: Don't Unlock Extra Attempts")}
           </button>
           <button
             type="button"
@@ -3688,23 +3685,23 @@ function AutoUnlockField({ touch, data, update, missing }: StepProps) {
             disabled={noLimit}
             onClick={() => update({ autoAttempts: true })}
           >
-            Yes: Unlock on Task Completion
+            {t("Yes: Unlock on Task Completion")}
           </button>
         </div>
         <p className="form-help">
           {noLimit
-            ? "Only for Quizzes with a limited number of attempts — set Maximum Attempts to a number to use this."
-            : "Automatically grant extra attempts once the learner completes specific Tasks. All trigger Tasks must complete to unlock; the extras stack with remaining and manually granted attempts."}
+            ? t("Only for Quizzes with a limited number of attempts \u2014 set Maximum Attempts to a number to use this.")
+            : t("Automatically grant extra attempts once the learner completes specific Tasks. All trigger Tasks must complete to unlock; the extras stack with remaining and manually granted attempts.")}
         </p>
       </div>
 
       {on && (
         <div className="form-group" onBlur={leave(() => touch?.("autoAttempts"))}>
           <label className="form-label">
-            Attempts to Unlock<span className="req">*</span>
+            {t("Attempts to Unlock")}<span className="req">*</span>
             {missing?.has(REQUIRED_FIELD_KEYS.autoAttempts) && (
               <span className="form-label-error">
-                {data.autoAttemptsCount.trim() ? "Unlock at least 1 attempt" : "Attempts to Unlock cannot be left empty"}
+                {data.autoAttemptsCount.trim() ? t("Unlock at least 1 attempt") : t("Attempts to Unlock cannot be left empty")}
               </span>
             )}
           </label>
@@ -3717,16 +3714,16 @@ function AutoUnlockField({ touch, data, update, missing }: StepProps) {
               if (v === "" || /^\d+$/.test(v)) update({ autoAttemptsCount: v });
             }}
           />
-          <p className="form-help">How many extra attempts the trigger Tasks grant.</p>
+          <p className="form-help">{t("How many extra attempts the trigger Tasks grant.")}</p>
         </div>
       )}
 
       {on && (
         <div className="form-group" onBlur={leave(() => touch?.("autoTriggers"))}>
           <label className="form-label">
-            Unlock After Completing All Of<span className="req">*</span>
+            {t("Unlock After Completing All Of")}<span className="req">*</span>
             {missing?.has(REQUIRED_FIELD_KEYS.autoTriggers) && (
-              <span className="form-label-error">Pick at least one Task to unlock on</span>
+              <span className="form-label-error">{t("Pick at least one Task to unlock on")}</span>
             )}
           </label>
           <MultiSelect
@@ -3739,13 +3736,11 @@ function AutoUnlockField({ touch, data, update, missing }: StepProps) {
                   .filter((t) => t.id),
               })
             }
-            placeholder="Select Tasks"
-            searchPlaceholder="Search Tasks..."
+            placeholder={t("Select Tasks")}
+            searchPlaceholder={t("Search Tasks...")}
           />
           <p className="form-help">
-            The learner must complete every selected Task before the extra
-            attempts are granted. Only Tasks with completion tracking appear
-            here — Tasks set to No Completion Tracking are never completed.
+            {t("The learner must complete every selected Task before the extra attempts are granted. Only Tasks with completion tracking appear here \u2014 Tasks set to No Completion Tracking are never completed.")}
           </p>
         </div>
       )}
@@ -3754,13 +3749,14 @@ function AutoUnlockField({ touch, data, update, missing }: StepProps) {
 }
 
 function QuizIntegrityStep({ touch, data, update, missing }: StepProps) {
+  const t = useDsText();
   return (
     <>
       {/* A seg-control rather than a toggle (standalone yes/no fields moved onto
           seg-controls), and the minutes get their own labelled field instead of
           a suffixed input tucked under the switch. */}
       <div className="form-group">
-        <label className="form-label">Time Limit</label>
+        <label className="form-label">{t("Time Limit")}</label>
         <div className="seg-control">
           <button
             type="button"
@@ -3768,7 +3764,7 @@ function QuizIntegrityStep({ touch, data, update, missing }: StepProps) {
             aria-pressed={!data.timeLimitOn}
             onClick={() => update({ timeLimitOn: false })}
           >
-            No: Untimed
+            {t("No: Untimed")}
           </button>
           <button
             type="button"
@@ -3776,7 +3772,7 @@ function QuizIntegrityStep({ touch, data, update, missing }: StepProps) {
             aria-pressed={data.timeLimitOn}
             onClick={() => update({ timeLimitOn: true })}
           >
-            Yes: Timed Attempts
+            {t("Yes: Timed Attempts")}
           </button>
         </div>
         <p className="form-help">
@@ -3788,9 +3784,9 @@ function QuizIntegrityStep({ touch, data, update, missing }: StepProps) {
       {data.timeLimitOn && (
         <div className="form-group" onBlur={leave(() => touch?.("timeLimit"))}>
           <label className="form-label">
-            Set Time in Minutes<span className="req">*</span>
+            {t("Set Time in Minutes")}<span className="req">*</span>
             {missing?.has(REQUIRED_FIELD_KEYS.timeLimit) && (
-              <span className="form-label-error">Time in Minutes cannot be left empty</span>
+              <span className="form-label-error">{t("Time in Minutes cannot be left empty")}</span>
             )}
           </label>
           <Stepper
@@ -3802,12 +3798,12 @@ function QuizIntegrityStep({ touch, data, update, missing }: StepProps) {
               if (v === "" || /^\d+$/.test(v)) update({ timeLimitMinutes: v });
             }}
           />
-          <p className="form-help">How long a learner has to finish one attempt.</p>
+          <p className="form-help">{t("How long a learner has to finish one attempt.")}</p>
         </div>
       )}
 
       <div className="form-group">
-        <label className="form-label">Proctoring</label>
+        <label className="form-label">{t("Proctoring")}</label>
         <div className="seg-control">
           <button
             type="button"
@@ -3815,7 +3811,7 @@ function QuizIntegrityStep({ touch, data, update, missing }: StepProps) {
             aria-pressed={!data.proctoring}
             onClick={() => update({ proctoring: false })}
           >
-            No: Proctoring Not Required
+            {t("No: Proctoring Not Required")}
           </button>
           <button
             type="button"
@@ -3823,18 +3819,16 @@ function QuizIntegrityStep({ touch, data, update, missing }: StepProps) {
             aria-pressed={data.proctoring}
             onClick={() => update({ proctoring: true })}
           >
-            Yes: Proctoring Required
+            {t("Yes: Proctoring Required")}
           </button>
         </div>
         <p className="form-help">
-          Quiz-level — capture frequency is a system-level setting and isn't
-          configured here. Passing attempts enter In-Review until the Proctoring
-          Team approves the footage; completion isn't recorded until then.
+          {t("Quiz-level \u2014 capture frequency is a system-level setting and isn't configured here. Passing attempts enter In-Review until the Proctoring Team approves the footage; completion isn't recorded until then.")}
         </p>
       </div>
 
       <div className="form-group">
-        <label className="form-label">In-Quiz Resources</label>
+        <label className="form-label">{t("In-Quiz Resources")}</label>
         <ResourceEditor data={data} update={update} />
         <p className="form-help">
           Materials a learner can open throughout the attempt — e.g. EPA PT
@@ -3865,6 +3859,7 @@ const EXISTING_QUIZ_RESOURCES: { name: string; ext: string; size: number }[] = [
    portalled: the Questions step anchors `.qz-menu` the same way, and nothing
    on this step clips them. */
 function ResourceEditor({ data, update }: StepProps) {
+  const t = useDsText();
   const rows = data.inQuizResources;
   const wrapRef = useRef<HTMLDivElement | null>(null);
   /** `null` = closed, `menu` = the two-item chooser, `existing` = the 774:1298
@@ -3959,7 +3954,7 @@ function ResourceEditor({ data, update }: StepProps) {
           onClick={() => setPanel((p) => (p ? null : "menu"))}
         >
           <TreeAddIcon />
-          Add Resource
+          {t("Add Resource")}
         </button>
 
         {panel === "menu" && (
@@ -3972,14 +3967,14 @@ function ResourceEditor({ data, update }: StepProps) {
                 setUploadOpen(true);
               }}
             >
-              Upload New File
+              {t("Upload New File")}
             </button>
             <button
               className="u-menu-item res-menu-item"
               role="menuitem"
               onClick={() => setPanel("existing")}
             >
-              Select from Existing Resources
+              {t("Select from Existing Resources")}
             </button>
           </div>
         )}
@@ -4021,6 +4016,7 @@ function ExistingResourcePicker({
   chosen: string[];
   onAdd: (names: string[]) => void;
 }) {
+  const t = useDsText();
   const [sel, setSel] = useState<string[]>([]);
   const toggle = (name: string) =>
     setSel((s) => (s.includes(name) ? s.filter((n) => n !== name) : [...s, name]));
@@ -4047,7 +4043,7 @@ function ExistingResourcePicker({
           disabled={sel.length === 0}
           onClick={() => onAdd(sel)}
         >
-          Add Resource
+          {t("Add Resource")}
         </button>
       </div>
     </div>
@@ -4066,6 +4062,7 @@ function ResourceUploadModal({
   onClose: () => void;
   onAdd: (files: UploadedFile[]) => void;
 }) {
+  const t = useDsText();
   const [staged, setStaged] = useState<UploadedFile[]>([]);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -4088,7 +4085,7 @@ function ResourceUploadModal({
   return (
     <PrmModal
       className="qbu qbu--pick"
-      title="Upload New File"
+      title={t("Upload New File")}
       description="Add a file learners can open throughout the attempt"
       confirmLabel={
         staged.length === 0
@@ -4126,8 +4123,7 @@ function ResourceUploadModal({
         <span className="drop-big-icon"><UploadTrayIcon /></span>
         <div className="drop-big-title">Drag and drop, or click to upload</div>
         <div className="drop-big-hint">
-          PDFs, charts, spreadsheets and images · Learners can open these at any
-          point during an attempt
+          {t("PDFs, charts, spreadsheets and images \u00b7 Learners can open these at any point during an attempt")}
         </div>
       </div>
 
@@ -4171,6 +4167,7 @@ function ResourceUploadModal({
 }
 
 function QuizReviewStep({ data, update }: StepProps) {
+  const t = useDsText();
   const sectioned = data.structure === "sectioned";
   const quizLevel = data.gradingModel === "quiz_level";
   const r = data.review;
@@ -4268,8 +4265,8 @@ function QuizReviewStep({ data, update }: StepProps) {
           className={`qsec-row${row.disabled ? " is-disabled" : ""}`}
         >
           <span className="qsec-revtext">
-            <span className="qsec-revname">{row.label}</span>
-            <span className="qsec-revsub">{row.sub}</span>
+            <span className="qsec-revname">{t(row.label)}</span>
+            <span className="qsec-revsub">{t(row.sub)}</span>
           </span>
           <span className="qsec-shown">
             <button
@@ -4290,6 +4287,7 @@ function QuizReviewStep({ data, update }: StepProps) {
 }
 
 function QuizPaymentsStep({ touch, data, update, missing }: StepProps) {
+  const t = useDsText();
   return (
     <>
       {/* Three sibling fields rather than one Toggle with everything nested
@@ -4297,7 +4295,7 @@ function QuizPaymentsStep({ touch, data, update, missing }: StepProps) {
           the store IDs themselves are three separate decisions. The last two
           only exist once the paywall is on. */}
       <div className="form-group">
-        <label className="form-label">Quiz Attempts Paywall</label>
+        <label className="form-label">{t("Quiz Attempts Paywall")}</label>
         <div className="seg-control">
           <button
             type="button"
@@ -4305,7 +4303,7 @@ function QuizPaymentsStep({ touch, data, update, missing }: StepProps) {
             aria-pressed={!data.paywallOn}
             onClick={() => update({ paywallOn: false })}
           >
-            No: Attempts Are Free
+            {t("No: Attempts Are Free")}
           </button>
           <button
             type="button"
@@ -4313,10 +4311,10 @@ function QuizPaymentsStep({ touch, data, update, missing }: StepProps) {
             aria-pressed={data.paywallOn}
             onClick={() => update({ paywallOn: true })}
           >
-            Yes: Attempts Are Charged
+            {t("Yes: Attempts Are Charged")}
           </button>
         </div>
-        <p className="form-help">Whether learners are charged to attempt this Quiz.</p>
+        <p className="form-help">{t("Whether learners are charged to attempt this Quiz.")}</p>
       </div>
 
       {data.paywallOn && <PaywallStructureField data={data} update={update} />}
@@ -4325,7 +4323,7 @@ function QuizPaymentsStep({ touch, data, update, missing }: StepProps) {
       )}
 
       <div className="form-group">
-        <label className="form-label">Requires NATE Integration</label>
+        <label className="form-label">{t("Requires NATE Integration")}</label>
         <div className="seg-control">
           <button
             type="button"
@@ -4333,7 +4331,7 @@ function QuizPaymentsStep({ touch, data, update, missing }: StepProps) {
             aria-pressed={!data.nateExam}
             onClick={() => update({ nateExam: false })}
           >
-            No: Not a NATE Exam
+            {t("No: Not a NATE Exam")}
           </button>
           <button
             type="button"
@@ -4341,12 +4339,11 @@ function QuizPaymentsStep({ touch, data, update, missing }: StepProps) {
             aria-pressed={data.nateExam}
             onClick={() => update({ nateExam: true })}
           >
-            Yes: This is a NATE Exam
+            {t("Yes: This is a NATE Exam")}
           </button>
         </div>
         <p className="form-help">
-          Flag this Quiz as a NATE exam to trigger NATE-specific behaviour. The
-          External IDs are sent when communicating with NATE's API.
+          {t("Flag this Quiz as a NATE exam to trigger NATE-specific behaviour. The External IDs are sent when communicating with NATE's API.")}
         </p>
       </div>
 
@@ -4358,29 +4355,29 @@ function QuizPaymentsStep({ touch, data, update, missing }: StepProps) {
         <div className="form-row-2">
           <div className="form-group" onBlur={leave(() => touch?.("nateId"))}>
             <label className="form-label">
-              External ID (English)<span className="req">*</span>
+              {t("External ID (English)")}<span className="req">*</span>
               {missing?.has("nateId") && !data.nateIdEn.trim() && (
-                <span className="form-label-error">Required when NATE Exam is enabled.</span>
+                <span className="form-label-error">{t("Required when NATE Exam is enabled.")}</span>
               )}
             </label>
             <input
               className={`form-input${missing?.has("nateId") && !data.nateIdEn.trim() ? " has-error" : ""}`}
               value={data.nateIdEn}
-              placeholder="NATE-assigned exam ID (EN)"
+              placeholder={t("NATE-assigned exam ID (EN)")}
               onChange={(e) => update({ nateIdEn: e.target.value })}
             />
           </div>
           <div className="form-group" onBlur={leave(() => touch?.("nateId"))}>
             <label className="form-label">
-              External ID (Spanish)<span className="req">*</span>
+              {t("External ID (Spanish)")}<span className="req">*</span>
               {missing?.has("nateId") && !data.nateIdEs.trim() && (
-                <span className="form-label-error">Required when NATE Exam is enabled.</span>
+                <span className="form-label-error">{t("Required when NATE Exam is enabled.")}</span>
               )}
             </label>
             <input
               className={`form-input${missing?.has("nateId") && !data.nateIdEs.trim() ? " has-error" : ""}`}
               value={data.nateIdEs}
-              placeholder="NATE-assigned exam ID (ES)"
+              placeholder={t("NATE-assigned exam ID (ES)")}
               onChange={(e) => update({ nateIdEs: e.target.value })}
             />
           </div>
@@ -4391,11 +4388,12 @@ function QuizPaymentsStep({ touch, data, update, missing }: StepProps) {
 }
 
 function PaywallStructureField({ data, update }: StepProps) {
+  const t = useDsText();
   const perAttempt = data.paywallMode === "per_attempt";
 
   return (
     <div className="form-group">
-      <label className="form-label">Paywall Structure</label>
+      <label className="form-label">{t("Paywall Structure")}</label>
       <div className="radio-card-group">
         <RadioCard
           selected={!perAttempt}
@@ -4417,6 +4415,7 @@ function PaywallStructureField({ data, update }: StepProps) {
 /* The store IDs themselves. Which shape they take follows Paywall Structure:
    one column for a single price, the attempt matrix for per-attempt pricing. */
 function PaywallPriceIdsField({ touch, data, update, missing }: StepProps) {
+  const t = useDsText();
   const flagEmpty = !!missing?.has(REQUIRED_FIELD_KEYS.priceIds);
   /* Figma 1506:1342: the label row names the FIRST empty ID ("Apple Price ID
      cannot be empty") and every empty input reddens. The matrix adds which
@@ -4439,7 +4438,7 @@ function PaywallPriceIdsField({ touch, data, update, missing }: StepProps) {
   return (
     <div className="form-group" onBlur={leave(() => touch?.("priceIds"))}>
       <label className="form-label">
-        Product/Price IDs<span className="req">*</span>
+        {t("Product/Price IDs")}<span className="req">*</span>
         {flagEmpty && firstEmpty && (
           <span className="form-label-error">{firstEmpty} cannot be empty</span>
         )}
@@ -4453,7 +4452,7 @@ function PaywallPriceIdsField({ touch, data, update, missing }: StepProps) {
           flagEmpty={flagEmpty}
         />
       )}
-      <p className="form-help">Enter the Product IDs from the respective stores.</p>
+      <p className="form-help">{t("Enter the Product IDs from the respective stores.")}</p>
     </div>
   );
 }
@@ -4505,11 +4504,12 @@ function PerAttemptPrices({ data, update, flagEmpty }: StepProps & { flagEmpty?:
 /* The one Name field every Task wizard uses (Quiz included — it used to carry
    its own "Quiz name" label/placeholders). Dual-language, EN Name / ES Nombre. */
 function NameField({ touch, data, update, nameError }: StepProps) {
+  const t = useDsText();
   return (
     <div className="form-group" onBlur={leave(() => touch?.("name"))}>
       <label className="form-label">
-        Name<span className="req">*</span>
-        {nameError && <span className="form-label-error">Enter a name to publish.</span>}
+        {t("Name")}<span className="req">*</span>
+        {nameError && <span className="form-label-error">{t("Enter a name to publish.")}</span>}
         <LimitError max={NAME_MAX} values={[data.nameEn, data.nameEs]} />
       </label>
       <LangField
@@ -4552,9 +4552,10 @@ function NameAndDescription({ touch, data, update, nameError }: StepProps) {
 }
 
 function TimeToCompleteField({ data, update }: StepProps) {
+  const t = useDsText();
   return (
     <div className="form-group">
-      <label className="form-label">Time to Complete</label>
+      <label className="form-label">{t("Time to Complete")}</label>
       <TimeField
         value={data.timeValue}
         unit={TIME_UNIT_LABEL[data.timeUnit]}
@@ -4563,7 +4564,7 @@ function TimeToCompleteField({ data, update }: StepProps) {
         onUnitChange={(v) => update({ timeUnit: TIME_UNIT_BY_LABEL[v] })}
       />
       <p className="form-help">
-        Estimated time required for the user to complete the Task
+        {t("Estimated time required for the user to complete the Task")}
       </p>
     </div>
   );
@@ -4587,12 +4588,13 @@ function MaxAttemptsField({
   update,
   help,
 }: Pick<StepProps, "data" | "update"> & { help: string }) {
+  const t = useDsText();
   const value =
     data.maxAttemptsMode === "unlimited" ? MAX_ATTEMPTS_UNLIMITED : data.maxAttempts;
 
   return (
     <div className="form-group">
-      <label className="form-label">Maximum Attempts</label>
+      <label className="form-label">{t("Maximum Attempts")}</label>
       <SelectField
         className="select-field--full"
         value={value}
@@ -4605,7 +4607,7 @@ function MaxAttemptsField({
           )
         }
       />
-      <p className="form-help">{help}</p>
+      <p className="form-help">{t(help)}</p>
     </div>
   );
 }
@@ -4616,35 +4618,34 @@ function MaxAttemptsField({
    "Requires Subscription" tag reads. A two-card radio field; neither card is
    selected until the admin picks one. */
 function SubscriptionAccessField({ touch, data, update, missing }: StepProps) {
+  const t = useDsText();
   // No default — the field stays unanswered until the admin picks one.
   const requires = data.requiresSubscription;
   const flagged = !!missing?.has(REQUIRED_FIELD_KEYS.subscription);
   return (
     <div className="form-group" onBlur={leave(() => touch?.("subscription"))}>
       <label className="form-label">
-        Requires a Subscription to Access this Task?<span className="req">*</span>
+        {t("Requires a Subscription to Access this Task?")}<span className="req">*</span>
         {flagged && (
-          <span className="form-label-error">Choose whether this Task requires a subscription to publish.</span>
+          <span className="form-label-error">{t("Choose whether this Task requires a subscription to publish.")}</span>
         )}
       </label>
       <div className="radio-card-group">
         <RadioCard
           selected={requires === false}
           onSelect={() => update({ requiresSubscription: false })}
-          title="No: Can Access on Free Trial"
-          desc="Free Trial users can open and complete this Task without subscribing."
+          title={t("No: Can Access on Free Trial")}
+          desc={t("Free Trial users can open and complete this Task without subscribing.")}
         />
         <RadioCard
           selected={requires === true}
           onSelect={() => update({ requiresSubscription: true })}
-          title="Yes: Requires Subscription"
-          desc="Only subscribers can open this Task. Free Trial users are prompted to subscribe."
+          title={t("Yes: Requires Subscription")}
+          desc={t("Only subscribers can open this Task. Free Trial users are prompted to subscribe.")}
         />
       </div>
       <p className="form-help">
-        Tasks that complete a Certification should have this
-        setting enabled. This is to prevent users from completing Certifications
-        without subscribing.
+        {t("Tasks that complete a Certification should have this setting enabled. This is to prevent users from completing Certifications without subscribing.")}
       </p>
     </div>
   );
@@ -4654,12 +4655,13 @@ function SubscriptionAccessField({ touch, data, update, missing }: StepProps) {
    single-select rather than its own wizard page. Hidden takes the neutral
    active pill (Figma 359:2373); Visible takes the accent one (639:895). */
 function VisibilityField({ data, update }: StepProps) {
+  const t = useDsText();
   /* A Task in an Access Restriction chain can't be hidden — the same rule the
      Tasks list's Hide applies. */
   const restricted = !!useContext(EditingTaskContext)?.accessRestricted;
   return (
     <div className="form-group">
-      <label className="form-label">Visibility</label>
+      <label className="form-label">{t("Visibility")}</label>
       <div className="seg-control">
         <button
           type="button"
@@ -4681,8 +4683,8 @@ function VisibilityField({ data, update }: StepProps) {
       </div>
       <p className="form-help">
         {restricted
-          ? "This Task is part of an Access Restriction chain, so it can't be hidden. Remove it from the chain first."
-          : "Hiding a Task temporarily removes it from Certifications"}
+          ? t("This Task is part of an Access Restriction chain, so it can't be hidden. Remove it from the chain first.")
+          : t("Hiding a Task temporarily removes it from Certifications")}
       </p>
     </div>
   );
@@ -4701,6 +4703,7 @@ function RadioCard({
   desc?: string;
   disabled?: boolean;
 }) {
+  const t = useDsText();
   return (
     <button
       type="button"
@@ -4710,8 +4713,8 @@ function RadioCard({
     >
       <span className="radio-dot" />
       <div className="radio-card-text">
-        <div className="radio-card-title">{title}</div>
-        {desc && <div className="radio-card-desc">{desc}</div>}
+        <div className="radio-card-title">{typeof title === "string" ? t(title) : title}</div>
+        {desc && <div className="radio-card-desc">{t(desc)}</div>}
       </div>
     </button>
   );
@@ -4886,6 +4889,7 @@ function BigDropZone({
   maxSize?: string;
   multiple?: boolean;
 }) {
+  const t = useDsText();
   return (
     <FilePicker onPick={onAdd} multiple={multiple}>
       {(open) => (
@@ -4895,8 +4899,8 @@ function BigDropZone({
           </span>
           <div className="drop-big-title">Drag and drop, or click to upload</div>
           <div className="drop-big-hint">
-            <div>Accepted File Types: {accept}</div>
-            <div>Maximum File Size: {maxSize}</div>
+            <div>{t("Accepted File Types:")} {accept}</div>
+            <div>{t("Maximum File Size:")} {maxSize}</div>
           </div>
         </button>
       )}

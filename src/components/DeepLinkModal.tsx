@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useMemo, useState } from "react";
 import { CAREER_STAGES, useLiveCerts, type Certification } from "../data/certifications";
 import { SYSTEM_DEEP_LINKS, certDeepLink } from "../data/deepLinks";
@@ -86,6 +87,7 @@ export function DeepLinkModal({
   /** The picked link, with its scheme, ready to use as the button's URL. */
   onPick: (url: string) => void;
 }) {
+  const t = useDsText();
   // The live list: Certifications created, renamed or re-slugged this session.
   const certifications = useLiveCerts();
   const [tab, setTab] = useState<Tab>("cert");
@@ -162,7 +164,7 @@ export function DeepLinkModal({
 
   return (
     <PrmModal
-      title="Find a Deep Link"
+      title={t("Find a Deep Link")}
       description="Pick where the Spotlight's button takes the user in the app."
       pickFull
       hideFooter
@@ -171,13 +173,13 @@ export function DeepLinkModal({
     >
       <div className="stm">
         <div className="tabbar srq-tabs">
-          {TABS.map((t) => (
+          {TABS.map((tb) => (
             <button
-              key={t.key}
-              className={`tab ${tab === t.key ? "is-active" : ""}`}
-              onClick={() => switchTab(t.key)}
+              key={tb.key}
+              className={`tab ${tab === tb.key ? "is-active" : ""}`}
+              onClick={() => switchTab(tb.key)}
             >
-              {t.label}
+              {t(tb.label)}
             </button>
           ))}
         </div>
@@ -207,7 +209,7 @@ export function DeepLinkModal({
               </span>
               <input
                 className="search-input"
-                placeholder="Search System Deep Links..."
+                placeholder={t("Search System Deep Links...")}
                 autoFocus
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -226,9 +228,9 @@ export function DeepLinkModal({
                   <Th label={cols.name} active={sort.key === "name"} dir={sort.dir} onClick={() => toggleSort("name")} />
                   <Th label={cols.extra} active={sort.key === "extra"} dir={sort.dir} onClick={() => toggleSort("extra")} />
                   {isCert && (
-                    <Th label="Career Stage" active={sort.key === "stage"} dir={sort.dir} onClick={() => toggleSort("stage")} />
+                    <Th label={t("Career Stage")} active={sort.key === "stage"} dir={sort.dir} onClick={() => toggleSort("stage")} />
                   )}
-                  <th className="no-sort">Deep Link</th>
+                  <th className="no-sort">{t("Deep Link")}</th>
                   <th className="col-actions no-sort" />
                 </tr>
               </thead>
@@ -265,7 +267,7 @@ export function DeepLinkModal({
                               pick(r);
                             }}
                           >
-                            Select Deep Link
+                            {t("Select Deep Link")}
                             <RowChevronIcon />
                           </button>
                         </div>
@@ -311,10 +313,11 @@ export function DeepLinkModal({
 const orDash = (v?: string) => (v ? v : "—");
 
 function Th({ label, active, dir, onClick }: { label: string; active: boolean; dir: SortDir; onClick: () => void }) {
+  const t = useDsText();
   return (
     <th onClick={onClick}>
       <span className="th-content">
-        {label}
+        {t(label)}
         <SortIcon active={active} dir={active ? dir : undefined} />
       </span>
     </th>

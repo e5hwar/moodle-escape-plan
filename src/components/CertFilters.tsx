@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useMemo } from "react";
 import { Dropdown } from "./Dropdown";
 import { FILTER_TIPS } from "../data/filterTips";
@@ -101,6 +102,7 @@ type Props = {
 };
 
 export function CertFilters({ filters, setFilters }: Props) {
+  const t = useDsText();
   // Setup lives under More Filters like Visibility and Tags, so it counts there.
   const moreCount =
     filters.visibilities.length +
@@ -158,8 +160,8 @@ export function CertFilters({ filters, setFilters }: Props) {
       />
       {hasFilters && (
         <button className="filter-clear-link" onClick={clearAll}>
-          Clear Filters
-        </button>
+{t("Clear Filters")}
+</button>
       )}
     </div>
   );
@@ -183,6 +185,7 @@ export function IndustryPill({
   onApply: (v: string[]) => void;
   tip?: string;
 }) {
+  const t = useDsText();
   const inds = useLiveIndustries();
   const INDUSTRY_OPTIONS = useMemo(() => industryTagOptions(inds).map((o) => o.label), [inds]);
   const summary = summarize(value, INDUSTRY_OPTIONS);
@@ -209,7 +212,7 @@ export function IndustryPill({
             close();
           }}
           searchable
-          searchPlaceholder="Search Industries/Sub-Industries..."
+          searchPlaceholder={t("Search Industries/Sub-Industries...")}
         />
       )}
     </Dropdown>
@@ -227,6 +230,7 @@ export function CareerStagePill({
   onApply: (v: string[]) => void;
   tip?: string;
 }) {
+  const t = useDsText();
   const all = [...CAREER_STAGES, NO_CAREER_STAGE];
   const summary = summarize(value, all);
   return (
@@ -234,7 +238,7 @@ export function CareerStagePill({
       width={240}
       trigger={({ open, toggle }) => (
         <PillTrigger
-          label="Career Stage"
+          label={t("Career Stage")}
           value={summary}
           open={open}
           toggle={toggle}
@@ -316,13 +320,14 @@ function MoreFiltersPill({
   count: number;
   onApply: (v: MoreFilters) => void;
 }) {
+  const t = useDsText();
   const summary = count > 0 ? `${count} Active` : null;
   return (
     <Dropdown
       width={260}
       trigger={({ open, toggle }) => (
         <PillTrigger
-          label="More Filters"
+          label={t("More Filters")}
           value={summary}
           open={open}
           toggle={toggle}

@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useMemo, useState } from "react";
 import {
   reviewSubmissions as seed,
@@ -246,6 +247,7 @@ export function ReviewHandsOnPage({
    *  on to another submission — the URL follows without a new history entry. */
   onOpenSubmission?: (id: string | null, replace?: boolean) => void;
 } = {}) {
+  const t = useDsText();
   const [rows] = useState<TaskSubmission[]>(() =>
     extraSubmissions?.length ? [...extraSubmissions, ...seed] : seed,
   );
@@ -484,7 +486,7 @@ export function ReviewHandsOnPage({
         <div className="tasks">
           <header className="tasks-header">
             <div>
-              <h1 className="tasks-title">Hands-On Task Submissions</h1>
+              <h1 className="tasks-title">{t("Hands-On Task Submissions")}</h1>
             </div>
           </header>
 
@@ -528,17 +530,17 @@ export function ReviewHandsOnPage({
                   value={tasks}
                   onApply={setTasks}
                   searchable
-                  searchPlaceholder="Search Tasks..."
+                  searchPlaceholder={t("Search Tasks...")}
                   width={300}
                   tip={FILTER_TIPS.handsOn.task}
                 />
                 <MultiPill
-                  label="Parent Certification"
+                  label={t("Parent Certification")}
                   all={certNames}
                   value={certs}
                   onApply={setCerts}
                   searchable
-                  searchPlaceholder="Search Certifications..."
+                  searchPlaceholder={t("Search Certifications...")}
                   width={300}
                   tip={FILTER_TIPS.handsOn.parentCertification}
                 />
@@ -553,8 +555,8 @@ export function ReviewHandsOnPage({
                 />
                 {hasFilters && (
                   <button className="filter-clear-link" onClick={clearFilters}>
-                    Clear Filters
-                  </button>
+{t("Clear Filters")}
+</button>
                 )}
               </div>
 
@@ -609,7 +611,7 @@ export function ReviewHandsOnPage({
                         <td className="col-actions">
                           <button
                             className="row-action-btn lone-dots row-chevron"
-                            aria-label="Review Task"
+                            aria-label={t("Review Task")}
                             onClick={(e) => { e.stopPropagation(); openReview(s.id); }}
                           >
                             <RowChevronIcon />
@@ -619,7 +621,7 @@ export function ReviewHandsOnPage({
                               className="row-action-btn row-action-btn--label"
                               onClick={(e) => { e.stopPropagation(); openReview(s.id); }}
                             >
-                              Review Task
+                              {t("Review Task")}
                               <RowChevronIcon />
                             </button>
                           </div>
@@ -663,6 +665,7 @@ function RunCards({
   pending: TaskSubmission[];
   onPick: (k: RunKey) => void;
 }) {
+  const t = useDsText();
   const runs = [
     ...recents.map((k) => ({ k, recent: true })),
     ...suggested.map((k) => ({ k, recent: false })),
@@ -673,7 +676,7 @@ function RunCards({
         <ReviewRunCard
           key={runId(k)}
           count={pending.filter((s) => inRun(s, k)).length}
-          values={k.kind === "all" ? ["All Tasks"] : k.values}
+          values={k.kind === "all" ? [t("All Tasks")] : k.values}
           sub={RUN_SUBTITLE[k.kind]}
           recent={recent}
           onClick={() => onPick(k)}
@@ -704,6 +707,7 @@ function MoreFiltersPill({
   onCompaniesChange: (v: string[]) => void;
   companyNames: string[];
 }) {
+  const t = useDsText();
   const count = types.length + companies.length;
   const value = useMemo(
     () => ({ types, companies }),
@@ -718,7 +722,7 @@ function MoreFiltersPill({
       align="right"
       trigger={({ open, toggle }) => (
         <PillTrigger
-          label="More Filters"
+          label={t("More Filters")}
           value={count > 0 ? `${count} Active` : null}
           open={open}
           toggle={toggle}
@@ -767,10 +771,11 @@ function SortableHeader({
   toggle: (k: SortKey) => void;
   sortable?: boolean;
 }) {
+  const t = useDsText();
   if (!sortable) {
     return (
       <th className={`${className ?? ""} no-sort`.trim()}>
-        <span className="th-content">{label}</span>
+        <span className="th-content">{t(label)}</span>
       </th>
     );
   }
@@ -778,7 +783,7 @@ function SortableHeader({
   return (
     <th className={className} onClick={() => toggle(col)}>
       <span className="th-content">
-        {label}
+        {t(label)}
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>

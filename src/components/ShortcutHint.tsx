@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { createPortal } from "react-dom";
 import { useHoverCard } from "../hooks/useHoverCard";
 
@@ -21,6 +22,7 @@ export function ShortcutHint({
   keyIcon?: React.ReactNode;
   children: React.ReactNode;
 }) {
+  const t = useDsText();
   // Flips above anything in the lower third of the window — these hints hang
   // off footer controls, where there's never room below.
   const { anchorRef, pos, open, close, hold } = useHoverCard({
@@ -52,7 +54,7 @@ export function ShortcutHint({
             onMouseEnter={hold}
             onMouseLeave={close}
           >
-            <span className="ksh-label">{label}</span>
+            <span className="ksh-label">{t(label)}</span>
             <span className={`ksh-key ${keyIcon ? "ksh-key--icon" : ""}`}>
               {keyIcon ?? keyLabel}
             </span>

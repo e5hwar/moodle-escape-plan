@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useMemo, useState } from "react";
 import {
   questions as QUESTION_BANK,
@@ -143,6 +144,7 @@ export function SelectQuestionsModal({
   onCancel: () => void;
   onConfirm: (ids: string[]) => void;
 }) {
+  const t = useDsText();
   const [query, setQuery] = useState("");
   const [types, setTypes] = useState<string[]>([]);
   const [cats, setCats] = useState<string[]>([]);
@@ -325,7 +327,7 @@ export function SelectQuestionsModal({
             ? "Only Active questions with grading enabled are shown here. Questions join the Quiz in the order you pick them"
             : "Every Active question in the Bank is shown here. Questions join the form in the order you pick them"
       }
-      confirmLabel="Add Questions"
+      confirmLabel={t("Add Questions")}
       confirmDisabled={picked.length === 0}
       pickFull
       onCancel={onCancel}
@@ -368,11 +370,11 @@ export function SelectQuestionsModal({
               onApply={resetPage(setCats)}
               /* The Bank's 300px: leaf names only, no "· parent" clause. */
               width={300}
-              searchPlaceholder="Search Categories..."
+              searchPlaceholder={t("Search Categories...")}
               labels={catLabels}
             />
             <FilterPill
-              label="Question Type"
+              label={t("Question Type")}
               tip={FILTER_TIPS.questionPicker.type}
               options={typeOptions}
               value={types}
@@ -423,9 +425,9 @@ export function SelectQuestionsModal({
                     </button>
                   </th>
                   <Th col="question" label="Question" cls="sqm-col-question" sort={sort} toggle={toggleSort} />
-                  <Th col="type" label="Question Type" cls="sqm-col-type" sort={sort} toggle={toggleSort} />
+                  <Th col="type" label={t("Question Type")} cls="sqm-col-type" sort={sort} toggle={toggleSort} />
                   <Th col="category" label="Category" cls="sqm-col-cat" sort={sort} toggle={toggleSort} />
-                  <Th col="dateModified" label="Edited On" cls="sqm-col-edited" sort={sort} toggle={toggleSort} />
+                  <Th col="dateModified" label={t("Edited On")} cls="sqm-col-edited" sort={sort} toggle={toggleSort} />
                   <th className="col-actions no-sort" />
                 </tr>
               </thead>
@@ -572,9 +574,10 @@ function QuestionPreviewModal({
   question: Question;
   onClose: () => void;
 }) {
+  const t = useDsText();
   return (
     <PrmModal
-      title="Question Preview"
+      title={t("Question Preview")}
       description={`${question.type} · ${categoryOf(question)}`}
       confirmLabel="Close"
       hideCancel
@@ -613,11 +616,12 @@ function Th({
   sort: { key: SortKey; dir: SortDir };
   toggle: (k: SortKey) => void;
 }) {
+  const t = useDsText();
   const active = sort.key === col;
   return (
     <th className={cls} onClick={() => toggle(col)}>
       <span className="th-content">
-        {label}
+        {t(label)}
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>

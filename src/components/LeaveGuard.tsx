@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { PrmModal } from "./PrmModal";
@@ -126,6 +127,7 @@ function copyFor({ noun, creating, title, body }: LeaveCopy) {
 
 /** Mounted once, at the app root: the confirm every guarded exit stops at. */
 export function LeaveGuardHost() {
+  const t = useDsText();
   const current = useSyncExternalStore(
     (l) => {
       listeners.add(l);
@@ -143,7 +145,7 @@ export function LeaveGuardHost() {
     <PrmModal
       title={title}
       confirmLabel="Discard"
-      cancelLabel="Keep Editing"
+      cancelLabel={t("Keep Editing")}
       danger
       onCancel={close}
       onConfirm={() => {

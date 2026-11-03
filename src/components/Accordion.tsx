@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { createContext, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronDownSquareIcon } from "./icons";
 
@@ -28,6 +29,7 @@ export function Accordion({
   defaultOpen?: boolean;
   children: ReactNode;
 }) {
+  const t = useDsText();
   const ref = useRef<HTMLElement | null>(null);
   const [open, setOpen] = useState(defaultOpen ?? false);
   const bodyId = useId();
@@ -50,7 +52,7 @@ export function Accordion({
           aria-controls={bodyId}
           onClick={() => setOpen((o) => !o)}
         >
-          <h2 className="acc-title">{title}</h2>
+          <h2 className="acc-title">{(typeof title === "string" ? t(title) : title)}</h2>
           <span className="acc-chevron" aria-hidden="true">
             <ChevronDownSquareIcon />
           </span>

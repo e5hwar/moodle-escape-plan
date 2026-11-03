@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { Dropdown } from "./Dropdown";
 import { PillTrigger, summarize, SectionedMultiSelect, CascadingMultiSelect, EditColumnsButton } from "./Filters";
 import { DateRangePill, type DateRangeState } from "./DateRangeFilter";
@@ -62,6 +63,7 @@ type Props = {
 };
 
 export function CompanyFilters({ filters, setFilters, dateRange, setDateRange }: Props) {
+  const t = useDsText();
   const hasFilters = Object.values(filters).some((v) => v.length > 0);
 
   function clearAll() {
@@ -98,8 +100,8 @@ export function CompanyFilters({ filters, setFilters, dateRange, setDateRange }:
       />
       {hasFilters && (
         <button className="filter-clear-link" onClick={clearAll}>
-          Clear Filters
-        </button>
+{t("Clear Filters")}
+</button>
       )}
       {/* Date Range holds the row's right edge (Figma 673:1409). It always has
           a value and cannot be removed — Clear Filters leaves it alone. */}
@@ -197,6 +199,7 @@ function IndustryPill({
   value: string[];
   onApply: (v: string[]) => void;
 }) {
+  const t = useDsText();
   // Product Config's Trade list, live — a Trade added there is offered here.
   const options = industryFilterOptions(useB2BConfig().trades);
   const summary = summarize(value, options);
@@ -223,7 +226,7 @@ function IndustryPill({
             close();
           }}
           searchable
-          searchPlaceholder="Search Trade..."
+          searchPlaceholder={t("Search Trade...")}
         />
       )}
     </Dropdown>
@@ -237,6 +240,7 @@ function PartnershipPill({
   value: string[];
   onApply: (v: string[]) => void;
 }) {
+  const t = useDsText();
   const options = partnershipFilterOptions(useB2BConfig().partnerships);
   const summary = summarize(value, options);
   return (
@@ -262,7 +266,7 @@ function PartnershipPill({
             close();
           }}
           searchable
-          searchPlaceholder="Search Partnerships..."
+          searchPlaceholder={t("Search Partnerships...")}
         />
       )}
     </Dropdown>
@@ -276,6 +280,7 @@ function MoreFiltersPill({
   value: CompanyMoreFilters;
   onApply: (v: CompanyMoreFilters) => void;
 }) {
+  const t = useDsText();
   const count = MORE_FILTER_KEYS.reduce((n, k) => n + value[k].length, 0);
   const summary = count > 0 ? `${count} Active` : null;
 
@@ -284,7 +289,7 @@ function MoreFiltersPill({
       width={320}
       trigger={({ open, toggle }) => (
         <PillTrigger
-          label="More Filters"
+          label={t("More Filters")}
           value={summary}
           open={open}
           toggle={toggle}

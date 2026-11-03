@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { KeyCommandIcon } from "./icons";
+import { useDsText } from "../designSystem";
 
 /* Skeleton State Overlay — Figma 1418:1402. What a page asks while it still has
  * nothing to show, centred over a ghost of the record it is about to load. The
@@ -24,12 +25,14 @@ export function SkeletonOverlay({
   onCta: () => void;
   dull?: boolean;
 }) {
+  /* Every caller's title / line / button is page copy, never a record's name. */
+  const t = useDsText();
   return (
     <div className={`skel-overlay${dull ? " is-dull" : ""}`}>
-      <div className="skel-overlay-title">{title}</div>
-      <div className="skel-overlay-sub">{sub}</div>
+      <div className="skel-overlay-title">{typeof title === "string" ? t(title) : title}</div>
+      <div className="skel-overlay-sub">{typeof sub === "string" ? t(sub) : sub}</div>
       <button className="btn-save-draft skel-overlay-cta" onClick={onCta}>
-        {cta}
+        {t(cta)}
         <span className="skel-overlay-keys">
           <span className="cta-kbd">
             <KeyCommandIcon />

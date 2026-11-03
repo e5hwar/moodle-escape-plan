@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useMemo } from "react";
 import {
   useReviewedQuizNames,
@@ -100,6 +101,7 @@ export function PendingIdReuploadsPage({
   flash?: string | null;
   onFlashDone?: () => void;
 }) {
+  const t = useDsText();
   const [, toastNode] = useToast(flash, onFlashDone);
   /* The live list Exam Reviews writes to: a re-upload requested in the console
      shows up here, and a row decided from here leaves. */
@@ -187,13 +189,13 @@ export function PendingIdReuploadsPage({
           {/* Reached from the Exam Reviews header, the same way Name Changes
               used to be — so the crumb is the way back. */}
           <nav className="rvc-crumbs" aria-label="Breadcrumb">
-            <button className="rvc-crumb" onClick={onBack} title="Back to Exam Reviews">
-              Exam Reviews
+            <button className="rvc-crumb" onClick={onBack} title={t("Back to Exam Reviews")}>
+              {t("Exam Reviews")}
             </button>
           </nav>
           <header className="tasks-header">
             <div className="rvc-pagehead">
-              <h1 className="tasks-title">Pending ID Re-Uploads</h1>
+              <h1 className="tasks-title">{t("Pending ID Re-Uploads")}</h1>
               <div className="tasks-subtitle">
                 <span>
                   No action needed here. These are users who were asked to re-upload their ID and
@@ -231,12 +233,12 @@ export function PendingIdReuploadsPage({
                   value={examFilter}
                   onApply={setExamFilter}
                   searchable
-                  searchPlaceholder="Search Quizzes..."
+                  searchPlaceholder={t("Search Quizzes...")}
                   width={300}
                   tip={FILTER_TIPS.examReviews.reuploadQuiz}
                 />
                 <DateRangePill
-                  label="Re-Upload Request Date"
+                  label={t("Re-Upload Request Date")}
                   value={requestedRange}
                   onChange={setRequestedRange}
                   tip={FILTER_TIPS.examReviews.reuploadRequested}
@@ -244,7 +246,7 @@ export function PendingIdReuploadsPage({
                   align="left"
                 />
                 <DateRangePill
-                  label="Submission Date"
+                  label={t("Submission Date")}
                   value={submittedRange}
                   onChange={setSubmittedRange}
                   tip={FILTER_TIPS.examReviews.reuploadSubmitted}
@@ -253,7 +255,7 @@ export function PendingIdReuploadsPage({
                 />
                 {hasFilters && (
                   <button className="filter-clear-link" onClick={clearFilters}>
-                    Clear Filters
+                    {t("Clear Filters")}
                   </button>
                 )}
               </div>
@@ -287,7 +289,7 @@ export function PendingIdReuploadsPage({
                   />
                   <thead>
                     <tr>
-                      <SortableHeader col="candidate" label="User's Name" sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="candidate" label={t("User's Name")} sort={sort} toggle={toggleSort} />
                       <SortableHeader col="email" label="Email" sort={sort} toggle={toggleSort} />
                       <SortableHeader col="phone" label="Phone" sort={sort} toggle={toggleSort} />
                       <SortableHeader col="exam" label="Quiz" sort={sort} toggle={toggleSort} />
@@ -296,8 +298,8 @@ export function PendingIdReuploadsPage({
                           measured from, so it leads and sorts the page — and
                           "Submitted On" is the candidate's original attempt (the
                           value the Exam Reviews table shows), always earlier. */}
-                      <SortableHeader col="requestedAt" label="Re-Upload Requested On" sort={sort} toggle={toggleSort} />
-                      <SortableHeader col="submittedAt" label="Submitted On" sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="requestedAt" label={t("Re-Upload Requested On")} sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="submittedAt" label={t("Submitted On")} sort={sort} toggle={toggleSort} />
                       <th className="col-actions" />
                     </tr>
                   </thead>
@@ -318,7 +320,7 @@ export function PendingIdReuploadsPage({
                         <td className="col-actions">
                           <button
                             className="row-action-btn lone-dots row-chevron"
-                            aria-label="Review Exam"
+                            aria-label={t("Review Exam")}
                             onClick={(e) => { e.stopPropagation(); review(s.id); }}
                           >
                             <RowChevronIcon />
@@ -328,7 +330,7 @@ export function PendingIdReuploadsPage({
                               className="row-action-btn row-action-btn--label"
                               onClick={(e) => { e.stopPropagation(); review(s.id); }}
                             >
-                              Review Exam
+                              {t("Review Exam")}
                               <RowChevronIcon />
                             </button>
                           </div>
@@ -371,11 +373,12 @@ function SortableHeader({
   sort: { key: SortKey; dir: SortDir };
   toggle: (k: SortKey) => void;
 }) {
+  const t = useDsText();
   const active = sort.key === col;
   return (
     <th onClick={() => toggle(col)}>
       <span className="th-content">
-        {label}
+        {t(label)}
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>

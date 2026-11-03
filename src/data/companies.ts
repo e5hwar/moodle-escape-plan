@@ -19,6 +19,8 @@ export type SignUpChannel = "Self Sign-Up" | "Internal Sign-Up";
  * the two options for admins. */
 export type PaymentCollection = "Automatic" | "Invoice";
 export type TaxStatus = "Taxable" | "Tax Exempt" | "Reverse Charge";
+/** Headcount band, for segmentation. */
+export type CompanySize = "0-25" | "25-50" | "50-100" | "100-200" | "200+";
 export type SubscriptionStatus =
   | "Active"
   /** Created on an automatic-payment subscription, but the account holder has
@@ -94,6 +96,7 @@ export type Company = {
    *  year on Annual (see DEFAULT_RATES). */
   ratePerSeat?: number;
   taxStatus?: TaxStatus;
+  companySize?: CompanySize;
   /** Date a scheduled cancellation takes effect, as "Mon D, YYYY" (e.g.
    *  "Aug 27, 2026"). Set when a subscription is cancelled through the UI. The
    *  date is the source of truth for which pill shows: before it the status
@@ -186,6 +189,7 @@ export function freshPaymentLink(company: Company, now = Date.now()): { company:
 }
 
 export const TAX_STATUSES: TaxStatus[] = ["Taxable", "Tax Exempt", "Reverse Charge"];
+export const COMPANY_SIZES: CompanySize[] = ["0-25", "25-50", "50-100", "100-200", "200+"];
 
 export const TIERS: Tier[] = ["Essentials", "Growth", "Professional"];
 

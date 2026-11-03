@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useMemo, useState } from "react";
 import { mergeUserOf, userTypeOf, type MergeUser } from "../data/mergeAccounts";
 import {
@@ -101,6 +102,7 @@ export function SelectUsersModal({
   onCancel: () => void;
   onConfirm: (ids: string[]) => void;
 }) {
+  const t = useDsText();
   // Every account on the live Users roster, as these flows see it.
   const roster = useUsers();
   const mergeUsers = useMemo<PickRow[]>(
@@ -214,7 +216,7 @@ export function SelectUsersModal({
 
   return (
     <PrmModal
-      title="Select Users"
+      title={t("Select Users")}
       description={description}
       confirmLabel="Continue"
       confirmDisabled={picked.length === 0}
@@ -226,7 +228,7 @@ export function SelectUsersModal({
         <div className="stm-toolbar">
           <EntitySearch
             scopes={scopes}
-            placeholder="Search Users by Name, Email, or Phone..."
+            placeholder={t("Search Users by Name, Email, or Phone...")}
             query={committedQuery}
             onCommit={(q) => {
               setCommittedQuery(q);
@@ -238,13 +240,13 @@ export function SelectUsersModal({
             {!b2cOnly && (
             <Dropdown
               width={200}
-              trigger={({ open, toggle: t }) => (
+              trigger={({ open, toggle: tg }) => (
                 <PillTrigger
-                  label="User Type"
+                  label={t("User Type")}
                   tip={FILTER_TIPS.userPicker.type}
                   value={summarize(types, USER_TYPES)}
                   open={open}
-                  toggle={t}
+                  toggle={tg}
                   onClear={() => resetPage(setTypes)([])}
                 />
               )}
@@ -264,13 +266,13 @@ export function SelectUsersModal({
 
             <Dropdown
               width={220}
-              trigger={({ open, toggle: t }) => (
+              trigger={({ open, toggle: tg }) => (
                 <PillTrigger
                   label="Subscription"
                   tip={FILTER_TIPS.userPicker.subscription}
                   value={summarize(subs, SUBSCRIPTIONS)}
                   open={open}
-                  toggle={t}
+                  toggle={tg}
                   onClear={() => resetPage(setSubs)([])}
                 />
               )}
@@ -289,13 +291,13 @@ export function SelectUsersModal({
 
             <Dropdown
               width={260}
-              trigger={({ open, toggle: t }) => (
+              trigger={({ open, toggle: tg }) => (
                 <PillTrigger
                   label="Company"
                   tip={FILTER_TIPS.userPicker.company}
                   value={summarize(companies, allCompanies)}
                   open={open}
-                  toggle={t}
+                  toggle={tg}
                   onClear={() => resetPage(setCompanies)([])}
                 />
               )}
@@ -315,13 +317,13 @@ export function SelectUsersModal({
             {!b2cOnly && (
             <Dropdown
               width={220}
-              trigger={({ open, toggle: t }) => (
+              trigger={({ open, toggle: tg }) => (
                 <PillTrigger
                   label="Role"
                   tip={FILTER_TIPS.userPicker.role}
                   value={summarize(roles, ROLES)}
                   open={open}
-                  toggle={t}
+                  toggle={tg}
                   onClear={() => resetPage(setRoles)([])}
                 />
               )}
@@ -354,9 +356,9 @@ export function SelectUsersModal({
                 <tr>
                   {/* Spacer only — there is no select-all when the cap is two. */}
                   <th className="stm-col-check no-sort" />
-                  <Th col="name" label="User Name" cls="sum-col-name" sort={sort} toggle={toggleSort} />
+                  <Th col="name" label={t("User Name")} cls="sum-col-name" sort={sort} toggle={toggleSort} />
                   <Th col="email" label="Email" cls="sum-col-email" sort={sort} toggle={toggleSort} />
-                  <Th col="phone" label="Phone Number" cls="sum-col-phone" sort={sort} toggle={toggleSort} />
+                  <Th col="phone" label={t("Phone Number")} cls="sum-col-phone" sort={sort} toggle={toggleSort} />
                   <Th col="company" label="Company" cls="sum-col-company" sort={sort} toggle={toggleSort} />
                   {!b2cOnly && <Th col="role" label="Role" cls="sum-col-role" sort={sort} toggle={toggleSort} />}
                   <Th col="subscription" label="Subscription" cls="sum-col-plan" sort={sort} toggle={toggleSort} />
@@ -479,11 +481,12 @@ function Th({
   sort: { key: SortKey; dir: SortDir };
   toggle: (k: SortKey) => void;
 }) {
+  const t = useDsText();
   const active = sort.key === col;
   return (
     <th className={cls} onClick={() => toggle(col)}>
       <span className="th-content">
-        {label}
+        {t(label)}
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>

@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect } from "react";
 import { NoteCard } from "./NoteCard";
 import { MenuEnterIcon } from "./icons";
@@ -25,6 +26,7 @@ export function PlaceholderPage({
    *  the admin tab that opened it is untouched, and several can be open. */
   viewingAs?: string;
 }) {
+  const t = useDsText();
   useEffect(() => {
     if (viewingAs) document.title = `Viewing as ${viewingAs}`;
   }, [viewingAs]);
@@ -43,7 +45,7 @@ export function PlaceholderPage({
       {crumb && (
         <nav className="rvc-crumbs" aria-label="Breadcrumb">
           <button className="rvc-crumb" onClick={crumb.onClick} title={`Back to ${crumb.label}`}>
-            {crumb.label}
+            {t(crumb.label)}
           </button>
         </nav>
       )}

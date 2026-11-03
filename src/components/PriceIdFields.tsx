@@ -1,5 +1,6 @@
 import { useId } from "react";
 import { ColumnCloseIcon, StepperPlusIcon } from "./icons";
+import { useDsText } from "../designSystem";
 
 // Paywall pricing is configured by Price ID, never a raw USD amount. Every paid
 // paywall entry — a Certification, or a single Quiz attempt — maps to four
@@ -81,6 +82,7 @@ export function PriceIdMatrix({
   /** True after a blocked create attempt: redden every cell still empty. */
   flagEmpty?: boolean;
 }) {
+  const t = useDsText();
   return (
     <div className="price-id-matrix">
       <div className="price-idm-labels" aria-hidden="true">
@@ -97,7 +99,7 @@ export function PriceIdMatrix({
         {columns.map((col) => (
           <div key={col.key} className="price-idm-col">
             <div className="price-idm-head">
-              <span>{col.title}</span>
+              <span>{t(col.title)}</span>
               {col.onRemove && (
                 <button
                   className="price-idm-x"
@@ -126,7 +128,7 @@ export function PriceIdMatrix({
       </div>
       <button className="price-idm-add" onClick={onAdd}>
         <StepperPlusIcon />
-        <span>{addLabel}</span>
+        <span>{t(addLabel)}</span>
       </button>
     </div>
   );

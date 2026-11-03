@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useState } from "react";
 import { SelectField } from "./SelectField";
 import { DropdownCaretIcon } from "./icons";
@@ -35,6 +36,7 @@ export function PhoneField({
   /** Paints the number input in the field error state. */
   invalid?: boolean;
 }) {
+  const t = useDsText();
   const [country, setCountry] = useState(
     () => findPhoneCountry(phone) ?? DEFAULT_PHONE_COUNTRY,
   );
@@ -62,7 +64,7 @@ export function PhoneField({
           emit(dialCodeFor(next), national);
         }}
         optionDetail={(name) => dialCodeFor(name)}
-        searchPlaceholder="Search..."
+        searchPlaceholder={t("Search...")}
         maxVisibleOptions={5}
         panelClass="ss-menu--countries"
         renderTrigger={({ open, toggle }) => (
@@ -83,7 +85,7 @@ export function PhoneField({
         type="tel"
         aria-invalid={invalid || undefined}
         inputMode="numeric"
-        placeholder="Phone Number..."
+        placeholder={t("Phone Number...")}
         value={national}
         onChange={(e) => {
           const next = formatPhoneNumber(e.target.value);

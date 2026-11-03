@@ -1039,6 +1039,7 @@ Platform-wide settings in tabs (General Settings, Display Settings, Award Templa
 
 - General Settings:
   - *Force App Update* keeps one log with separate iOS and Android versions; each platform's newest version is its Active one, so a row can be Active on one platform only. *Force New Version* needs at least one of the two; each version entered must be higher than that platform's Active version and not already in its log. Any row can be removed; removing a platform's Active row makes its previous version Active again, and the confirmation names that version per platform (or says no version will be forced, or that no learner is affected when the row isn't Active).
+  - *What's New Page* lists links, each set for one or more app versions; learners who update to one of those versions see that page. A link and at least one version are required, and a version can belong to one page only (versions already on another page are listed but can't be picked). Pages can be edited and removed; all changes save with the page's Save Changes.
   - *Webcam Capture Frequency* (seconds) applies to Proctored Quiz attempts started after the change.
   - *App Deep Links* lists the system pages that can be linked to; the list is read-only here.
 - Display Settings:

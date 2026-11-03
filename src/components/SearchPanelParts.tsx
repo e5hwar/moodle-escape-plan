@@ -6,6 +6,7 @@ import {
   SearchIcon,
   SearchClearIcon,
 } from "./icons";
+import { useDsText } from "../designSystem";
 
 // Shared parts of the search combobox panels (Tasks, Users, Review, Question,
 // Companies, Manage IDs, Proctoring, Content Links, Manage Completions):
@@ -130,13 +131,14 @@ export function stepActive(a: number, count: number, dir: 1 | -1): number {
  *  label in white, or — once something is typed — "Showing Results for “q”"
  *  in #a8a8a8 with the query in orange. */
 export function ResultsHead({ query, label }: { query: string; label: string }) {
+  const t = useDsText();
   const q = query.trim();
   return q ? (
     <div className="usearch-head is-results">
-      Showing Results for “<span className="usearch-head-q">{q}</span>”
+      {t("Showing Results for")} “<span className="usearch-head-q">{q}</span>”
     </div>
   ) : (
-    <div className="usearch-head">{label}</div>
+    <div className="usearch-head">{t(label)}</div>
   );
 }
 

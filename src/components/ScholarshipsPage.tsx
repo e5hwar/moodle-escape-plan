@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   isScholarshipActive,
@@ -140,6 +141,7 @@ function compare(a: Row, b: Row, key: SortKey): number {
 }
 
 export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
+  const t = useDsText();
   /* The shared list (scholarships.ts) — the Users roster reads it to decide
      who is on a Scholarship, so creating, revoking or letting one run out moves
      the user's pill and profile with it. */
@@ -268,7 +270,7 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
           {/* This page is reached from Manage Users' header button (it no
               longer has its own sidebar entry), so the crumb is the way back. */}
           <nav className="rvc-crumbs" aria-label="Breadcrumb">
-            <button className="rvc-crumb" onClick={onBack} title="Back to Users">
+            <button className="rvc-crumb" onClick={onBack} title={t("Back to Users")}>
               Users
             </button>
           </nav>
@@ -295,7 +297,7 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
             <div className="tasks-header-actions">
               <button className="new-task" onClick={() => setAdding(true)}>
                 <AddIcon />
-                Create Scholarship
+                {t("Create Scholarship")}
                 <span className="cta-kbd">C</span>
               </button>
             </div>
@@ -309,7 +311,7 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
                 </span>
                 <input
                   className="search-input"
-                  placeholder="Search Users by Name, Email, or Phone..."
+                  placeholder={t("Search Users by Name, Email, or Phone...")}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
@@ -348,7 +350,7 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
                   width={260}
                   trigger={({ open, toggle }) => (
                     <PillTrigger
-                      label="Assigned By"
+                      label={t("Assigned By")}
                       tip={FILTER_TIPS.scholarships.assignedBy}
                       value={summarize(assignerFilter, assigners)}
                       open={open}
@@ -366,14 +368,14 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
                         close();
                       }}
                       searchable
-                      searchPlaceholder="Search Assigners..."
+                      searchPlaceholder={t("Search Assigners...")}
                     />
                   )}
                 </Dropdown>
 
                 {hasFilters && (
                   <button className="filter-clear-link" onClick={clearFilters}>
-                    Clear Filters
+                    {t("Clear Filters")}
                   </button>
                 )}
               </div>
@@ -423,11 +425,11 @@ export function ScholarshipsPage({ onBack }: { onBack?: () => void }) {
                         sort={sort}
                         toggle={toggleSort}
                       />
-                      <SortableHeader col="expiresOn" label="Expires On" sort={sort} toggle={toggleSort} />
-                      <SortableHeader col="assignedOn" label="Assigned On" sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="expiresOn" label={t("Expires On")} sort={sort} toggle={toggleSort} />
+                      <SortableHeader col="assignedOn" label={t("Assigned On")} sort={sort} toggle={toggleSort} />
                       <SortableHeader
                         col="assignedBy"
-                        label="Assigned By"
+                        label={t("Assigned By")}
                         className="col-creator"
                         sort={sort}
                         toggle={toggleSort}
@@ -531,10 +533,11 @@ function SortableHeader({
   sortable?: boolean;
   className?: string;
 }) {
+  const t = useDsText();
   if (!sortable || !col) {
     return (
       <th className={`${className ?? ""} no-sort`.trim()}>
-        <span className="th-content">{label}</span>
+        <span className="th-content">{t(label)}</span>
       </th>
     );
   }
@@ -542,7 +545,7 @@ function SortableHeader({
   return (
     <th className={className} onClick={() => toggle(col)}>
       <span className="th-content">
-        {label}
+        {t(label)}
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>
@@ -647,6 +650,7 @@ function ScholarshipRevokeConfirm({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const t = useDsText();
   // PrmModal has no key handling of its own, so the owner closes on Escape.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -659,8 +663,8 @@ function ScholarshipRevokeConfirm({
   const name = scholarship.user.name;
   return (
     <PrmModal
-      title="Revoke Scholarship?"
-      confirmLabel="Revoke Scholarship"
+      title={t("Revoke Scholarship?")}
+      confirmLabel={t("Revoke Scholarship")}
       danger
       doubleConfirm={
         <>
@@ -792,6 +796,7 @@ function ScholarshipModal({
   onClose: () => void;
   onSubmit: (user: User, expiresOn: string) => void;
 }) {
+  const t = useDsText();
   const editing = !!scholarship;
   const roster = useUsers();
   const [expiresOn, setExpiresOn] = useState(
@@ -880,8 +885,8 @@ function ScholarshipModal({
           </button>
           <p className="form-help">
             {editing
-              ? "A scholarship can't move to another user — revoke this one and create a new one."
-              : "Subscribers and B2B Employees cannot be assigned a Scholarship"}
+              ? t("A scholarship can't move to another user \u2014 revoke this one and create a new one.")
+              : t("Subscribers and B2B Employees cannot be assigned a Scholarship")}
           </p>
         </div>
 

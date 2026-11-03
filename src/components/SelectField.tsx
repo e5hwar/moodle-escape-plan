@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Dropdown } from "./Dropdown";
 import { DropdownCaretIcon } from "./icons";
@@ -30,6 +31,7 @@ export function SelectField<T extends string>({
   searchPlaceholder,
   optionDetail,
   optionPrimary,
+  dsCase = false,
   optionSecondary,
   optionSearchText,
   popupMenu = false,
@@ -62,6 +64,9 @@ export function SelectField<T extends string>({
    *  string — e.g. a Question Bank category, whose option is unique only as
    *  "Sub · Parent" while the row wants the sub name alone in white. */
   optionPrimary?: (option: T) => ReactNode;
+  /** Show option labels the way the active design system writes them (sentence
+   *  case under the SkillCat look). Only for enum-like options — never names. */
+  dsCase?: boolean;
   /** Muted text set immediately after the option's name, inside the same row
    *  (Figma 955:976 — an employee's email beside their name). Unlike
    *  `optionDetail` it hugs the name rather than the row's far edge. */
@@ -92,6 +97,7 @@ export function SelectField<T extends string>({
    *  620:1446 (`.ss-menu-foot`). Gets the menu's `close`. */
   footer?: (close: () => void) => ReactNode;
 }) {
+  const t = useDsText();
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(0);
 
@@ -134,7 +140,7 @@ export function SelectField<T extends string>({
               aria-expanded={open}
               onClick={toggle}
             >
-              <span className="select-field-value">{label}</span>
+              <span className="select-field-value">{dsCase && typeof label === "string" ? t(label) : label}</span>
               {/* A native select is as wide as its widest option and never
                   resizes as the value changes. A button is only as wide as its
                   label, so this zero-height stack reinstates that width. */}
@@ -157,6 +163,7 @@ export function SelectField<T extends string>({
             searchPlaceholder={searchPlaceholder}
             optionDetail={optionDetail}
             optionPrimary={optionPrimary}
+            dsCase={dsCase}
             optionSecondary={optionSecondary}
             optionSearchText={optionSearchText}
             maxVisibleOptions={maxVisibleOptions}
@@ -182,6 +189,7 @@ function SelectMenu<T extends string>({
   searchPlaceholder,
   optionDetail,
   optionPrimary,
+  dsCase = false,
   optionSecondary,
   optionSearchText,
   maxVisibleOptions,
@@ -197,10 +205,14 @@ function SelectMenu<T extends string>({
   searchPlaceholder?: string;
   optionDetail?: (option: T) => ReactNode;
   optionPrimary?: (option: T) => ReactNode;
+  /** Show option labels the way the active design system writes them (sentence
+   *  case under the SkillCat look). Only for enum-like options — never names. */
+  dsCase?: boolean;
   optionSecondary?: (option: T) => ReactNode;
   optionSearchText?: (option: T) => string;
   maxVisibleOptions?: number;
 }) {
+  const t = useDsText();
   const listRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const [query, setQuery] = useState("");
@@ -298,7 +310,7 @@ function SelectMenu<T extends string>({
     >
       {shown.map((opt, i) => {
         const detail = optionDetail?.(opt);
-        const primary = optionPrimary?.(opt) ?? opt;
+        const primary = optionPrimary?.(opt) ?? (dsCase ? t(opt) : opt);
         const secondary = optionSecondary?.(opt);
         return (
           <button
@@ -331,7 +343,7 @@ function SelectMenu<T extends string>({
                 {detail != null && <span className="dropdown-item-detail">{detail}</span>}
               </>
             ) : (
-              opt
+              primary
             )}
           </button>
         );

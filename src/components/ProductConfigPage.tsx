@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SYSTEM_DEEP_LINKS, type SystemDeepLink } from "../data/deepLinks";
 import type { AwardDesignTemplate } from "../data/awards";
@@ -24,6 +25,7 @@ import { Stepper } from "./Stepper";
 import { PermissionsSection } from "./PermissionsPage";
 import { AwardTemplatesSection } from "./AwardTemplatesSection";
 import { PlaceholderPage } from "./PlaceholderPage";
+import { MultiSelect } from "./NewCompanyWizard";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { useLeaveGuard } from "./LeaveGuard";
 import { useToast } from "./useToast";
@@ -130,6 +132,12 @@ const APP_PLATFORMS: { key: AppPlatform; name: string }[] = [
 const forceUpdateLabel = (h: ForceUpdate) =>
   APP_PLATFORMS.filter((p) => h[p.key]).map((p) => `${p.name} ${h[p.key]}`).join(" · ");
 
+/** A What's New page and the app versions that open it after updating. A
+ *  version belongs to one page at most. */
+type WhatsNewPage = { id: string; url: string; versions: string[] };
+/** The released app versions a What's New page can be set for, newest first. */
+const APP_VERSIONS = ["4.3.0", "4.2.1", "4.2.0", "4.1.3", "4.1.2", "4.1.0", "4.0.0"];
+
 type BilingualDoc = { en: string; es: string };
 
 
@@ -155,6 +163,7 @@ const tabRow = (id: string, nameEn: string, nameEs: string, url: string): TabRow
    lives in App state, so it outlasts a visit to another page. */
 export type ProductSettings = {
   forceUpdates: ForceUpdate[];
+  whatsNewPages: WhatsNewPage[];
   webcamFrequency: string;
   initialTaskCount: string;
   appTabs: TabRow[];
@@ -187,6 +196,10 @@ export const DEFAULT_PRODUCT_SETTINGS: Settings = {
     { id: "fu-3", ios: "4.2.0", android: "4.2.0", date: "2026-06-02" },
     { id: "fu-2", ios: "4.1.3", android: "4.1.2", date: "2026-04-18" },
     { id: "fu-1", ios: "4.0.0", android: "4.0.0", date: "2026-01-27" },
+  ],
+  whatsNewPages: [
+    { id: "wn-2", url: "https://skillcat.app/whats-new/4-2", versions: ["4.2.1", "4.2.0"] },
+    { id: "wn-1", url: "https://skillcat.app/whats-new/4-1", versions: ["4.1.3", "4.1.2", "4.1.0"] },
   ],
   webcamFrequency: "20",
   initialTaskCount: "5",
@@ -278,6 +291,7 @@ function useEscape(onClose: () => void) {
 const cw = (px: number) => ({ "--cw": px }) as React.CSSProperties;
 // Equal quarters (user): both versions, their date and the status read as peers.
 const FU_COLS = { ios: cw(120), android: cw(120), date: cw(120), status: cw(120) };
+const WN_COLS = { link: cw(360), versions: cw(200) };
 const DL_COLS = { dest: cw(160), link: cw(280), login: cw(120) };
 const TAB_COLS = { name: cw(160), url: cw(360), visible: cw(64) };
 const SUP_COLS = { page: cw(160), url: cw(400) };
@@ -353,24 +367,32 @@ function UrlField({
   onChange,
   ariaLabel,
   autoFocus,
+  flagBlank = true,
+  onBlur,
 }: {
   value: string;
   onChange: (v: string) => void;
   ariaLabel?: string;
   autoFocus?: boolean;
+  /** Off while a new entry's field hasn't been visited yet, so an empty
+   *  modal doesn't open red. */
+  flagBlank?: boolean;
+  onBlur?: () => void;
 }) {
+  const t = useDsText();
   const blank = !value.trim();
   return (
-    <div className={`deeplink-input${blank ? " invalid" : ""}`}>
+    <div className={`deeplink-input${blank && flagBlank ? " invalid" : ""}`}>
       <div className="deeplink-cell">
         <input
           className="deeplink-slug"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="URL..."
+          placeholder={t("URL...")}
           aria-label={ariaLabel}
-          aria-invalid={blank || undefined}
+          aria-invalid={(blank && flagBlank) || undefined}
           autoFocus={autoFocus}
+          onBlur={onBlur}
           spellCheck={false}
         />
         {/* Empty (Figma 1675:1438): the field alone — no link to follow. */}
@@ -380,7 +402,7 @@ function UrlField({
             className="deeplink-copy"
             onClick={() => window.open(value.trim(), "_blank", "noopener,noreferrer")}
           >
-            Test It Out
+            {t("Test It Out")}
           </button>
         )}
       </div>
@@ -407,10 +429,11 @@ function NumberField({
    *  and Save Changes is blocked. */
   error?: string | null;
 }) {
+  const t = useDsText();
   return (
     <div className="form-group">
       <label className="form-label">
-        {label}
+        {t(label)}
         <span className="req">*</span>
         {error && <span className="form-label-error">{error}</span>}
       </label>
@@ -421,7 +444,7 @@ function NumberField({
         ariaLabel={label}
         hasError={!!error}
       />
-      <p className="form-help">{help}</p>
+      <p className="form-help">{t(help)}</p>
     </div>
   );
 }
@@ -488,6 +511,7 @@ function ForceAppUpdateField({
   history: ForceUpdate[];
   onChange: (h: ForceUpdate[]) => void;
 }) {
+  const t = useDsText();
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<ForceUpdate | null>(null);
 
@@ -503,7 +527,7 @@ function ForceAppUpdateField({
 
   return (
     <div className="form-group">
-      <label className="form-label">Force App Update</label>
+      <label className="form-label">{t("Force App Update")}</label>
       {/* History is newest-first, and each platform's newest version is the one
           being forced — so the log IS the current state. A row can be Active
           for one platform while a newer row carries only the other. */}
@@ -518,7 +542,7 @@ function ForceAppUpdateField({
 
         {history.length === 0 && (
           <div className="qsec-row">
-            <span className="qsec-empty">No Force Updates Configured Yet</span>
+            <span className="qsec-empty">{t("No Force Updates Configured Yet")}</span>
           </div>
         )}
 
@@ -561,7 +585,7 @@ function ForceAppUpdateField({
         <div className="qsec-foot">
           <button className="qsec-add" onClick={() => setAdding(true)}>
             <PlusThinIcon />
-            Force New Version
+            {t("Force New Version")}
           </button>
         </div>
       </div>
@@ -629,6 +653,7 @@ function ForceUpdateModal({
   onForce: (versions: Pick<ForceUpdate, AppPlatform>) => void;
   onCancel: () => void;
 }) {
+  const t = useDsText();
   const [values, setValues] = useState<Record<AppPlatform, string>>({ ios: "", android: "" });
   const typed = { ios: values.ios.trim(), android: values.android.trim() };
   const errors = {
@@ -646,9 +671,9 @@ function ForceUpdateModal({
 
   return (
     <PrmModal
-      title="Force New Version"
+      title={t("Force New Version")}
       description="Enter a minimum version for iOS, Android or both. Users below it are prompted to update before they can continue."
-      confirmLabel="Force Update"
+      confirmLabel={t("Force Update")}
       confirmDisabled={!isValid}
       confirmTip={isEmpty ? "Enter an iOS or Android version" : undefined}
       onCancel={onCancel}
@@ -699,6 +724,7 @@ function RemoveForceUpdateModal({
   onRemove: () => void;
   onCancel: () => void;
 }) {
+  const t = useDsText();
   useEscape(onCancel);
 
   // Any entry can go. Where it's the Active one for a platform, that
@@ -708,7 +734,7 @@ function RemoveForceUpdateModal({
 
   return (
     <PrmModal
-      title="Remove Force Update?"
+      title={t("Remove Force Update?")}
       confirmLabel="Remove"
       danger
       onCancel={onCancel}
@@ -741,12 +767,230 @@ function RemoveForceUpdateModal({
   );
 }
 
+/* What's New Page — the OptionListField pattern: plain rows (the link and its
+   versions) with an edit pencil and a remove ✕, and the Add row closing the
+   card. Adding and editing open WhatsNewModal; both write to the page draft,
+   so Save Changes saves them like the Force App Update log above. */
+function WhatsNewField({
+  pages,
+  onChange,
+}: {
+  pages: WhatsNewPage[];
+  onChange: (p: WhatsNewPage[]) => void;
+}) {
+  const t = useDsText();
+  const [modal, setModal] = useState<{ kind: "new" } | { kind: "edit"; page: WhatsNewPage } | null>(null);
+  const [removing, setRemoving] = useState<WhatsNewPage | null>(null);
+  const editing = modal?.kind === "edit" ? modal.page : null;
+
+  return (
+    <div className="form-group">
+      <label className="form-label">{t("What's New Page")}</label>
+      <div className="qsec ct-prop">
+        <div className="qsec-hd">
+          <span className="ct-col" style={WN_COLS.link}>LINK</span>
+          <span className="ct-col" style={WN_COLS.versions}>VERSIONS</span>
+          <span className="pc-col-actions" aria-hidden />
+        </div>
+
+        {pages.length === 0 && (
+          <div className="qsec-row">
+            <span className="qsec-empty">{t("No What's New Pages Added Yet")}</span>
+          </div>
+        )}
+
+        {pages.map((p) => (
+          <div className="qsec-row" key={p.id}>
+            <span className="ct-col pc-muted" style={WN_COLS.link}>{p.url}</span>
+            <span className="ct-col pc-strong" style={WN_COLS.versions}>
+              {sortVersions(p.versions).join(", ")}
+            </span>
+            <span className="pc-col-actions">
+              <button
+                className="qsec-x"
+                title="Edit"
+                aria-label={`Edit What's New page ${p.url}`}
+                onClick={() => setModal({ kind: "edit", page: p })}
+              >
+                <RowEditIcon />
+              </button>
+              <button
+                className="qsec-x"
+                title="Remove"
+                aria-label={`Remove What's New page ${p.url}`}
+                onClick={() => setRemoving(p)}
+              >
+                <RowCloseIcon />
+              </button>
+            </span>
+          </div>
+        ))}
+
+        <div className="qsec-foot">
+          <button className="qsec-add" onClick={() => setModal({ kind: "new" })}>
+            <PlusThinIcon />
+            {t("Add What's New Page")}
+          </button>
+        </div>
+      </div>
+      <p className="form-help">
+        {t("The page learners see after updating the app to one of its versions. Each version opens one page at most.")}
+      </p>
+
+      {modal && (
+        <WhatsNewModal
+          page={editing}
+          others={pages.filter((p) => p.id !== editing?.id)}
+          onCancel={() => setModal(null)}
+          onSubmit={(patch) => {
+            onChange(
+              editing
+                ? pages.map((p) => (p.id === editing.id ? { ...p, ...patch } : p))
+                : [{ id: `wn-${Date.now()}`, ...patch }, ...pages],
+            );
+            setModal(null);
+          }}
+        />
+      )}
+      {removing && (
+        <RemoveWhatsNewModal
+          page={removing}
+          onCancel={() => setRemoving(null)}
+          onRemove={() => {
+            onChange(pages.filter((p) => p.id !== removing.id));
+            setRemoving(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Newest first ("4.10.0" before "4.9.2"). */
+const sortVersions = (v: string[]) => [...v].sort((a, b) => compareVersions(b, a));
+
+/* New / Edit a What's New page — the shared modal shell, OptionNameModal's
+   shape: Link (the page's URL field, with Test It Out) and Versions (the
+   shared multiselect), both required. Versions another page already has stay
+   listed but locked. A new entry's fields only go red once visited. */
+function WhatsNewModal({
+  page,
+  others,
+  onSubmit,
+  onCancel,
+}: {
+  /** Null when adding. */
+  page: WhatsNewPage | null;
+  /** Every other page — their links can't repeat, their versions are taken. */
+  others: WhatsNewPage[];
+  onSubmit: (patch: Pick<WhatsNewPage, "url" | "versions">) => void;
+  onCancel: () => void;
+}) {
+  const t = useDsText();
+  const [url, setUrl] = useState(page?.url ?? "");
+  const [versions, setVersions] = useState<string[]>(page?.versions ?? []);
+  const [urlVisited, setUrlVisited] = useState(!!page);
+  const [versionsVisited, setVersionsVisited] = useState(!!page);
+  const link = url.trim();
+  const isDuplicate = !!link && others.some((p) => p.url.trim().toLowerCase() === link.toLowerCase());
+  const unchanged = !!page && link === page.url && sameValue(sortVersions(versions), sortVersions(page.versions));
+  const isValid = !!link && versions.length > 0 && !isDuplicate && !unchanged;
+  const locked = Object.fromEntries(
+    others.flatMap((p) => p.versions.map((v) => [v, { detail: "On another page" }])),
+  );
+  const urlError = isDuplicate
+    ? "This link is already in the list."
+    : urlVisited && !link
+      ? EMPTY_ERROR
+      : null;
+  const versionsError = versionsVisited && versions.length === 0 ? "Select at least one version" : null;
+
+  useEscape(onCancel);
+
+  return (
+    <PrmModal
+      title={page ? "Edit What's New Page" : "New What's New Page"}
+      description="Learners who update the app to one of these versions are shown this page."
+      confirmLabel={t(page ? "Save What's New Page" : "Create What's New Page")}
+      confirmDisabled={!isValid}
+      confirmTip={
+        unchanged ? NO_CHANGES_TIP : !link || versions.length === 0 ? "Enter a link and select at least one version" : undefined
+      }
+      onCancel={onCancel}
+      onConfirm={() => isValid && onSubmit({ url: link, versions: sortVersions(versions) })}
+    >
+      <div className="prm-stack">
+        <div className="prm-field">
+          <span className="prm-label">
+            Link<span className="prm-req">*</span>
+            {urlError && <span className="form-label-error">{urlError}</span>}
+          </span>
+          <UrlField
+            value={url}
+            onChange={setUrl}
+            ariaLabel="Link"
+            autoFocus={!page}
+            flagBlank={urlVisited}
+            onBlur={() => setUrlVisited(true)}
+          />
+        </div>
+        <div className="prm-field">
+          <span className="prm-label">
+            Versions<span className="prm-req">*</span>
+            {versionsError && <span className="form-label-error">{versionsError}</span>}
+          </span>
+          <MultiSelect
+            options={APP_VERSIONS}
+            value={sortVersions(versions)}
+            onChange={setVersions}
+            placeholder={t("Select Versions")}
+            searchPlaceholder={t("Search Versions...")}
+            locked={locked}
+            popupMenu
+            hasError={!!versionsError}
+            onLeave={() => setVersionsVisited(true)}
+          />
+        </div>
+      </div>
+    </PrmModal>
+  );
+}
+
+function RemoveWhatsNewModal({
+  page,
+  onRemove,
+  onCancel,
+}: {
+  page: WhatsNewPage;
+  onRemove: () => void;
+  onCancel: () => void;
+}) {
+  const t = useDsText();
+  useEscape(onCancel);
+  return (
+    <PrmModal
+      title={t("Remove What's New Page?")}
+      confirmLabel="Remove"
+      danger
+      onCancel={onCancel}
+      onConfirm={onRemove}
+    >
+      <p className="prm-content">
+        Remove <strong>{page.url}</strong>? Learners updating to{" "}
+        <strong>{sortVersions(page.versions).join(", ")}</strong> will no longer be shown a
+        What's New page.
+      </p>
+    </PrmModal>
+  );
+}
+
 /* Read-only: a reference list, so the rows carry no controls — just the link
    out to each destination. */
 function DeepLinksField({ links }: { links: SystemDeepLink[] }) {
+  const t = useDsText();
   return (
     <div className="form-group">
-      <label className="form-label">App Deep Links</label>
+      <label className="form-label">{t("App Deep Links")}</label>
       <div className="qsec ct-prop">
         <div className="qsec-hd">
           <span className="ct-col" style={DL_COLS.dest}>DESTINATION</span>
@@ -756,7 +1000,7 @@ function DeepLinksField({ links }: { links: SystemDeepLink[] }) {
         </div>
         {links.map((link) => (
           <div className="qsec-row" key={link.id}>
-            <span className="ct-col pc-strong" style={DL_COLS.dest}>{link.label}</span>
+            <span className="ct-col pc-strong" style={DL_COLS.dest}>{t(link.label)}</span>
             <span className="ct-col pc-muted" style={DL_COLS.link}>{link.url}</span>
             <span className="ct-col pc-muted" style={DL_COLS.login}>{link.requiresLogin ? "Yes" : "No"}</span>
             <a
@@ -764,7 +1008,7 @@ function DeepLinksField({ links }: { links: SystemDeepLink[] }) {
               href={link.url}
               target="_blank"
               rel="noopener noreferrer"
-              title="Open in a New Tab"
+              title={t("Open in a New Tab")}
               aria-label={`Open ${link.label} in a new tab`}
             >
               <RowExternalLinkIcon />
@@ -800,13 +1044,14 @@ function TabsField({
   rows: TabRow[];
   onUpdate: (fn: (rows: TabRow[]) => TabRow[]) => void;
 }) {
+  const t = useDsText();
   const [editing, setEditing] = useState<TabRow | null>(null);
   const setRow = (id: string, patch: Partial<TabRow>) =>
     onUpdate((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
 
   return (
     <div className="form-group">
-      <label className="form-label">{label}</label>
+      <label className="form-label">{t(label)}</label>
       <div className="qsec ct-prop">
         <div className="qsec-hd">
           <span className="ct-col" style={TAB_COLS.name}>TAB NAME</span>
@@ -845,7 +1090,7 @@ function TabsField({
           );
         })}
       </div>
-      <p className="form-help">{help}</p>
+      <p className="form-help">{t(help)}</p>
 
       {editing && (
         <TabEditModal
@@ -874,6 +1119,7 @@ function TabEditModal({
   onCancel: () => void;
   onSave: (patch: Pick<TabRow, "nameEn" | "nameEs" | "url" | "icon">) => void;
 }) {
+  const t = useDsText();
   const [nameEn, setNameEn] = useState(row.nameEn);
   const [nameEs, setNameEs] = useState(row.nameEs);
   const [url, setUrl] = useState(row.url);
@@ -889,8 +1135,8 @@ function TabEditModal({
 
   return (
     <PrmModal
-      title="Edit Tab"
-      confirmLabel="Save Tab"
+      title={t("Edit Tab")}
+      confirmLabel={t("Save Tab")}
       confirmDisabled={!isValid}
       confirmTip={unchanged ? NO_CHANGES_TIP : undefined}
       onCancel={onCancel}
@@ -909,8 +1155,8 @@ function TabEditModal({
             es={nameEs}
             onChangeEn={setNameEn}
             onChangeEs={setNameEs}
-            placeholderEn="Tab Name..."
-            placeholderEs="Nombre de la Pestaña..."
+            placeholderEn={t("Tab Name...")}
+            placeholderEs={t("Nombre de la Pesta\u00f1a...")}
             maxLength={NAME_MAX}
           />
         </div>
@@ -940,10 +1186,11 @@ function SupportPagesField({
   links: SupportLink[];
   onChange: (links: SupportLink[]) => void;
 }) {
+  const t = useDsText();
   return (
     <div className="form-group">
       <label className="form-label">
-        Support Pages
+        {t("Support Pages")}
         <span className="req">*</span>
         {links.some((l) => !l.url.trim()) && (
           <span className="form-label-error">{EMPTY_ERROR}</span>
@@ -956,7 +1203,7 @@ function SupportPagesField({
         </div>
         {links.map((link) => (
           <div className="qsec-row" key={link.id}>
-            <span className="ct-col pc-strong" style={SUP_COLS.page}>{link.label}</span>
+            <span className="ct-col pc-strong" style={SUP_COLS.page}>{t(link.label)}</span>
             <div className="ct-col" style={SUP_COLS.url}>
               <UrlField
                 value={link.url}
@@ -969,7 +1216,7 @@ function SupportPagesField({
           </div>
         ))}
       </div>
-      <p className="form-help">Set the destination URL for each support page surfaced to users.</p>
+      <p className="form-help">{t("Set the destination URL for each support page surfaced to users.")}</p>
     </div>
   );
 }
@@ -986,25 +1233,25 @@ function EpaCardField({
   /** Which surface this ID covers — the other tab holds the other one. */
   note: string;
 }) {
+  const t = useDsText();
   // Required, like every Price ID: blank goes red and blocks Save.
   const blank = !value.trim();
   return (
     <div className="form-group">
       <label className="form-label">
-        EPA Card
+        {t("EPA Card")}
         <span className="req">*</span>
         {blank && <span className="form-label-error">{EMPTY_ERROR}</span>}
       </label>
       <input
         className={`form-input${blank ? " has-error" : ""}`}
-        placeholder="Stripe Product ID..."
+        placeholder={t("Stripe Product ID...")}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         spellCheck={false}
       />
       <p className="form-help">
-        Stripe Product ID for the EPA card. Checkout uses the Product's default Price when a
-        learner purchases their EPA card.
+        {t("Stripe Product ID for the EPA card. Checkout uses the Product's default Price when a learner purchases their EPA card.")}
         <span className="form-help-info" tabIndex={0} role="note" aria-label={note} data-tip={note}>
           <InfoIcon12 />
         </span>
@@ -1047,6 +1294,7 @@ function OptionListField({
   options: string[];
   onChange: (o: string[]) => void;
 }) {
+  const t = useDsText();
   const [modal, setModal] = useState<{ kind: "new" } | { kind: "edit"; index: number } | null>(
     null,
   );
@@ -1055,7 +1303,7 @@ function OptionListField({
 
   return (
     <div className="form-group">
-      <label className="form-label">{label}</label>
+      <label className="form-label">{t(label)}</label>
       <div className="qsec ct-prop">
         <div className="qsec-hd">
           <span className="ct-col" style={OPTION_COLS.name}>{column}</span>
@@ -1095,11 +1343,11 @@ function OptionListField({
         <div className="qsec-foot">
           <button className="qsec-add" onClick={() => setModal({ kind: "new" })}>
             <PlusThinIcon />
-            Add {noun}
+            {t(`Add ${noun}`)}
           </button>
         </div>
       </div>
-      <p className="form-help">{help}</p>
+      <p className="form-help">{t(help)}</p>
 
       {modal && (
         <OptionNameModal
@@ -1276,12 +1524,13 @@ function LegalDocField({
   doc: BilingualDoc;
   onChange: (d: BilingualDoc) => void;
 }) {
+  const t = useDsText();
   // Required in English (the copy learners agree to); Spanish is optional.
   const blank = docBlank(doc);
   return (
     <div className="form-group">
       <label className="form-label">
-        {title}
+        {t(title)}
         <span className="req">*</span>
         {blank && <span className="form-label-error">{EMPTY_ERROR}</span>}
       </label>
@@ -1297,7 +1546,7 @@ function LegalDocField({
         minRows={4}
         maxRows={16}
       />
-      <p className="form-help">{desc}</p>
+      <p className="form-help">{t(desc)}</p>
     </div>
   );
 }
@@ -1340,6 +1589,35 @@ function describeChanges(
         onDrop: revert("forceUpdates", (d, sv) => {
           const keep = new Set([...d.map((x) => x.id), h.id]);
           return [...d.filter((x) => !savedIds.has(x.id)), ...sv.filter((x) => keep.has(x.id))];
+        }),
+      });
+
+  // What's New Page — added, removed, or its link / versions changed, by id.
+  for (const p of draft.whatsNewPages) {
+    const was = saved.whatsNewPages.find((x) => x.id === p.id);
+    if (was && sameValue(p, was)) continue;
+    const what = was
+      ? [p.url !== was.url && "Link Changed", !sameValue(p.versions, was.versions) && "Versions Changed"]
+          .filter((x): x is string => !!x)
+          .join(", ")
+      : "Added";
+    out.push({
+      key: `wn-${p.id}`, subject: `What's New Page · ${(was ?? p).url}`, action: what,
+      onDrop: revert("whatsNewPages", (d) => (was ? d.map((x) => (x.id === p.id ? was : x)) : d.filter((x) => x.id !== p.id))),
+    });
+  }
+  for (const p of saved.whatsNewPages)
+    if (!draft.whatsNewPages.some((x) => x.id === p.id))
+      out.push({
+        key: `wn-${p.id}`, subject: `What's New Page · ${p.url}`, action: "Removed",
+        onDrop: revert("whatsNewPages", (d, sv) => {
+          // Back in its saved place, with the other rows as they now stand.
+          const keep = new Set([...d.map((x) => x.id), p.id]);
+          const savedIds = new Set(sv.map((x) => x.id));
+          return [
+            ...d.filter((x) => !savedIds.has(x.id)),
+            ...sv.filter((x) => keep.has(x.id)).map((x) => d.find((y) => y.id === x.id) ?? x),
+          ];
         }),
       });
 
@@ -1453,11 +1731,12 @@ function SaveReviewModal({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const t = useDsText();
   useEscape(onCancel);
   return (
     <PrmModal
       title={`Save ${changes.length} ${changes.length === 1 ? "Change" : "Changes"}?`}
-      confirmLabel="Save Changes"
+      confirmLabel={t("Save Changes")}
       onCancel={onCancel}
       onConfirm={onConfirm}
     >
@@ -1495,6 +1774,7 @@ export function ProductConfigPage({
   templates: AwardDesignTemplate[];
   setTemplates: React.Dispatch<React.SetStateAction<AwardDesignTemplate[]>>;
 }) {
+  const t = useDsText();
   const [tab, setTab] = useState<Tab>(initialTab ?? "general");
   // A tab link followed while already here: go to that tab. (Not on mount —
   // useState above already opened on it.)
@@ -1609,29 +1889,29 @@ export function ProductConfigPage({
         <div className="tasks pc-page">
           <header className="tasks-header">
             <div>
-              <h1 className="tasks-title">Product Config</h1>
+              <h1 className="tasks-title">{t("Product Config")}</h1>
             </div>
             {onTemplatesTab && (
               <div className="tasks-header-actions">
                 <button className="new-task" onClick={() => setTemplateWizard({ kind: "new" })}>
                   <AddIcon />
-                  Create Design Template
+                  {t("Create Design Template")}
                   <span className="cta-kbd">C</span>
                 </button>
               </div>
             )}
           </header>
 
-          <div className="tabbar pc-tabs" role="tablist" aria-label="Product Config">
-            {TAB_ORDER.map((t) => (
+          <div className="tabbar pc-tabs" role="tablist" aria-label={t("Product Config")}>
+            {TAB_ORDER.map((k) => (
               <button
-                key={t}
+                key={k}
                 role="tab"
-                aria-selected={tab === t}
-                className={`tab${tab === t ? " is-active" : ""}`}
-                onClick={() => setTab(t)}
+                aria-selected={tab === k}
+                className={`tab${tab === k ? " is-active" : ""}`}
+                onClick={() => setTab(k)}
               >
-                {TAB_LABELS[t]}
+                {t(TAB_LABELS[k])}
               </button>
             ))}
           </div>
@@ -1661,17 +1941,21 @@ export function ProductConfigPage({
                         history={settings.forceUpdates}
                         onChange={set("forceUpdates")}
                       />
+                      <WhatsNewField
+                        pages={settings.whatsNewPages}
+                        onChange={set("whatsNewPages")}
+                      />
                       <NumberField
-                        label="Webcam Capture Frequency in Seconds"
-                        help="How often the webcam captures a frame during proctored sessions. Changes apply to future Proctored Quiz attempts only."
+                        label={t("Webcam Capture Frequency in Seconds")}
+                        help={t("How often the webcam captures a frame during proctored sessions. Changes apply to future Proctored Quiz attempts only.")}
                         value={settings.webcamFrequency}
                         onChange={set("webcamFrequency")}
                         min={NUMBER_MINS.webcamFrequency}
                         error={numberErr.webcamFrequency}
                       />
                       <NumberField
-                        label="Initial Tasks Count"
-                        help="How many Tasks from the start of each Certification are open to B2C Starter users and B2B companies with no active plan. Final Exams stay locked regardless."
+                        label={t("Initial Tasks Count")}
+                        help={t("How many Tasks from the start of each Certification are open to B2C Starter users and B2B companies with no active plan. Final Exams stay locked regardless.")}
                         value={settings.initialTaskCount}
                         onChange={set("initialTaskCount")}
                         min={NUMBER_MINS.initialTaskCount}
@@ -1684,13 +1968,13 @@ export function ProductConfigPage({
                   {tab === "display" && (
                     <>
                       <TabsField
-                        label="App Tabs"
+                        label={t("App Tabs")}
                         help="Customise the tabs shown in the learner app. Set the name per language, visibility, destination URL, and an icon."
                         rows={settings.appTabs}
                         onUpdate={update("appTabs")}
                       />
                       <TabsField
-                        label="Dashboard Tabs"
+                        label={t("Dashboard Tabs")}
                         help="Customise the tabs shown in the B2B dashboard. Set the name per language, visibility, destination URL, and an icon."
                         rows={settings.dashboardTabs}
                         onUpdate={update("dashboardTabs")}
@@ -1706,7 +1990,7 @@ export function ProductConfigPage({
                     <>
                       <div className="form-group">
                         <label className="form-label">
-                          Paywall Pricing
+                          {t("Paywall Pricing")}
                           <span className="req">*</span>
                           {b2cPricesBlank && <span className="form-label-error">{EMPTY_ERROR}</span>}
                         </label>
@@ -1723,7 +2007,7 @@ export function ProductConfigPage({
                         </p>
                       </div>
                       <NumberField
-                        label="Free Trial Duration in Days"
+                        label={t("Free Trial Duration in Days")}
                         help="The trial length in days for new users."
                         value={settings.b2cTrialDays}
                         onChange={set("b2cTrialDays")}
@@ -1733,7 +2017,7 @@ export function ProductConfigPage({
                       <EpaCardField
                         value={settings.b2cEpaCard}
                         onChange={set("b2cEpaCard")}
-                        note="This ID applies to the user app only. For the dashboard EPA card, set it under the B2B Management tab."
+                        note={t("This ID applies to the user app only. For the dashboard EPA card, set it under the B2B Management tab.")}
                       />
                     </>
                   )}
@@ -1742,7 +2026,7 @@ export function ProductConfigPage({
                     <>
                       <div className="form-group">
                         <label className="form-label">
-                          Paywall Pricing
+                          {t("Paywall Pricing")}
                           <span className="req">*</span>
                           {b2bPricesBlank && <span className="form-label-error">{EMPTY_ERROR}</span>}
                         </label>
@@ -1753,17 +2037,16 @@ export function ProductConfigPage({
                           onChange={set("b2bPrices")}
                         />
                         <p className="form-help">
-                          Set the Stripe Price ID for each tier and billing cycle. These IDs are used
-                          to create subscriptions and checkout sessions for B2B companies.
+                          {t("Set the Stripe Price ID for each tier and billing cycle. These IDs are used to create subscriptions and checkout sessions for B2B companies.")}
                         </p>
                       </div>
                       <EpaCardField
                         value={settings.b2bEpaCard}
                         onChange={set("b2bEpaCard")}
-                        note="This ID applies to the dashboard only. For the user app EPA card, set it under the B2C Management tab."
+                        note={t("This ID applies to the dashboard only. For the user app EPA card, set it under the B2C Management tab.")}
                       />
                       <NumberField
-                        label="Free Trial Duration in Days"
+                        label={t("Free Trial Duration in Days")}
                         help="The trial length in days for new companies. The trial needs no payment method."
                         value={settings.b2bTrialDays}
                         onChange={set("b2bTrialDays")}
@@ -1777,7 +2060,7 @@ export function ProductConfigPage({
                         noun="Partnership"
                         fieldLabel="Name"
                         modalDesc="A partner affiliation that can be assigned to B2B companies."
-                        emptyLabel="No Partnerships Configured Yet"
+                        emptyLabel={t("No Partnerships Configured Yet")}
                         options={settings.partnerships}
                         onChange={set("partnerships")}
                         onRequestRemove={onRemoveValue && requestRemove("partnerships", "Partnership")}
@@ -1789,19 +2072,19 @@ export function ProductConfigPage({
                         noun="Trade"
                         fieldLabel="Name"
                         modalDesc="A trade category used to classify B2B companies and tailor their content."
-                        emptyLabel="No Trades Configured Yet"
+                        emptyLabel={t("No Trades Configured Yet")}
                         options={settings.trades}
                         onChange={set("trades")}
                         onRequestRemove={onRemoveValue && requestRemove("trades", "Trade")}
                       />
                       <OptionListField
-                        label="Cancellation Reasons"
+                        label={t("Cancellation Reasons")}
                         help="Options shown to admins when they cancel a B2B subscription. Add or remove reasons to customise the field values."
                         column="REASON"
                         noun="Reason"
                         fieldLabel="Reason"
                         modalDesc="An option admins can pick when they cancel a B2B subscription."
-                        emptyLabel="No Cancellation Reasons Configured Yet"
+                        emptyLabel={t("No Cancellation Reasons Configured Yet")}
                         options={settings.cancelReasons}
                         onChange={set("cancelReasons")}
                         onRequestRemove={onRemoveValue && requestRemove("cancelReasons", "Reason")}
@@ -1812,16 +2095,16 @@ export function ProductConfigPage({
                   {tab === "legal" && (
                     <>
                       <LegalDocField
-                        title="Terms of Service"
+                        title={t("Terms of Service")}
                         titleEs="Términos de Servicio"
-                        desc="The Terms of Service shown to learners. Provide both English and Spanish versions."
+                        desc={t("The Terms of Service shown to learners. Provide both English and Spanish versions.")}
                         doc={settings.termsOfService}
                         onChange={set("termsOfService")}
                       />
                       <LegalDocField
-                        title="Privacy Policy"
+                        title={t("Privacy Policy")}
                         titleEs="Política de Privacidad"
-                        desc="The Privacy Policy shown to learners. Provide both English and Spanish versions."
+                        desc={t("The Privacy Policy shown to learners. Provide both English and Spanish versions.")}
                         doc={settings.privacyPolicy}
                         onChange={set("privacyPolicy")}
                       />

@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   completesOnSubmission,
@@ -153,6 +154,7 @@ export function ReviewConsole({
    *  Next) — the page keeps the URL on the open submission. */
   onNavigate?: (id: string) => void;
 }) {
+  const t = useDsText();
   const [currentId, setCurrentId] = useState(initialId);
   const [viewAttempt, setViewAttempt] = useState<number | null>(null); // 0-based chip; null = current
   /* Attempts dropdown (Figma 1169:1598 trigger / 1169:2024 panel). `attHi` is
@@ -401,7 +403,7 @@ export function ReviewConsole({
   /* See NEXT vs PENDING above: the count is pending rows after this one; the
      buttons follow whether there is any row after it at all. */
   const pendingCount = pendingAfter().length;
-  const submitLabel = nextId ? "Submit & Next" : "Submit";
+  const submitLabel = t(nextId ? "Submit & Next" : "Submit");
   // The CTA dims until a score is picked and the feedback fits its limit; its
   // tip names whatever is still in the way.
   const feedbackOver = isOver(DESCRIPTION_MAX, draft.feedback);
@@ -440,8 +442,8 @@ export function ReviewConsole({
                       type="button"
                       className="rvc-headicon"
                       onClick={() => openInNewTab(`taskBrief=${taskRecord.id}`)}
-                      aria-label="Open this Task's Pre-Submission Screen in a new tab"
-                      title="View the Pre-Submission Screen a user sees before attempting this Task"
+                      aria-label={t("Open this Task's Pre-Submission Screen in a new tab")}
+                      title={t("View the Pre-Submission Screen a user sees before attempting this Task")}
                     >
                       <RowExternalLinkIcon />
                     </button>
@@ -492,7 +494,7 @@ export function ReviewConsole({
                       <span className="rvc-ac rvc-ac--idx">#</span>
                       <span className="rvc-ac rvc-ac--result">Result</span>
                       <span className="rvc-ac rvc-ac--fb">Feedback</span>
-                      <span className="rvc-ac rvc-ac--who">Reviewed By</span>
+                      <span className="rvc-ac rvc-ac--who">{t("Reviewed By")}</span>
                       <span className="rvc-ac rvc-ac--date">Submitted</span>
                     </div>
                     <div className="rvc-alist">
@@ -569,7 +571,7 @@ export function ReviewConsole({
             <div className="rvc-stagecol">
               {/* The write-up under its label (Figma 1441:1852). */}
               <div className="rvc-notes">
-                <p className="rvc-notes-label">Learner&rsquo;s Notes</p>
+                <p className="rvc-notes-label">{t("Learner’s Notes")}</p>
                 <p className="rvc-desc">{view.description}</p>
               </div>
 
@@ -655,7 +657,7 @@ export function ReviewConsole({
                   role="note"
                   mutedIcon
                   icon={<EditOffIcon />}
-                  title="Read-Only"
+                  title={t("Read-Only")}
                   body={
                     noGrading
                       ? "No grading needed. This Task is completed as soon as the learner makes a submission"
@@ -672,7 +674,7 @@ export function ReviewConsole({
                 <div className="rvc-field">
                   <div className="rvc-field-head">
                     <span className="form-label rvc-check-label">
-                      Reviewer’s Checklist
+                      {t("Reviewer\u2019s Checklist")}
                       {/* The grey subtext moved into this glyph's tooltip
                           (Figma 1172:2237/1172:2238). */}
                       <span
@@ -761,7 +763,7 @@ export function ReviewConsole({
                       {!railReadOnly && <CharCount value={shownFeedback} max={DESCRIPTION_MAX} />}
                     </div>
                     <p className="form-help">
-                      Optional. Shown to the user along with their score.
+                      {t("Optional. Shown to the user along with their score.")}
                     </p>
                   </div>
                 </>
@@ -776,8 +778,8 @@ export function ReviewConsole({
               popover (and its Q key) is gone — user, 2026-10-07. ── */}
           <div className="wizard-footer rvc-footer">
             <button className="wizard-cancel" onClick={() => onExit()}>
-              Back
-            </button>
+{t("Back")}
+</button>
             <div className="rvc-foot-actions">
               {/* Skip prints its own N keycap (756:3836). It walks every row,
                   even at "0 Pending" (NEXT vs PENDING, above), and is hidden
@@ -785,7 +787,7 @@ export function ReviewConsole({
               {nextId && (
                 <button className="btn-save-draft rvc-skip" onClick={doSkip}>
                   <span className="rvc-skip-label">
-                    Skip to Next{" "}
+                    {t("Skip to Next")}{" "}
                     <span className="rvc-skip-count">· {pendingCount} Pending</span>
                   </span>
                   <span className="cta-kbd">N</span>
@@ -796,7 +798,7 @@ export function ReviewConsole({
                   className="btn-save-draft rvc-back-current"
                   onClick={() => { setViewAttempt(null); setMediaIndex(0); }}
                 >
-                  Back To Current Attempt
+                  {t("Back To Current Attempt")}
                   <span className="cta-kbd">Esc</span>
                 </button>
               ) : reviewable ? (
@@ -821,7 +823,7 @@ export function ReviewConsole({
 
       {confirmSubmit && draft.score != null && (
         <PrmModal
-          title="Submit Review?"
+          title={t("Submit Review?")}
           confirmLabel={submitLabel}
           onCancel={() => setConfirmSubmit(false)}
           onConfirm={commitSubmit}

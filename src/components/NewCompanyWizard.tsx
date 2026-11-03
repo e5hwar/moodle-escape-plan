@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   BILLING_CYCLES,
@@ -5,6 +6,7 @@ import {
   CURRENCY_SYMBOL,
   DEFAULT_RATES,
   TAX_STATUSES,
+  COMPANY_SIZES,
   TIERS,
   CSM_OPTIONS,
 
@@ -23,6 +25,7 @@ import {
   todayStamp,
   type BillingCycle,
   type CompanyBilling,
+  type CompanySize,
   type Company,
   type Currency,
   type PaymentCollection,
@@ -204,6 +207,7 @@ export function planFor(c: Company): Plan {
 const STEP_LABELS = ["Company Details", "Admin Account", "Plan"];
 
 export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, onSave, subscriptionOnly = false, detailsOnly = false, onNavigateToProductConfig }: Props) {
+  const t = useDsText();
   const isEdit = !!editCompany;
   // Billing defaults are derived for seed companies that have no explicit values,
   // so the edit form starts populated either way.
@@ -264,6 +268,7 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
   // Company details
   const [name, setName] = useState(editCompany?.name ?? "");
   const [taxStatus, setTaxStatus] = useState<TaxStatus>(editCompany?.taxStatus ?? "Taxable");
+  const [companySize, setCompanySize] = useState<CompanySize | undefined>(editCompany?.companySize);
   /* Editing shows the owners the Companies table shows, which for a record
      created before these fields existed is the derived one — reading the
      record raw made the form say "Unassigned" for an account the table
@@ -366,6 +371,7 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
      handleSaveDetails writes, so putting a value back un-dirties the form. */
   const detailsStateKey = draftKey({
     name: name.trim(),
+    companySize,
     taxStatus,
     assignedCsm,
     assignedSalesRep,
@@ -557,11 +563,9 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
       : null;
   // Editing always saves changes, whatever the change turns out to be — the
   // preview states what will happen, so the button doesn't have to.
-  const saveCta = isEdit
-    ? "Save Changes"
-    // Creating doesn't save from here — it hands off to the confirmation screen,
-    // where "Create company" is the button that actually commits.
-    : "Review Details";
+  // Creating doesn't save from here — it hands off to the confirmation screen,
+  // where "Create company" is the button that actually commits.
+  const saveCta = t(isEdit ? "Save Changes" : "Review Details");
   const builtPreview = buildPreviewModel({
     change, planTypeChange, currentSub,
     plan, tier, billingCycle, payment, effectiveRate, seatCount, planTotal, sym,
@@ -681,6 +685,7 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
     onSave?.({
       ...editCompany,
       name: name.trim(),
+      companySize,
       taxStatus,
       assignedCsm: assignedCsm || undefined,
       assignedSalesRep: assignedSalesRep || undefined,
@@ -776,6 +781,7 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
       seats: seatCount,
       industry: industries,
       partnership: partnerships,
+      companySize,
       taxStatus,
       assignedCsm: assignedCsm || undefined,
       assignedSalesRep: assignedSalesRep || undefined,
@@ -932,10 +938,10 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
         <aside className="wizard-nav">
           <div className="wizard-brand">
             <span className="wizard-brand-eyebrow">
-              {isEdit ? "Editing Company" : "Creating"}
+              {isEdit ? t("Editing Company") : t("Creating")}
             </span>
             <span className="wizard-brand-name">
-              {editCompany ? editCompany.name : "New Company"}
+              {editCompany ? editCompany.name : t("New Company")}
             </span>
           </div>
 
@@ -950,7 +956,7 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
                 >
                   <WizardStepRail status={status} num={i + 1} />
                   <div className="wizard-step-text">
-                    <div className="wizard-step-title">{s.label}</div>
+                    <div className="wizard-step-title">{t(s.label)}</div>
                   </div>
                 </li>
               );
@@ -974,6 +980,7 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
               {step === 0 ? (
                 <Step1Details
                   name={name} setName={setName}
+                  companySize={companySize} setCompanySize={setCompanySize}
                   taxStatus={taxStatus} setTaxStatus={setTaxStatus}
                   assignedCsm={assignedCsm} setAssignedCsm={setAssignedCsm}
                   assignedSalesRep={assignedSalesRep} setAssignedSalesRep={setAssignedSalesRep}
@@ -1031,7 +1038,7 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
 
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
-          <button className="wizard-cancel" onClick={requestClose}>Cancel</button>
+          <button className="wizard-cancel" onClick={requestClose}>{t("Cancel")}</button>
         </div>
         <div className="wizard-actions">
           {step > 0 && !subscriptionOnly && (
@@ -1088,7 +1095,7 @@ export function NewCompanyWizard({ onClose, onCreate, onCreated, editCompany, on
                 handleSaveDetails();
               }}
             >
-              Save Changes
+              {t("Save Changes")}
               <WizardKeyHint />
             </button>
           ) : (
@@ -1557,15 +1564,16 @@ function SaveChangesModal({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const t = useDsText();
   const planChanged = model.rows.some((r) => r.label === "Plan" && r.oldStr != null);
   const rows = planChanged
     ? model.rows.map((r) => (r.oldStr != null ? r : { ...r, oldStr: "—" }))
     : model.rows.filter((r) => r.oldStr != null);
   return (
     <PrmModal
-      title="Save Changes"
+      title={t("Save Changes")}
       description="Review the change before it is applied."
-      confirmLabel="Save Changes"
+      confirmLabel={t("Save Changes")}
       onCancel={onCancel}
       onConfirm={onConfirm}
     >
@@ -1574,7 +1582,7 @@ function SaveChangesModal({
           <div className="sub-summary">
             {rows.map((r) => (
               <div className="sub-summary-row" key={r.label}>
-                <span className="sub-summary-label">{r.label}</span>
+                <span className="sub-summary-label">{t(r.label)}</span>
                 <span className="sub-summary-val">
                   {r.oldStr != null && (
                     <>
@@ -1874,6 +1882,7 @@ function createToModel({
 // where there is a prior value — over the billing timeline. Both sit directly in
 // the rail; there are no section headers between them.
 function SubPreview({ model }: { model: PreviewModel }) {
+  const t = useDsText();
   if (model.empty) {
     return (
       <div className="sub-preview-empty">
@@ -1888,7 +1897,7 @@ function SubPreview({ model }: { model: PreviewModel }) {
         <div className="sub-summary">
           {model.rows.map((r) => (
             <div className="sub-summary-row" key={r.label}>
-              <span className="sub-summary-label">{r.label}</span>
+              <span className="sub-summary-label">{t(r.label)}</span>
               <span className="sub-summary-val">
                 {r.oldStr != null && (
                   <>
@@ -1906,18 +1915,18 @@ function SubPreview({ model }: { model: PreviewModel }) {
           there is no price yet, so there are no charges to lay out. */}
       {model.timeline.length > 0 && (
       <div className="sub-timeline">
-        {model.timeline.map((t, i) => (
+        {model.timeline.map((tl, i) => (
           <div className="sub-timeline-item" key={i}>
             <div className="sub-timeline-rail">
-              <span className={`sub-timeline-dot ${t.now ? "is-now" : ""}`} />
+              <span className={`sub-timeline-dot ${tl.now ? "is-now" : ""}`} />
               {i < model.timeline.length - 1 && <span className="sub-timeline-divider" />}
             </div>
             <div className="sub-timeline-body">
-              <p className="sub-timeline-date">{t.date}</p>
-              {t.amount != null && (
-                <p className={`sub-timeline-amount ${t.muted ? "is-muted" : ""}`}>{t.amount}</p>
+              <p className="sub-timeline-date">{t(tl.date)}</p>
+              {tl.amount != null && (
+                <p className={`sub-timeline-amount ${tl.muted ? "is-muted" : ""}`}>{tl.amount}</p>
               )}
-              <p className="sub-timeline-desc">{t.desc}</p>
+              <p className="sub-timeline-desc">{t(tl.desc)}</p>
             </div>
           </div>
         ))}
@@ -1933,6 +1942,7 @@ function Step1Details({
   nameMissing = false,
   touch,
   name, setName,
+  companySize, setCompanySize,
   taxStatus, setTaxStatus,
   assignedCsm, setAssignedCsm,
   assignedSalesRep, setAssignedSalesRep,
@@ -1955,6 +1965,7 @@ function Step1Details({
   nameMissing?: boolean;
   touch: (key: string) => void;
   name: string; setName: (v: string) => void;
+  companySize: CompanySize | undefined; setCompanySize: (v: CompanySize | undefined) => void;
   taxStatus: TaxStatus; setTaxStatus: (v: TaxStatus) => void;
   assignedCsm: string; setAssignedCsm: (v: string) => void;
   assignedSalesRep: string; setAssignedSalesRep: (v: string) => void;
@@ -1973,6 +1984,7 @@ function Step1Details({
   partnerships: string[]; setPartnerships: (v: string[]) => void;
   onNavigateToProductConfig?: () => void;
 }) {
+  const t = useDsText();
   // Either address menu open whitens the whole shell (1550:2709) — the menus
   // are portaled and take focus, so :focus-within alone would drop the edge.
   const [countryOpen, setCountryOpen] = useState(false);
@@ -1987,15 +1999,15 @@ function Step1Details({
   ];
   return (
     <>
-      <h1 className="tasks-title">Company Details</h1>
+      <h1 className="tasks-title">{t("Company Details")}</h1>
       <p className="tasks-subtitle wizard-desc">
-        Identify the company. Trade and partnership are used for segmentation and reporting.
+        {t("Identify the company. Trade and partnership are used for segmentation and reporting.")}
       </p>
 
       <div className="form-group" onBlur={leave(() => touch("name"))}>
         <label className="form-label">
-          Company Name<span className="req">*</span>
-          {nameMissing && <span className="form-label-error">Company Name cannot be left empty</span>}
+          {t("Company Name")}<span className="req">*</span>
+          {nameMissing && <span className="form-label-error">{t("Company Name cannot be left empty")}</span>}
           {/* Admin- and receipt-facing, never truncated in the app: the hard
               128 limit only, no amber warning. */}
           <LimitError max={NAME_MAX} values={[name]} warn={false} />
@@ -2006,17 +2018,42 @@ function Step1Details({
           autoFocus
           className={`form-input${nameMissing ? " has-error" : ""}`}
           aria-invalid={nameMissing || undefined}
-          placeholder="Company Name"
+          placeholder={t("Company Name")}
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
-        <p className="form-help">This will be the name shown on Stripe's receipts</p>
+        <p className="form-help">{t("This will be the name shown on Stripe's receipts")}</p>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">{t("Company Size")}</label>
+        {/* Optional, so "None" leads and takes the neutral active — an unset
+            size never reads as a deliberate choice. */}
+        <div className="seg-control">
+          <button
+            type="button"
+            className={`seg-btn ${companySize === undefined ? "active" : ""}`}
+            onClick={() => setCompanySize(undefined)}
+          >
+            {t("None")}
+          </button>
+          {COMPANY_SIZES.map((s) => (
+            <button
+              key={s}
+              type="button"
+              className={`seg-btn ${companySize === s ? "active accent" : ""}`}
+              onClick={() => setCompanySize(s)}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="form-group" onBlur={leave(() => touch("zip"))}>
         <label className="form-label">
           Address<span className="req">*</span>
-          {zipMissing && <span className="form-label-error">Zip Code cannot be left empty</span>}
+          {zipMissing && <span className="form-label-error">{t("Zip Code cannot be left empty")}</span>}
           {zipInvalid && <span className="form-label-error">{zipInvalid}</span>}
         </label>
         <div
@@ -2033,7 +2070,7 @@ function Step1Details({
               setCountry(next);
             }}
             onOpenChange={setCountryOpen}
-            searchPlaceholder="Search Countries..."
+            searchPlaceholder={t("Search Countries...")}
             maxVisibleOptions={5}
             renderTrigger={({ toggle, label }) => (
               <button type="button" className="address-row address-row-btn" onClick={toggle}>
@@ -2044,20 +2081,20 @@ function Step1Details({
           />
           <input
             className="address-input"
-            placeholder="Address Line 1 (Optional)"
+            placeholder={t("Address Line 1 (Optional)")}
             value={addrLine1}
             onChange={(e) => setAddrLine1(e.target.value)}
           />
           <input
             className="address-input"
-            placeholder="Address Line 2 (Optional)"
+            placeholder={t("Address Line 2 (Optional)")}
             value={addrLine2}
             onChange={(e) => setAddrLine2(e.target.value)}
           />
           <div className="address-split">
             <input
               className="address-input address-cell"
-              placeholder="City (Optional)"
+              placeholder={t("City (Optional)")}
               value={addrCity}
               onChange={(e) => setAddrCity(e.target.value)}
             />
@@ -2100,7 +2137,7 @@ function Step1Details({
           ) : (
             <input
               className="address-input"
-              placeholder="State (Optional)"
+              placeholder={t("State (Optional)")}
               value={addrState}
               onChange={(e) => setAddrState(e.target.value)}
             />
@@ -2108,14 +2145,14 @@ function Step1Details({
         </div>
         <p className="form-help">
           {zipRequired(country)
-            ? "Country and Zipcode are mandatory"
-            : `Country is mandatory. ${country} doesn't use postal codes, so Zipcode is optional`}
+            ? t("Country and Zipcode are mandatory")
+            : `${t("Country is mandatory.")} ${country} ${t("doesn't use postal codes, so Zipcode is optional")}`}
         </p>
       </div>
 
       <div className="form-group">
-        <label className="form-label">Tax Status<span className="req">*</span></label>
-        <SelectField value={taxStatus} options={TAX_STATUSES} onChange={setTaxStatus} />
+        <label className="form-label">{t("Tax Status")}<span className="req">*</span></label>
+        <SelectField value={taxStatus} options={TAX_STATUSES} onChange={setTaxStatus} dsCase />
         <p className="form-help">
           Refer to{" "}
           <a
@@ -2124,7 +2161,7 @@ function Step1Details({
             rel="noopener noreferrer"
             className="text-link"
           >
-            Stripe's Documentation
+            {t("Stripe's Documentation")}
           </a>{" "}
           for more details
         </p>
@@ -2132,16 +2169,16 @@ function Step1Details({
 
       <div className="form-row-2">
         <div className="form-group">
-          <label className="form-label">Trade</label>
+          <label className="form-label">{t("Trade")}</label>
           <MultiSelect
             options={withCurrent(tradeOptions, industries)}
             value={industries}
             onChange={setIndustries}
-            placeholder="Select Trade"
-            searchPlaceholder="Search Trade..."
+            placeholder={t("Select Trade")}
+            searchPlaceholder={t("Search Trade...")}
           />
           <p className="form-help co-w-manage-link">
-            Manage Trade on{" "}
+            {t("Manage Trade on")}{" "}
             <a
               href="#"
               className="text-link"
@@ -2150,21 +2187,21 @@ function Step1Details({
                 onNavigateToProductConfig?.();
               }}
             >
-              Product Config
+              {t("Product Config")}
             </a>
           </p>
         </div>
         <div className="form-group">
-          <label className="form-label">Partnership</label>
+          <label className="form-label">{t("Partnership")}</label>
           <MultiSelect
             options={withCurrent(partnershipOptions, partnerships)}
             value={partnerships}
             onChange={setPartnerships}
-            placeholder="Select Partnerships"
-            searchPlaceholder="Search Partnerships..."
+            placeholder={t("Select Partnerships")}
+            searchPlaceholder={t("Search Partnerships...")}
           />
           <p className="form-help co-w-manage-link">
-            Manage Partnerships on{" "}
+            {t("Manage Partnerships on")}{" "}
             <a
               href="#"
               className="text-link"
@@ -2173,7 +2210,7 @@ function Step1Details({
                 onNavigateToProductConfig?.();
               }}
             >
-              Product Config
+              {t("Product Config")}
             </a>
           </p>
         </div>
@@ -2181,21 +2218,21 @@ function Step1Details({
 
       <div className="form-row-2">
         <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label">Assigned CSM</label>
+          <label className="form-label">{t("Assigned CSM")}</label>
           <SelectField
             value={assignedCsm}
             options={CSM_OPTIONS}
             onChange={setAssignedCsm}
-            placeholder="Unassigned"
+            placeholder={t("Unassigned")}
           />
         </div>
         <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label">Assigned Sales Rep</label>
+          <label className="form-label">{t("Assigned Sales Rep")}</label>
           <SelectField
             value={assignedSalesRep}
             options={SALES_REP_OPTIONS}
             onChange={setAssignedSalesRep}
-            placeholder="Unassigned"
+            placeholder={t("Unassigned")}
           />
         </div>
       </div>
@@ -2221,17 +2258,18 @@ function StepAdminAccount({
   email: string; setEmail: (v: string) => void;
   phone: string; setPhone: (v: string) => void;
 }) {
+  const t = useDsText();
   return (
     <>
-      <h1 className="tasks-title">Admin Account</h1>
+      <h1 className="tasks-title">{t("Admin Account")}</h1>
       <p className="tasks-subtitle wizard-desc">
-        The primary contact and first Admin account for the company.
+        {t("The primary contact and first Admin account for the company.")}
       </p>
 
       <div className="form-group" onBlur={leave(() => touch("holder"))}>
         <label className="form-label">
-          Account Holder<span className="req">*</span>
-          {holderMissing && <span className="form-label-error">Account Holder cannot be left empty</span>}
+          {t("Account Holder")}<span className="req">*</span>
+          {holderMissing && <span className="form-label-error">{t("Account Holder cannot be left empty")}</span>}
           {/* Admin-facing, never truncated: the hard 128 limit only. */}
           <LimitError max={NAME_MAX} values={[contactName]} warn={false} />
         </label>
@@ -2241,7 +2279,7 @@ function StepAdminAccount({
           autoFocus
           className={`form-input${holderMissing ? " has-error" : ""}`}
           aria-invalid={holderMissing || undefined}
-          placeholder="Name..."
+          placeholder={t("Name...")}
           value={contactName}
           onChange={(e) => setContactName(e.target.value)}
         />
@@ -2250,23 +2288,23 @@ function StepAdminAccount({
       <div className="form-group" onBlur={leave(() => touch("email"))}>
         <label className="form-label">
           Email<span className="req">*</span>
-          {emailMissing && <span className="form-label-error">Email cannot be left empty</span>}
+          {emailMissing && <span className="form-label-error">{t("Email cannot be left empty")}</span>}
         </label>
         <input
           className={`form-input${emailMissing ? " has-error" : ""}`}
           aria-invalid={emailMissing || undefined}
           type="email"
-          placeholder="Email..."
+          placeholder={t("Email...")}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
         <p className="form-help">
-          Becomes the Stripe billing email and the company's first Admin account.
+          {t("Becomes the Stripe billing email and the company's first Admin account.")}
         </p>
       </div>
 
       <div className="form-group" style={{ marginBottom: 0 }}>
-        <label className="form-label">Phone Number</label>
+        <label className="form-label">{t("Phone Number")}</label>
         <PhoneField phone={phone} setPhone={setPhone} />
       </div>
     </>
@@ -2326,6 +2364,7 @@ function Step2Plan({
   /** Manage Subscription: this step IS the page, so it heads itself. */
   manageMode?: boolean;
 }) {
+  const t = useDsText();
   const isSubscription = plan === "subscription";
 
   // Why an option of the Plan field can't be picked — the lock card's copy.
@@ -2357,13 +2396,13 @@ function Step2Plan({
 
   return (
     <>
-      <h1 className="tasks-title">{manageMode ? "Manage Subscription" : "Plan Selection"}</h1>
+      <h1 className="tasks-title">{manageMode ? t("Manage Subscription") : t("Plan Selection")}</h1>
       <p className="tasks-subtitle wizard-desc">
         {manageMode ? "Update the company's plan" : "Set up the company's plan"}
       </p>
 
       <div className="form-group">
-        <label className="form-label">Plan<span className="req">*</span></label>
+        <label className="form-label">{t("Plan")}<span className="req">*</span></label>
         {/* The Quiz Structure lock's format: why an option is unavailable goes
             in the lock card above; every option keeps its own subtext, and only
             the unavailable ones are disabled. */}
@@ -2371,28 +2410,28 @@ function Step2Plan({
           locked={!!planLock}
           lockChildren={false}
           title={planLock?.title}
-          sub={planLock?.sub}
+          sub={planLock && t(planLock.sub)}
         >
           <div className="radio-card-group">
             <RadioCard
               selected={plan === "subscription"}
               onSelect={() => setPlan("subscription")}
               title="Subscription"
-              desc="Paid plan. You can set the Tier, Price-Per Seat, and Payment Method"
+              desc={t("Paid plan. You can set the Tier, Price-Per Seat, and Payment Method")}
             />
             <RadioCard
               selected={plan === "free-trial"}
               onSelect={() => setPlan("free-trial")}
               disabled={trialUnavailable}
-              title="Free Trial"
+              title={t("Free Trial")}
               desc={`${trialDays}-day free trial. No payment method required to start the trial.`}
             />
             <RadioCard
               selected={plan === "complimentary"}
               onSelect={() => setPlan("complimentary")}
               disabled={complimentaryLocked}
-              title="Complimentary Free Access"
-              desc="Free access, with all the same features as that of the Professional Tier."
+              title={t("Complimentary Free Access")}
+              desc={t("Free access, with all the same features as that of the Professional Tier.")}
             />
           </div>
         </LockedField>
@@ -2401,7 +2440,7 @@ function Step2Plan({
       {isSubscription && (
         <>
           <div className="form-group">
-            <label className="form-label">Subscription Tier<span className="req">*</span></label>
+            <label className="form-label">{t("Subscription Tier")}<span className="req">*</span></label>
             <div className="seg-control">
               {(TIERS as PaidTier[]).map((t) => (
                 <button
@@ -2417,7 +2456,7 @@ function Step2Plan({
           </div>
 
           <div className="form-group">
-            <label className="form-label">Billing Cycle<span className="req">*</span></label>
+            <label className="form-label">{t("Billing Cycle")}<span className="req">*</span></label>
             <div className="seg-control">
               {BILLING_CYCLES.map((c) => (
                 <button
@@ -2434,8 +2473,8 @@ function Step2Plan({
 
           <div className="form-group" onBlur={leave(() => touch("price"))}>
             <label className="form-label">
-              Per-Seat Price<span className="req">*</span>
-              {priceMissing && <span className="form-label-error">Per-Seat Price cannot be left empty</span>}
+              {t("Per-Seat Price")}<span className="req">*</span>
+              {priceMissing && <span className="form-label-error">{t("Per-Seat Price cannot be left empty")}</span>}
             </label>
             <PerSeatPriceField
               missing={priceMissing}
@@ -2456,7 +2495,7 @@ function Step2Plan({
           <div className="form-group" onBlur={leave(() => touch("seats"))}>
             <label className="form-label">
               Seats<span className="req">*</span>
-              {seatsMissing && <span className="form-label-error">Seats cannot be left empty</span>}
+              {seatsMissing && <span className="form-label-error">{t("Seats cannot be left empty")}</span>}
             </label>
             <Stepper
               value={seats}
@@ -2467,18 +2506,18 @@ function Step2Plan({
             />
             <p className="form-help">
               {seatsLocked
-                ? "Seats are added and removed from the Company's Dashboard"
-                : "Minimum 1. Number of seats to be billed for the company's first invoice."}
+                ? t("Seats are added and removed from the Company's Dashboard")
+                : t("Minimum 1. Number of seats to be billed for the company's first invoice.")}
             </p>
           </div>
 
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Payment Method<span className="req">*</span></label>
+            <label className="form-label">{t("Payment Method")}<span className="req">*</span></label>
             <LockedField
               locked={automaticLocked}
               lockChildren={false}
-              title="Automatic Payment Unavailable"
-              sub="Companies can switch to automatic payment via the Billing Tab of their Dashboard."
+              title={t("Automatic Payment Unavailable")}
+              sub={t("Companies can switch to automatic payment via the Billing Tab of their Dashboard.")}
             >
               <div className="radio-card-group">
                 <RadioCard
@@ -2521,13 +2560,13 @@ function Step2Plan({
       {plan === "complimentary" && (
         <div className="form-group" onBlur={leave(() => touch("endDate"))} style={{ marginBottom: 0 }}>
           <label className="form-label">
-            Access End Date<span className="req">*</span>
-            {endDateMissing && <span className="form-label-error">Access End Date cannot be left empty</span>}
+            {t("Access End Date")}<span className="req">*</span>
+            {endDateMissing && <span className="form-label-error">{t("Access End Date cannot be left empty")}</span>}
           </label>
           <DateField
             value={freeAccessEndDate}
             onChange={setFreeAccessEndDate}
-            placeholder="Select Date..."
+            placeholder={t("Select Date...")}
             hasError={endDateMissing}
             shortcuts={freeAccessEndShortcuts()}
           />
@@ -2560,6 +2599,7 @@ function PerSeatPriceField({
   noteRate: number;
   noteSym: string;
 }) {
+  const t = useDsText();
   // Both halves are SelectFields; these only light the shared shell's open edge.
   const [priceOpen, setPriceOpen] = useState(false);
   const [currencyOpen, setCurrencyOpen] = useState(false);
@@ -2607,7 +2647,7 @@ function PerSeatPriceField({
         <SelectField
           value={currencyOptionFor(currency)}
           options={CURRENCY_INFO.map((c) => currencyOptionFor(c.code))}
-          searchPlaceholder="Search..."
+          searchPlaceholder={t("Search...")}
           onChange={(next) => setCurrency(codeFromCurrencyOption(next) as Currency)}
           maxVisibleOptions={5}
           panelClass="ss-menu--currency"
@@ -2643,7 +2683,7 @@ function PerSeatPriceField({
               const p = priceByOption.get(o);
               if (p) setPriceStr(String(rateOf(p)));
             }}
-            searchPlaceholder="Search Prices..."
+            searchPlaceholder={t("Search Prices...")}
             optionPrimary={(o) => {
               const p = priceByOption.get(o);
               return p ? `${sym}${rateOf(p)} ${currency}` : o;
@@ -2760,6 +2800,7 @@ function CompanyReviewCards({
    *  carry no pencil. */
   onEditStep?: (step: number) => void;
 }) {
+  const t = useDsText();
   const isSubscription = plan === "subscription";
   const currency = company.currency ?? "USD";
   // The node reads "USD $79.00" — code, then symbol, then amount. A currency
@@ -2773,6 +2814,7 @@ function CompanyReviewCards({
 
   const details: ConfirmField[] = [
     ["Company Name", company.name],
+    ["Company Size", company.companySize],
     ["Address", company.address, true],
     ["Tax Behaviour", company.taxStatus],
     ["Trade", company.industry.join(", ")],
@@ -2787,9 +2829,9 @@ function CompanyReviewCards({
 
   return (
     <>
-      <ConfirmCard title="Company Details" fillBlanks onEdit={edit(0)} columns={columns} rows={details} />
+      <ConfirmCard title={t("Company Details")} fillBlanks onEdit={edit(0)} columns={columns} rows={details} />
 
-      <ConfirmCard title="Account Holder" fillBlanks onEdit={edit(1)} columns={columns} rows={[
+      <ConfirmCard title={t("Account Holder")} fillBlanks onEdit={edit(1)} columns={columns} rows={[
         ["Company Admin", company.contactName],
         ["Email", company.email],
         ["Phone Number", company.phone],
@@ -2823,6 +2865,7 @@ function ConfirmCompanyScreen({
   /** Jumps back to the wizard step a card came from. */
   onEditStep: (step: number) => void;
 }) {
+  const t = useDsText();
   useWizardEnterShortcut(onConfirm);
   return (
     <div className="wizard">
@@ -2830,9 +2873,9 @@ function ConfirmCompanyScreen({
           with a header and content, the same shape as the steps before it. */}
       <div className="wizard-body">
         <div className="wizard-content">
-          <h1 className="tasks-title">Review Details</h1>
+          <h1 className="tasks-title">{t("Review Details")}</h1>
           <p className="tasks-subtitle wizard-desc">
-            Review all the details. Once done, the company's account will be created.
+            {t("Review all the details. Once done, the company's account will be created.")}
           </p>
 
           {/* Each card's pencil returns to the step it came from. */}
@@ -2844,12 +2887,12 @@ function ConfirmCompanyScreen({
 
       <footer className="wizard-footer">
         <div className="wizard-footer-left">
-          <button className="wizard-cancel" onClick={onBack}>Back</button>
+          <button className="wizard-cancel" onClick={onBack}>{t("Back")}</button>
         </div>
         <div className="wizard-actions">
           <button className="btn-publish" onClick={onConfirm}>
-            Create Company
-            <WizardKeyHint />
+{t("Create Company")}
+<WizardKeyHint />
           </button>
         </div>
       </footer>
@@ -2868,6 +2911,7 @@ function PaymentLinkScreen({
   title?: string;
   onClose: () => void;
 }) {
+  const t = useDsText();
   useWizardEnterShortcut(onClose);
   // The link generated and stored when the subscription was created.
   const stripeLink = company.paymentLink ?? "";
@@ -2892,9 +2936,9 @@ function PaymentLinkScreen({
           <div className="wizard-success-icon wizard-success-icon--brand">
             <CheckIcon />
           </div>
-          <h1 className="tasks-title">{title}</h1>
+          <h1 className="tasks-title">{t(title)}</h1>
           <p className="tasks-subtitle wizard-desc">
-            Almost done! Just the Payment Method needs to be added.
+            {t("Almost done! Just the Payment Method needs to be added.")}
           </p>
 
           <StripeLinkBox stripeLink={stripeLink} onCopy={() => setShowToast(true)} />
@@ -2910,8 +2954,8 @@ function PaymentLinkScreen({
         <div className="wizard-footer-left" />
         <div className="wizard-actions">
           <button className="btn-publish" onClick={onClose}>
-            Done
-            <WizardKeyHint />
+{t("Done")}
+<WizardKeyHint />
           </button>
         </div>
       </footer>
@@ -2933,6 +2977,7 @@ function CreatePriceModal({
   onClose: () => void;
   onCreate: (p: SavedPrice) => void;
 }) {
+  const t = useDsText();
   const [label, setLabel] = useState("");
   const [cycle, setCycle] = useState<BillingCycle>(initialCycle);
   /* The currencies a price can be set in: USD, CAD and — when the company's
@@ -2984,34 +3029,34 @@ function CreatePriceModal({
   // is why the groups carry no bottom margin of their own.
   return (
     <PrmModal
-      title="Create New Price"
+      title={t("Create New Price")}
       description="Set the per-seat rate per currency. This price becomes available to select for any future company."
-      confirmLabel="Create Price"
+      confirmLabel={t("Create Price")}
       confirmDisabled={!valid}
       onCancel={onClose}
       onConfirm={submit}
     >
       <div className="form-group" style={{ marginBottom: 0 }}>
         <label className="form-label">
-          Name
+          {t("Name")}
           <LimitError max={NAME_MAX} values={[label]} />
         </label>
         <LimitedInput
           max={NAME_MAX}
           autoFocus
           className="form-input"
-          placeholder="Name..."
+          placeholder={t("Name...")}
           value={label}
           onChange={(e) => setLabel(e.target.value)}
         />
         <p className="form-help">
-          Optional - Internal-facing label for the saved-price list. Never shown to the customer.
+          {t("Optional - Internal-facing label for the saved-price list. Never shown to the customer.")}
         </p>
       </div>
 
       {/* The same segmented control the Plan step uses for Billing Cycle. */}
       <div className="form-group" style={{ marginBottom: 0 }}>
-        <label className="form-label">Billing Cycle</label>
+        <label className="form-label">{t("Billing Cycle")}</label>
         <div className="seg-control">
           {BILLING_CYCLES.map((c) => (
             <button
@@ -3027,7 +3072,7 @@ function CreatePriceModal({
       </div>
 
       <div className="form-group" style={{ marginBottom: 0 }}>
-        <label className="form-label">Price Per-Seat<span className="req">*</span></label>
+        <label className="form-label">{t("Price Per-Seat")}<span className="req">*</span></label>
         {/* Figma 940:1013 "Paywall - Single Price": a tinted card of rows, each
             a split currency+amount control with a remove glyph beside it, over
             an "Add Currency" action. */}
@@ -3045,7 +3090,7 @@ function CreatePriceModal({
                     (c) => c.code === row.code || !usedCodes.includes(c.code),
                   ).map((c) => currencyOptionFor(c.code))}
                   onChange={(next) => setCode(i, codeFromCurrencyOption(next))}
-                  searchPlaceholder="Search..."
+                  searchPlaceholder={t("Search...")}
                   maxVisibleOptions={5}
                   panelClass="ss-menu--currency"
                   popupMenu
@@ -3068,7 +3113,7 @@ function CreatePriceModal({
                     type="text"
                     inputMode="decimal"
                     value={row.amount}
-                    placeholder="0.00"
+                    placeholder={t("0.00")}
                     onChange={(e) => setAmount(i, e.target.value)}
                   />
                   {/* 941:1206 — the unit follows the cycle chosen above, so a
@@ -3097,7 +3142,7 @@ function CreatePriceModal({
             onClick={() => addCurrency(available[0].code)}
           >
             <TreeAddIcon />
-            Add Currency
+            {t("Add Currency")}
           </button>
         </div>
         <p className="form-help">
@@ -3306,6 +3351,7 @@ export function RadioCard({
 }: {
   selected: boolean; onSelect: () => void; title: React.ReactNode; desc?: string; disabled?: boolean;
 }) {
+  const t = useDsText();
   return (
     <button
       type="button"
@@ -3316,8 +3362,8 @@ export function RadioCard({
     >
       <span className="radio-dot" />
       <div className="radio-card-text">
-        <div className="radio-card-title">{title}</div>
-        {desc && <div className="radio-card-desc">{desc}</div>}
+        <div className="radio-card-title">{(typeof title === "string" ? t(title) : title)}</div>
+        {desc && <div className="radio-card-desc">{t(desc)}</div>}
       </div>
     </button>
   );

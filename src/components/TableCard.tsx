@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import type { ReactNode } from "react";
 
 /* Table Card — Figma 960:980 "Quiz Questions", with the titled block the
@@ -40,12 +41,13 @@ export function TableCard({
   className?: string;
   children: ReactNode;
 }) {
+  const t = useDsText();
   const cls = (base: string) => `${base}${className ? ` ${className}` : ""}`;
   if (!title) return <div className={cls("tcard")}>{children}</div>;
   return (
     <section className={cls("tcard-block")}>
       <header className="tcard-head">
-        <h2 className="tcard-title">{title}</h2>
+        <h2 className="tcard-title">{t(title)}</h2>
         {trailing}
       </header>
       <div className="tcard">{children}</div>

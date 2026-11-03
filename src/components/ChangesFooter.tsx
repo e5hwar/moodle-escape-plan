@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useRef, useState } from "react";
 import { ChangeArrowIcon, SmallCloseIcon } from "./icons";
 import { WizardKeyHint } from "./wizardKeys";
@@ -38,6 +39,7 @@ export function ChangesFooter({
    *  disabled and this names what's wrong on hover. */
   blockedTip?: string;
 }) {
+  const t = useDsText();
   const [open, setOpen] = useState(false);
   const count = changes.length;
 
@@ -104,7 +106,7 @@ export function ChangesFooter({
           data-tip={blockedTip}
           onClick={() => !blockedTip && onReview()}
         >
-          Review &amp; Save
+          {t("Review & Save")}
           <WizardKeyHint />
         </button>
       </div>

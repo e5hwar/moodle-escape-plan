@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { UserAvatar } from "./UserAvatar";
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
@@ -498,6 +499,7 @@ export function MergeAccountsPage({
    *  Users and raises this as its success toast. There is no done screen. */
   onMerged?: (message: string) => void;
 }) {
+  const t = useDsText();
   const [step, setStep] = useState(0);
   // Furthest step reached — the rail is navigable up to here, so stepping Back
   // does not re-lock the steps already answered. Follows `step` upward; only
@@ -735,7 +737,7 @@ export function MergeAccountsPage({
      head row rather than growing it. */
   const swapButton = (
     <button className="btn-dialog" onClick={swapRoles}>
-      <SwapRolesIcon /> Swap Roles
+      <SwapRolesIcon /> {t("Swap Roles")}
     </button>
   );
 
@@ -746,7 +748,7 @@ export function MergeAccountsPage({
         <aside className="wizard-nav">
           <div className="wizard-brand">
             <span className="wizard-brand-eyebrow">Admin</span>
-            <span className="wizard-brand-name">Merge Accounts</span>
+            <span className="wizard-brand-name">{t("Merge Accounts")}</span>
           </div>
 
           <ol className="wizard-steps">
@@ -762,7 +764,7 @@ export function MergeAccountsPage({
                 >
                   <WizardStepRail status={stepStatuses[i]} num={i + 1} />
                   <div className="wizard-step-text">
-                    <div className="wizard-step-title">{x.label}</div>
+                    <div className="wizard-step-title">{t(x.label)}</div>
                   </div>
                 </li>
               );
@@ -803,11 +805,11 @@ export function MergeAccountsPage({
               <div className="form-row-2 mgf-pickers">
                 <div className="form-group">
                   <label className="form-label">
-                    Account to Keep<span className="req">*</span>
+                    {t("Account to Keep")}<span className="req">*</span>
                   </label>
                   <AccountPicker
                     user={p}
-                    placeholder="Search Account to Keep..."
+                    placeholder={t("Search Account to Keep...")}
                     onPick={() => setShowPicker(true)}
                     onClear={() => pickAccount(setPrimId, null)}
                   />
@@ -816,11 +818,11 @@ export function MergeAccountsPage({
 
                 <div className="form-group">
                   <label className="form-label">
-                    Account to Delete<span className="req">*</span>
+                    {t("Account to Delete")}<span className="req">*</span>
                   </label>
                   <AccountPicker
                     user={s}
-                    placeholder="Search Account to Delete..."
+                    placeholder={t("Search Account to Delete...")}
                     onPick={() => setShowPicker(true)}
                     onClear={() => pickAccount(setSecId, null)}
                   />
@@ -839,7 +841,7 @@ export function MergeAccountsPage({
                   body="Company-affiliated accounts cannot be removed as they are linked to their dashboard."
                   action={
                     <button className="cta-quiet" onClick={swapRoles}>
-                      Swap Roles
+                      {t("Swap Roles")}
                       <span className="cta-kbd">S</span>
                     </button>
                   }
@@ -854,7 +856,7 @@ export function MergeAccountsPage({
                   tone="danger"
                   icon={<WarnTriangleIcon />}
                   className="mgf-note"
-                  title="Both accounts belong to a B2B Company"
+                  title={t("Both accounts belong to a B2B Company")}
                   body={
                     p.company === s.company
                       ? `${p.name} and ${s.name} are both linked to ${p.company}'s dashboard, so neither one can be removed. Replace one of them with an account that isn't company-affiliated.`
@@ -902,14 +904,14 @@ export function MergeAccountsPage({
                   {/* No swap in the dead end either — rearranging two company
                       accounts changes nothing about why they can't merge. */}
                   <TableCard
-                    title="Account Details"
+                    title={t("Account Details")}
                     trailing={bothB2B ? undefined : swapButton}
                     className="mgf-tcard"
                   >
                     <CompareTable rows={accountCompareRows(p, s)} />
                   </TableCard>
 
-                  <TableCard title="Training Progress" className="mgf-tcard">
+                  <TableCard title={t("Training Progress")} className="mgf-tcard">
                     <CompareTable rows={recordCompareRows(p, s)} />
                   </TableCard>
                 </>
@@ -955,7 +957,7 @@ export function MergeAccountsPage({
                 icon={<WarnTriangleIcon />}
                 className="mgf-note"
                 title={`${activeConflicts.length} Decisions Required`}
-                body="These two require a confirmation on how to proceed. Please check with the Product or Engineering Teams in case of any questions"
+                body={t("These two require a confirmation on how to proceed. Please check with the Product or Engineering Teams in case of any questions")}
               />
 
               {/* Each conflict is a flat field: the record as its label, the two
@@ -1007,7 +1009,7 @@ export function MergeAccountsPage({
             <>
               {/* The Learning-records row says what moves in the delta column
                   rather than in the prose, the way Training Progress does. */}
-              <TableCard title="Summary of Updates" className="mgf-tcard">
+              <TableCard title={t("Summary of Updates")} className="mgf-tcard">
                 <CompareTable
                   rows={[
                     { k: "Email", a: p.email, b: s.email, strikeB: true },
@@ -1033,7 +1035,7 @@ export function MergeAccountsPage({
               {/* What moves, per category — the Skills page's grouped table:
                   a collapsible category row over its sample records. Titled by
                   the card, like every other card table on the page. */}
-              <TableCard title="Complete List of Changes" className="mgf-tcard">
+              <TableCard title={t("Complete List of Changes")} className="mgf-tcard">
                 <table className="table mgf-table mgf-records">
                   <colgroup>
                     <col />
@@ -1165,7 +1167,7 @@ export function MergeAccountsPage({
           >
             {!isLast && <span className="wizard-gate-fill" ref={gate.nextFillRef} />}
             <span className="wizard-gate-btn-inner">
-              {isLast ? "Merge Accounts" : "Continue"}
+              {isLast ? t("Merge Accounts") : t("Continue")}
               <WizardKeyHint />
             </span>
           </button>

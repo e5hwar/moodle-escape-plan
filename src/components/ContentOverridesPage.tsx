@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import {
   useEffect,
   useLayoutEffect,
@@ -220,6 +221,7 @@ export function ContentOverridesPage({
   backLabel?: string;
   onBack?: () => void;
 }) {
+  const t = useDsText();
   const data = useMemo(() => buildData(), []);
 
   /* Committed state — only the apply step writes these. Both are read from
@@ -779,7 +781,7 @@ export function ContentOverridesPage({
                 </button>
               </nav>
             )}
-            <h1 className="tasks-title">Manage Completions</h1>
+            <h1 className="tasks-title">{t("Manage Completions")}</h1>
             <div className="tasks-subtitle">
               Look up an employee, then a certification or a single task, to review and override
               completions.
@@ -793,19 +795,19 @@ export function ContentOverridesPage({
           <div className="mc-scoperow">
             <div className="mc-scopebar">
               <ScopeSearch
-                placeholder="Select a User..."
+                placeholder={t("Select a User...")}
                 scope={whoScope}
                 query={whoQ}
                 onQuery={setWhoQ}
                 onClearScope={clearWho}
                 options={whoOptions}
-                suggestLabel="Recently Active Users"
+                suggestLabel={t("Recently Active Users")}
                 openOnMount={openHalf === "who"}
                 onOpenChange={(o) => setPanelOpen((p) => ({ ...p, who: o }))}
                 handleRef={whoHandle}
               />
               <ScopeSearch
-                placeholder="Select a Task/Certification..."
+                placeholder={t("Select a Task/Certification...")}
                 scope={whatScope}
                 query={whatQ}
                 onQuery={setWhatQ}
@@ -934,7 +936,7 @@ export function ContentOverridesPage({
           {dialogOpen && (
             <PrmModal
               title={`Apply ${staged.length} ${staged.length === 1 ? "Change" : "Changes"}?`}
-              confirmLabel="Apply Changes"
+              confirmLabel={t("Apply Changes")}
               onCancel={() => setDialogOpen(false)}
               onConfirm={applyChanges}
             >
@@ -945,7 +947,7 @@ export function ContentOverridesPage({
           {/* ===== grant-attempts modal ===== */}
           {grantFor && grantTask && grantUser && (
             <PrmModal
-              title="Grant Additional Attempts"
+              title={t("Grant Additional Attempts")}
               description={`${grantUser.name} · ${grantTask.name}`}
               confirmLabel="Continue"
               onCancel={() => setGrantFor(null)}
@@ -969,7 +971,7 @@ export function ContentOverridesPage({
               other pop-up here. It used to be a one-off 460px `.pm-modal`. */}
           {gradePrompt && (
             <PrmModal
-              title="Mark Complete"
+              title={t("Mark Complete")}
               description={`${gradePrompt.taskName} · ${gradePrompt.type}`}
               confirmLabel="Continue"
               onCancel={() => {
@@ -995,7 +997,7 @@ export function ContentOverridesPage({
                           id={`mc-grade-${i}`}
                           className="mc-gradefield-input"
                           type="number"
-                          placeholder="Grade..."
+                          placeholder={t("Grade...")}
                           min={0}
                           max={100}
                           autoFocus={i === 0}
@@ -1033,7 +1035,7 @@ export function ContentOverridesPage({
                       id="mc-grade"
                       className="mc-gradefield-input"
                       type="number"
-                      placeholder="Grade..."
+                      placeholder={t("Grade...")}
                       min={0}
                       max={gradePrompt.max}
                       autoFocus
@@ -1184,6 +1186,7 @@ function ScopeSearch({
   /** Lets the page open this half from outside — the empty state's CTA. */
   handleRef?: React.MutableRefObject<ScopeHandle | null>;
 }) {
+  const t = useDsText();
   const [open, setOpen] = useState(openOnMount);
   const [active, setActive] = useState(-1);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -1333,9 +1336,9 @@ function ScopeSearch({
               >
                 <span className="mc-opt-text">
                   <span className="mc-opt-name"><HighlightMatch text={opt.name} query={query} /></span>
-                  {opt.sub && <span className="mc-opt-sub">{opt.sub}</span>}
+                  {opt.sub && <span className="mc-opt-sub">{t(opt.sub)}</span>}
                 </span>
-                {opt.kind && <span className="mc-opt-kind">{opt.kind}</span>}
+                {opt.kind && <span className="mc-opt-kind">{t(opt.kind)}</span>}
               </button>
             ))
           )}
@@ -1364,12 +1367,13 @@ type RowCtx = {
 /** One person's tasks on the employee × certification view — the Figma
  *  960:980 card: TASK · TIME SPENT · COMPLETED ON · GRADE · ATTEMPTS · ⋯. */
 function TaskTable({ uid, tasks, ctx }: { uid: string; tasks: CertTask[]; ctx: RowCtx }) {
+  const t = useDsText();
   return (
     <div className="mct">
       <div className="mct-hd">
         <span className="mct-c-task">Task</span>
-        <span className="mct-c-time">Time Spent</span>
-        <span className="mct-c-date">Completed On</span>
+        <span className="mct-c-time">{t("Time Spent")}</span>
+        <span className="mct-c-date">{t("Completed On")}</span>
         <span className="mct-c-grade">Grade</span>
         <span className="mct-c-att">Attempts</span>
         <span className="mct-c-menu" />
@@ -1385,6 +1389,7 @@ function TaskTable({ uid, tasks, ctx }: { uid: string; tasks: CertTask[]; ctx: R
 }
 
 function TaskRow({ uid, task, ctx }: { uid: string; task: CertTask; ctx: RowCtx }) {
+  const t = useDsText();
   const cell = ctx.cells[uid + "_" + task.id];
   const done = cell.status === "complete";
   const stagedC = ctx.isStagedComplete(uid, task.id);
@@ -1454,7 +1459,7 @@ function TaskRow({ uid, task, ctx }: { uid: string; task: CertTask; ctx: RowCtx 
           {canGrant && (
             <button
               className="row-action-btn"
-              aria-label="Grant Additional Attempts"
+              aria-label={t("Grant Additional Attempts")}
               data-tip="Grant Additional Attempts"
               onClick={(e) => {
                 e.stopPropagation();

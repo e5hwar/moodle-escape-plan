@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useState } from "react";
 import { hasIdDocument, idDocOf, idTimelineOf, type IdRecord } from "../data/manageIds";
 import { NoteCard } from "./NoteCard";
@@ -188,6 +189,7 @@ export function UploadIdModal({
   /** The HEIC stand-in card's full view owns Escape while open. */
   onFullViewChange?: (open: boolean) => void;
 }) {
+  const t = useDsText();
   const [file, setFile] = useState<File | null>(null);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -243,7 +245,7 @@ export function UploadIdModal({
             </button>
           )
         }
-        confirmLabel="Upload & Approve"
+        confirmLabel={t("Upload & Approve")}
         confirmDisabled={!file}
         onConfirm={() => onDecide("approved")}
         onCancel={onClose}
@@ -278,9 +280,9 @@ export function UploadIdModal({
             </span>
             <span className="mid-drop-title">Drag and drop, or click to upload</span>
             <span className="mid-drop-hint">
-              Accepted File Types: PNG, JPG, HEIC, HEIF
+              {t("Accepted File Types: PNG, JPG, HEIC, HEIF")}
               <br />
-              Maximum File Size: 100MB
+              {t("Maximum File Size: 100MB")}
             </span>
             {fileError && <span className="mid-drop-error">{fileError}</span>}
           </label>

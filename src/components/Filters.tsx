@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from "react";
 import { Dropdown } from "./Dropdown";
 import { useTipWhileClosed } from "./HoverTooltip";
@@ -50,6 +51,7 @@ export function Filters({
   extraActive = 0,
   onClearExtra,
 }: Props) {
+  const t = useDsText();
   const moreCount =
     filters.visibilities.length +
     filters.subscription.length +
@@ -110,7 +112,7 @@ export function Filters({
       {extraPills}
       {hasFilters && (
         <button className="filter-clear-link" onClick={clearAll}>
-          Clear Filters
+          {t("Clear Filters")}
         </button>
       )}
     </div>
@@ -142,6 +144,7 @@ export function PillTrigger({
   tip?: string;
 }) {
   const hint = useTipWhileClosed(tip, open);
+  const t = useDsText();
   if (value && onClear) {
     return (
       <span className={`filter-applied ${open ? "open" : ""}`}>
@@ -153,9 +156,9 @@ export function PillTrigger({
           <XCircleIcon />
         </button>
         <button className="filter-applied-main" onClick={toggle} data-tip={hint}>
-          <span className="label">{label}</span>
+          <span className="label">{t(label)}</span>
           <span className="sep" />
-          <span className="value">{value}</span>
+          <span className="value">{typeof value === "string" ? t(value) : value}</span>
           <span className="caret">
             <ChevronDownIcon />
           </span>
@@ -172,7 +175,7 @@ export function PillTrigger({
       <span className="icon">
         <PlusCircleIcon />
       </span>
-      {label}
+      {t(label)}
     </button>
   );
 }
@@ -221,6 +224,7 @@ export function CreatedByPill({
   /** Overridable, but every page so far wants the shared line. */
   tip?: string;
 }) {
+  const t = useDsText();
   /* The complete source (spec review 2026-10-09): every company on record
      (live, so one created this session is listed) plus the B2B creators the
      content carries — not just the names the current rows happen to hold. */
@@ -237,7 +241,7 @@ export function CreatedByPill({
       width={300}
       trigger={({ open, toggle }) => (
         <PillTrigger
-          label="Created By"
+          label={t("Created By")}
           value={summary}
           open={open}
           toggle={toggle}
@@ -259,7 +263,7 @@ export function CreatedByPill({
             close();
           }}
           searchable
-          searchPlaceholder="Search Creators..."
+          searchPlaceholder={t("Search Creators...")}
         />
       )}
     </Dropdown>
@@ -277,6 +281,7 @@ export function CertificationsPill({
   onApply: (v: string[]) => void;
   tip?: string;
 }) {
+  const t = useDsText();
   const certifications = useCertificationOptions();
   const summary = summarize(value, certifications);
 
@@ -303,7 +308,7 @@ export function CertificationsPill({
             close();
           }}
           searchable
-          searchPlaceholder="Search Certifications..."
+          searchPlaceholder={t("Search Certifications...")}
         />
       )}
     </Dropdown>
@@ -321,6 +326,7 @@ export function TaskTypePill({
   onApply: (v: string[]) => void;
   tip?: string;
 }) {
+  const t = useDsText();
   const summary = summarize(value, TASK_TYPES);
 
   return (
@@ -328,7 +334,7 @@ export function TaskTypePill({
       width={220}
       trigger={({ open, toggle }) => (
         <PillTrigger
-          label="Task Type"
+          label={t("Task Type")}
           value={summary}
           open={open}
           toggle={toggle}
@@ -369,6 +375,7 @@ function MoreFiltersPill({
   count: number;
   onApply: (v: MoreFilterValues) => void;
 }) {
+  const t = useDsText();
   const summary = count > 0 ? `${count} Active` : null;
 
   return (
@@ -376,7 +383,7 @@ function MoreFiltersPill({
       width={320}
       trigger={({ open, toggle }) => (
         <PillTrigger
-          label="More Filters"
+          label={t("More Filters")}
           value={summary}
           open={open}
           toggle={toggle}
@@ -503,9 +510,10 @@ export function EditColumnsButton<C extends Record<string, boolean>>({
    every filter-family dropdown with a search box: the pill checklists and the
    More Filters submenus. */
 export function FilterNoResults({ height }: { height?: number }) {
+  const t = useDsText();
   return (
     <div className="filter-noresults" role="status" style={height ? { height } : undefined}>
-      <div className="filter-noresults-title">No Results Found :(</div>
+      <div className="filter-noresults-title">{t("No Results Found :(")}</div>
       <div className="filter-noresults-sub">Try changing your search or filters</div>
     </div>
   );

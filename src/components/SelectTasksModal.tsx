@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useMemo, useState } from "react";
 import { tasks as taskLibrary, type Task, type TaskType } from "../data/tasks";
 import { certifications } from "../data/certifications";
@@ -102,6 +103,7 @@ export function SelectTasksModal({
   onCancel: () => void;
   onConfirm: (ids: string[]) => void;
 }) {
+  const t = useDsText();
   const [query, setQuery] = useState("");
   /* Opens pre-filtered to the Task types that award Skills — Hands-On and
      Quiz. Clearing the pill reveals xAPI and Resources. */
@@ -232,7 +234,7 @@ export function SelectTasksModal({
 
   return (
     <PrmModal
-      title="Select Tasks"
+      title={t("Select Tasks")}
       description={description}
       confirmLabel="Continue"
       pickFull
@@ -262,9 +264,9 @@ export function SelectTasksModal({
           <div className="filters stm-filters">
             <Dropdown
               width={220}
-              trigger={({ open, toggle: t }) => (
+              trigger={({ open, toggle: tg }) => (
                 <PillTrigger
-                  label="Task Type"
+                  label={t("Task Type")}
                   tip={FILTER_TIPS.taskPicker.type}
                   /* Only four short types, so name them ("Hands-On Task, Quiz")
                      rather than the shared "2 Selected" — in menu order. */
@@ -274,7 +276,7 @@ export function SelectTasksModal({
                       : summarize(types, TASK_TYPES)
                   }
                   open={open}
-                  toggle={t}
+                  toggle={tg}
                   onClear={() => resetPage(setTypes)([])}
                 />
               )}
@@ -293,13 +295,13 @@ export function SelectTasksModal({
 
             <Dropdown
               width={200}
-              trigger={({ open, toggle: t }) => (
+              trigger={({ open, toggle: tg }) => (
                 <PillTrigger
-                  label="Task Visibility"
+                  label={t("Task Visibility")}
                   tip={FILTER_TIPS.taskPicker.visibility}
                   value={summarize(vis, VISIBILITIES)}
                   open={open}
-                  toggle={t}
+                  toggle={tg}
                   onClear={() => resetPage(setVis)([])}
                 />
               )}
@@ -318,13 +320,13 @@ export function SelectTasksModal({
 
             <Dropdown
               width={260}
-              trigger={({ open, toggle: t }) => (
+              trigger={({ open, toggle: tg }) => (
                 <PillTrigger
                   label="Certifications"
                   tip={FILTER_TIPS.taskPicker.certifications}
                   value={summarize(certs, allCerts)}
                   open={open}
-                  toggle={t}
+                  toggle={tg}
                   onClear={() => resetPage(setCerts)([])}
                 />
               )}
@@ -343,13 +345,13 @@ export function SelectTasksModal({
 
             <Dropdown
               width={300}
-              trigger={({ open, toggle: t }) => (
+              trigger={({ open, toggle: tg }) => (
                 <PillTrigger
                   label="Industries"
                   tip={FILTER_TIPS.taskPicker.industry}
                   value={summarize(inds, allIndustries)}
                   open={open}
-                  toggle={t}
+                  toggle={tg}
                   onClear={() => resetPage(setInds)([])}
                 />
               )}
@@ -390,10 +392,10 @@ export function SelectTasksModal({
                       {allOn ? <CheckIcon /> : someOn ? <CheckboxDashIcon /> : null}
                     </button>
                   </th>
-                  <Th col="name" label="Task Name" cls="stm-col-name" sort={sort} toggle={toggleSort} />
+                  <Th col="name" label={t("Task Name")} cls="stm-col-name" sort={sort} toggle={toggleSort} />
                   <Th col="type" label="Type" cls="stm-col-type" sort={sort} toggle={toggleSort} />
                   <Th col="certs" label="Certifications" cls="stm-col-certs" sort={sort} toggle={toggleSort} />
-                  <Th col="dateModified" label="Date Modified" cls="stm-col-edited" sort={sort} toggle={toggleSort} />
+                  <Th col="dateModified" label={t("Date Modified")} cls="stm-col-edited" sort={sort} toggle={toggleSort} />
                 </tr>
               </thead>
             </table>
@@ -526,11 +528,12 @@ function Th({
   sort: { key: SortKey; dir: SortDir };
   toggle: (k: SortKey) => void;
 }) {
+  const t = useDsText();
   const active = sort.key === col;
   return (
     <th className={cls} onClick={() => toggle(col)}>
       <span className="th-content">
-        {label}
+        {t(label)}
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>

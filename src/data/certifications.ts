@@ -255,6 +255,17 @@ export function formatTimeToComplete(time: Certification["timeToComplete"]): str
   return `${time.value} ${time.value === 1 ? one : many}`;
 }
 
+/* A seed stamp n days before today, in the seeds' "Oct 01, 2026" form. The
+   Certifications still mid-setup use it: Setup status only shows for a
+   Certification's first 30 days (CertificationsPage `hasSetupStatus`), and
+   fixed stamps age out of that window on the real clock. */
+const SEED_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+export function seedDaysAgo(days: number): string {
+  const now = new Date();
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - days);
+  return `${SEED_MONTHS[d.getMonth()]} ${String(d.getDate()).padStart(2, "0")}, ${d.getFullYear()}`;
+}
+
 const C = (
   id: string,
   name: string,
@@ -301,11 +312,12 @@ export const certifications: Certification[] = [
   C("C-0221", "Welding Inspector Prep", ["plumbing-pipefitting"], "1.8", 10, "SkillCat", "Dec 02, 2022", "Aug 21, 2025", { careerStage: "Master", type: "Credential", payment: "Non-consumable", keywords: ["welding", "inspector", "cwi"] }),
   // Blank type — exercises the "No Type" filter.
   C("C-0612", "Heat Pump Specialist (2026)", ["hvac-residential"], "1.6", 9, "SkillCat", "Apr 02, 2026", "Apr 28, 2026", { visibility: "Hidden", careerStage: "Journeyman", keywords: ["heat pump", "specialist", "hvac"] }),
-  // Recently created, setup unfinished (see CERT_DETAILS above). Boiler Safety
-  // Basics has no Industry yet — no tags is what "Add Industries" fixes.
-  C("C-0631", "Boiler Safety Basics", [], "0.6", 5, "SkillCat", "Oct 01, 2026", "Oct 01, 2026", { setupClosed: false, careerStage: "Apprentice", type: "Credential", keywords: ["boiler", "safety", "lockout"] }),
-  C("C-0629", "Ductless Mini-Split Install", ["hvac-residential"], "0.8", 6, "SkillCat", "Sep 29, 2026", "Sep 29, 2026", { setupClosed: false, careerStage: "Journeyman", type: "Unit", keywords: ["mini-split", "ductless", "install"] }),
-  C("C-0624", "Confined Space Entry", ["plumbing-service"], "0.4", 4, "SkillCat", "Sep 24, 2026", "Sep 24, 2026", { setupClosed: false, careerStage: "Apprentice", type: "Credential", keywords: ["confined space", "permit", "entry"] }),
+  // Recently created (relative to today), setup unfinished (see CERT_DETAILS
+  // above). Boiler Safety Basics has no Industry yet — no tags is what "Add
+  // Industries" fixes.
+  C("C-0631", "Boiler Safety Basics", [], "0.6", 5, "SkillCat", seedDaysAgo(2), seedDaysAgo(2), { setupClosed: false, careerStage: "Apprentice", type: "Credential", keywords: ["boiler", "safety", "lockout"] }),
+  C("C-0629", "Ductless Mini-Split Install", ["hvac-residential"], "0.8", 6, "SkillCat", seedDaysAgo(4), seedDaysAgo(4), { setupClosed: false, careerStage: "Journeyman", type: "Unit", keywords: ["mini-split", "ductless", "install"] }),
+  C("C-0624", "Confined Space Entry", ["plumbing-service"], "0.4", 4, "SkillCat", seedDaysAgo(9), seedDaysAgo(9), { setupClosed: false, careerStage: "Apprentice", type: "Credential", keywords: ["confined space", "permit", "entry"] }),
   // Company-created certifications — owned by a B2B account, editable only from
   // the B2B Dashboard (exercises the company edit-block flow). Only SkillCat-
   // created Certifications can carry Industry tags, so these have none.

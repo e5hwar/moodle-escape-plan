@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useState, type ReactNode } from "react";
 
 /** Modal close glyph — the design's tdesign:close (20px, 2.42 square-capped). */
@@ -111,6 +112,7 @@ export function PrmModal({
    *  between items that exist, so the title group is left on its own. */
   children?: ReactNode;
 }) {
+  const t = useDsText();
   const [sure, setSure] = useState(false);
 
   // Escape on the stacked confirm closes both. Window capture, so the page's
@@ -198,7 +200,7 @@ export function PrmModal({
             doubleConfirmLabel ??
             (typeof confirmLabel === "string" ? `Yes, ${confirmLabel}` : confirmLabel)
           }
-          cancelLabel="Go Back"
+          cancelLabel={t("Go Back")}
           className="prm--sure"
           onCancel={() => {
             setSure(false);

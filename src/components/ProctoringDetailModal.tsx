@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { Submission, WebcamFrame } from "../data/proctoring";
@@ -127,6 +128,7 @@ export function ProctoringDetailModal({
   onRequestId,
   onUpdateName,
 }: Props) {
+  const t = useDsText();
   const [zoom, setZoom] = useState<{ title: string; content: ReactNode } | null>(null);
   const [confirmKind, setConfirmKind] = useState<ConfirmKind | null>(null);
 
@@ -189,7 +191,7 @@ export function ProctoringDetailModal({
               <button
                 className="pr-modal-edit"
                 aria-label="View full profile"
-                title="Open full profile in Users"
+                title={t("Open full profile in Users")}
                 onClick={() => openUserProfile(submission.userId)}
               >
                 <ExternalLinkIcon />
@@ -578,6 +580,7 @@ function ImageZoomOverlay({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const t = useDsText();
   const [scale, setScale] = useState(1);
   const clamp = (z: number) => Math.min(3, Math.max(1, z));
 
@@ -592,7 +595,7 @@ function ImageZoomOverlay({
   return (
     <div className="ncr-fs-overlay" onClick={onClose}>
       <div className="ncr-fs-bar">
-        <div className="ncr-fs-title">{title}</div>
+        <div className="ncr-fs-title">{t(title)}</div>
         <button className="ncr-fs-close" onClick={onClose} aria-label="Close">
           <SmallXIcon />
         </button>
@@ -633,7 +636,7 @@ function ImageZoomOverlay({
           </div>
         </div>
       </div>
-      <div className="ncr-fs-hint">Press Esc or click outside to close</div>
+      <div className="ncr-fs-hint">{t("Press Esc or click outside to close")}</div>
     </div>
   );
 }

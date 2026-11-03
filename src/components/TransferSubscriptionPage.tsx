@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useState, type ReactNode } from "react";
 import { findUser } from "../data/transferSubscription";
 import { loginId, renewalLabel, subLabel } from "../data/mergeAccounts";
@@ -74,6 +75,7 @@ export function TransferSubscriptionPage({
    *  screen — the same hand-off a finished merge makes. */
   onTransferred?: (message: string) => void;
 }) {
+  const t = useDsText();
   const [srcId, setSrcId] = useState<string | null>(null);
   const [dstId, setDstId] = useState<string | null>(null);
   // Both account fields open the same Select Users picker (Figma 682:2321).
@@ -200,7 +202,7 @@ export function TransferSubscriptionPage({
      head row rather than growing it. */
   const swapButton = (
     <button className="btn-dialog" onClick={swapRoles}>
-      <SwapRolesIcon /> Swap Roles
+      <SwapRolesIcon /> {t("Swap Roles")}
     </button>
   );
 
@@ -219,7 +221,7 @@ export function TransferSubscriptionPage({
               <div className="wizard-pane">
           {/* Ancestors only (1415:1354): the page this was opened from. */}
           <nav className="rvc-crumbs" aria-label="Breadcrumb">
-            <button className="rvc-crumb" onClick={() => onClose && guard(onClose)} title="Back to Users">
+            <button className="rvc-crumb" onClick={() => onClose && guard(onClose)} title={t("Back to Users")}>
               Users
             </button>
           </nav>
@@ -247,11 +249,11 @@ export function TransferSubscriptionPage({
               <div className="form-row-2 mgf-pickers">
                 <div className="form-group">
                   <label className="form-label">
-                    Destination Account<span className="req">*</span>
+                    {t("Destination Account")}<span className="req">*</span>
                   </label>
                   <AccountPicker
                     user={dst}
-                    placeholder="Search Account to Move To..."
+                    placeholder={t("Search Account to Move To...")}
                     onPick={() => setShowPicker(true)}
                     onClear={() => pickAccount(setDstId, null)}
                   />
@@ -260,11 +262,11 @@ export function TransferSubscriptionPage({
 
                 <div className="form-group">
                   <label className="form-label">
-                    Source Account<span className="req">*</span>
+                    {t("Source Account")}<span className="req">*</span>
                   </label>
                   <AccountPicker
                     user={src}
-                    placeholder="Search Account to Move From..."
+                    placeholder={t("Search Account to Move From...")}
                     onPick={() => setShowPicker(true)}
                     onClear={() => pickAccount(setSrcId, null)}
                   />
@@ -283,7 +285,7 @@ export function TransferSubscriptionPage({
                   body="There is nothing on the source account to transfer. The other account is the one holding a subscription, so the roles are the wrong way round."
                   action={
                     <button className="cta-quiet" onClick={swapRoles}>
-                      Swap Roles
+                      {t("Swap Roles")}
                       <span className="cta-kbd">S</span>
                     </button>
                   }
@@ -325,7 +327,7 @@ export function TransferSubscriptionPage({
                       accounts changes nothing about why the transfer can't
                       run. */}
                   <TableCard
-                    title="Account Details"
+                    title={t("Account Details")}
                     trailing={neitherHasSub ? undefined : swapButton}
                     className="mgf-tcard"
                   >
@@ -424,7 +426,7 @@ export function TransferSubscriptionPage({
             data-tip={blockedTip}
             onClick={advance}
           >
-            Transfer Subscription
+            {t("Transfer Subscription")}
             <WizardKeyHint />
           </button>
         </div>

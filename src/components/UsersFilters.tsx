@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { SUBSCRIPTION_FILTER_OPTIONS } from "../data/users";
 import { useState, useMemo, useEffect, type ReactNode } from "react";
 import { Dropdown } from "./Dropdown";
@@ -92,6 +93,7 @@ export function UsersFilters({
   /** Which filters the "More Filters" menu offers — defaults to all three. */
   more?: UserMoreFilterKey[];
 }) {
+  const t = useDsText();
   const moreCount = more.reduce((n, k) => n + filters[k].length, 0);
   // Every company — the seed ones and any created this session.
   const live = useLiveCompanies();
@@ -121,7 +123,7 @@ export function UsersFilters({
     <div className="filters">
       {leading}
       <MultiPill
-        label="User Type"
+        label={t("User Type")}
         all={USER_TYPES}
         value={filters.types}
         onApply={(v) => setFilters({ ...filters, types: v })}
@@ -140,7 +142,7 @@ export function UsersFilters({
         value={filters.companies}
         onApply={(v) => setFilters({ ...filters, companies: v })}
         searchable
-        searchPlaceholder="Search Companies..."
+        searchPlaceholder={t("Search Companies...")}
         width={300}
         tip={FILTER_TIPS.users.company}
       />
@@ -168,8 +170,8 @@ export function UsersFilters({
       )}
       {hasFilters && (
         <button className="filter-clear-link" onClick={clearAll}>
-          Clear Filters
-        </button>
+{t("Clear Filters")}
+</button>
       )}
     </div>
   );
@@ -298,12 +300,13 @@ function MoreFiltersPill({
   count: number;
   onApply: (v: { roles: string[]; goals: string[]; industries: string[] }) => void;
 }) {
+  const t = useDsText();
   return (
     <Dropdown
       width={300}
       trigger={({ open, toggle }) => (
         <PillTrigger
-          label="More Filters"
+          label={t("More Filters")}
           value={count > 0 ? `${count} Active` : null}
           open={open}
           toggle={toggle}

@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   users as allUsers,
@@ -170,6 +171,7 @@ export function CertPurchasersPage({
   cert: Certification;
   onBack: () => void;
 }) {
+  const t = useDsText();
   const userById = useMemo(() => new Map(allUsers.map((u) => [u.id, u])), []);
 
   /* The live paid Certifications (seed + this session's, under their current
@@ -366,18 +368,18 @@ export function CertPurchasersPage({
               Who Paid page. The Certification this opened on is carried by the
               pre-applied Certification pill, not a subtitle. */}
           <nav className="rvc-crumbs" aria-label="Breadcrumb">
-            <button className="rvc-crumb" onClick={onBack} title="Back to Certifications">
+            <button className="rvc-crumb" onClick={onBack} title={t("Back to Certifications")}>
               Certifications
             </button>
           </nav>
           <header className="tasks-header">
             <div className="rvc-pagehead">
-              <h1 className="tasks-title">Who Paid</h1>
+              <h1 className="tasks-title">{t("Who Paid")}</h1>
             </div>
             <div className="tasks-header-actions">
               <button className="new-task" onClick={() => setGranting(true)}>
                 <AddIcon />
-                Grant Access
+                {t("Grant Access")}
               </button>
             </div>
           </header>
@@ -389,7 +391,7 @@ export function CertPurchasersPage({
                     pills below, exactly as on the quiz Who Paid page. */}
                 <EntitySearch
                   scopes={scopes}
-                  placeholder="Search Users by Name, Email, or Phone..."
+                  placeholder={t("Search Users by Name, Email, or Phone...")}
                   query={committedQuery}
                   onCommit={setCommittedQuery}
                 />
@@ -405,7 +407,7 @@ export function CertPurchasersPage({
                     value={certNames}
                     onApply={setCertNames}
                     searchable
-                    searchPlaceholder="Search Certifications..."
+                    searchPlaceholder={t("Search Certifications...")}
                     width={300}
                     tip={FILTER_TIPS.whoPaid.certification}
                   />
@@ -523,8 +525,8 @@ export function CertPurchasersPage({
 
       {revoking && (
         <PrmModal
-          title="Revoke Access"
-          confirmLabel="Revoke Access"
+          title={t("Revoke Access")}
+          confirmLabel={t("Revoke Access")}
           danger
           doubleConfirm={
             <>
@@ -571,10 +573,11 @@ function SortableHeader({
   toggle: (k: SortKey) => void;
   sortable?: boolean;
 }) {
+  const t = useDsText();
   if (!sortable) {
     return (
       <th className={`${className ?? ""} no-sort`.trim()}>
-        <span className="th-content">{label}</span>
+        <span className="th-content">{t(label)}</span>
       </th>
     );
   }
@@ -582,7 +585,7 @@ function SortableHeader({
   return (
     <th className={className} onClick={() => toggle(col)}>
       <span className="th-content">
-        {label}
+        {t(label)}
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>
@@ -673,6 +676,7 @@ function PurchaserActionsMenu({
   onClose: () => void;
   onRevoke: () => void;
 }) {
+  const t = useDsText();
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
 
@@ -738,7 +742,7 @@ function PurchaserActionsMenu({
     >
       <span className="u-menu-item-icon">{icon}</span>
       <span className="u-menu-item-text">
-        <span>{label}</span>
+        <span>{t(label)}</span>
         {note && <span className="u-menu-item-sub">{note}</span>}
       </span>
     </button>
@@ -790,6 +794,7 @@ function GrantAccessModal({
   onGrant: (u: User) => void;
   onClose: () => void;
 }) {
+  const t = useDsText();
   const [picked, setPicked] = useState<User | null>(null);
   // Cancel on the confirm returns to the picker with the pick still ticked.
   const [confirming, setConfirming] = useState(false);
@@ -809,7 +814,7 @@ function GrantAccessModal({
     return (
       <SelectGrantUsersModal
         title={`Grant access to “${cert.name}”`}
-        description="Give a user access to this Certification without a purchase. Choose who to comp."
+        description={t("Give a user access to this Certification without a purchase. Choose who to comp.")}
         candidates={candidates}
         single
         value={picked ? [picked.id] : []}

@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useRef, useState } from "react";
 import { CheckBoldIcon, DownloadIcon, UploadTrayIcon } from "./icons";
 import { NoteCard } from "./NoteCard";
@@ -56,6 +57,7 @@ export function BulkUploadModal({
   /** Confirmed — the page appends the questions and creates the categories. */
   onImport: (report: ImportReport) => void;
 }) {
+  const t = useDsText();
   const [report, setReport] = useState<ImportReport | null>(null);
   /* "Template Downloaded" — raised and rendered INSIDE the modal: the card's
      `.pr-confirm-overlay` (z 400) is its own stacking context, so a page-level
@@ -112,8 +114,8 @@ export function BulkUploadModal({
     return (
       <PrmModal
         className="qbu qbu--pick"
-        title="Bulk Upload Questions"
-        description="Add Questions along with the Categories/Sub-Categories they belong to"
+        title={t("Bulk Upload Questions")}
+        description={t("Add Questions along with the Categories/Sub-Categories they belong to")}
         hideFooter
         onCancel={onClose}
       >
@@ -144,8 +146,7 @@ export function BulkUploadModal({
           <span className="drop-big-icon"><UploadTrayIcon /></span>
           <div className="drop-big-title">Drag and drop, or click to upload</div>
           <div className="drop-big-hint">
-            One row per question · True/False, MCQs, and Match the Following · Every
-            row is checked before importing
+            {t("One row per question \u00b7 True/False, MCQs, and Match the Following \u00b7 Every row is checked before importing")}
           </div>
           {/* The template is its own action inside the zone — clicking it must
               not also open the file picker. */}
@@ -158,7 +159,7 @@ export function BulkUploadModal({
             }}
           >
             <DownloadIcon />
-            Download Template
+            {t("Download Template")}
           </button>
         </div>
         {input}
@@ -185,7 +186,7 @@ export function BulkUploadModal({
           report.fatal ??
           "Each issue names the column to correct. Fix them in your spreadsheet and drop the CSV again. Nothing is imported until every row passes."
         }
-        confirmLabel="Re-Upload"
+        confirmLabel={t("Re-Upload")}
         onCancel={onClose}
         onConfirm={pickFile}
       >
@@ -194,9 +195,9 @@ export function BulkUploadModal({
             <div className="qbu-err-row qbu-err-head">
               <span className="qbu-err-c-row">Row</span>
               <span className="qbu-err-c-cat">Category</span>
-              <span className="qbu-err-c-sub">Sub-Category</span>
+              <span className="qbu-err-c-sub">{t("Sub-Category")}</span>
               <span className="qbu-err-c-q">Question (EN)</span>
-              <span className="qbu-err-c-type">Question Type</span>
+              <span className="qbu-err-c-type">{t("Question Type")}</span>
               <span className="qbu-err-c-issue">Issue</span>
             </div>
             <div className="qbu-err-body">
@@ -204,7 +205,7 @@ export function BulkUploadModal({
                 <div className="qbu-err-row" key={issue.row}>
                   <span className="qbu-err-c-row">{issue.row}</span>
                   <span className="qbu-err-c-cat">{issue.category}</span>
-                  <span className="qbu-err-c-sub">{issue.sub}</span>
+                  <span className="qbu-err-c-sub">{t(issue.sub)}</span>
                   <span className="qbu-err-c-q qbu-err-q">{issue.text}</span>
                   <span className="qbu-err-c-type">{issue.type}</span>
                   <span className="qbu-err-c-issue">
@@ -233,7 +234,7 @@ export function BulkUploadModal({
     <PrmModal
       className="qbu qbu--ready"
       title={`Add ${n} ${n === 1 ? "Question" : "Questions"}`}
-      description="Here's what this file adds to the bank. Categories and Sub-Categories that don't exist yet are created on import."
+      description={t("Here's what this file adds to the bank. Categories and Sub-Categories that don't exist yet are created on import.")}
       confirmLabel={`Import ${n} ${n === 1 ? "Question" : "Questions"}`}
       onCancel={onClose}
       onConfirm={() => onImport(report)}

@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useListState, useResetPageOnChange } from "../hooks/useListState";
 import { CopiedToast } from "./CopiedToast";
@@ -224,6 +225,7 @@ export function FeedbackFormsPage({
   flash,
   onFlashDone,
 }: Props) {
+  const t = useDsText();
   // The page's toast: a flow's `flash` on arrival, or one raised here
   // (Responses Downloaded, Archived / Unarchived, Deleted) — the
   // Certifications page's pattern.
@@ -359,18 +361,18 @@ export function FeedbackFormsPage({
           {/* This page is reached from the Certifications header button (it
               no longer has its own sidebar entry), so the crumb is the way back. */}
           <nav className="rvc-crumbs" aria-label="Breadcrumb">
-            <button className="rvc-crumb" onClick={onBackToCerts} title="Back to Certifications">
+            <button className="rvc-crumb" onClick={onBackToCerts} title={t("Back to Certifications")}>
               Certifications
             </button>
           </nav>
           <header className="tasks-header">
             <div className="rvc-pagehead">
-              <h1 className="tasks-title">Feedback Forms</h1>
+              <h1 className="tasks-title">{t("Feedback Forms")}</h1>
             </div>
             <div className="tasks-header-actions">
               <button className="new-task" onClick={createBlank}>
                 <AddIcon />
-                Create Feedback Form
+                {t("Create Feedback Form")}
                 <span className="cta-kbd">C</span>
               </button>
             </div>
@@ -385,7 +387,7 @@ export function FeedbackFormsPage({
                   </span>
                   <input
                     className="search-input"
-                    placeholder="Search Feedback Forms..."
+                    placeholder={t("Search Feedback Forms...")}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                   />
@@ -402,7 +404,7 @@ export function FeedbackFormsPage({
                   tip={FILTER_TIPS.feedbackForms.status}
                 />
                 <MultiPill
-                  label="Created By"
+                  label={t("Created By")}
                   options={creators}
                   value={filters.creators}
                   onApply={(v) => setFilters((p) => ({ ...p, creators: v }))}
@@ -413,7 +415,7 @@ export function FeedbackFormsPage({
                     className="filter-clear-link"
                     onClick={() => setFilters({ statuses: [], creators: [] })}
                   >
-                    Clear Filters
+                    {t("Clear Filters")}
                   </button>
                 )}
                 {/* Date Range holds the row's right edge and always has a
@@ -759,6 +761,7 @@ function FormDeleteConfirm({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const t = useDsText();
   // PrmModal has no key handling of its own, so the owner closes on Escape.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -770,8 +773,8 @@ function FormDeleteConfirm({
 
   return (
     <PrmModal
-      title="Delete Form?"
-      confirmLabel="Delete Form"
+      title={t("Delete Form?")}
+      confirmLabel={t("Delete Form")}
       danger
       doubleConfirm={
         <>
@@ -813,6 +816,7 @@ function FormActionsMenu({
   onToggleActive: () => void;
   onDelete: () => void;
 }) {
+  const t = useDsText();
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
 
@@ -860,7 +864,7 @@ function FormActionsMenu({
       }}
     >
       <span className="u-menu-item-icon">{icon}</span>
-      {label}
+      {t(label)}
     </button>
   );
 
@@ -904,7 +908,7 @@ function FormActionsMenu({
           <span>Delete Form</span>
           {!canDelete && (
             <span className="u-menu-item-sub">
-              Feedback Forms with responses cannot be deleted
+              {t("Feedback Forms with responses cannot be deleted")}
             </span>
           )}
         </span>

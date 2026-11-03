@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import {
   useCallback,
   useEffect,
@@ -165,6 +166,7 @@ export function FullscreenViewer({
    *  viewer itself, on a wrapper around whatever this returns. */
   children: (state: { rotation: number; stage: { w: number; h: number } }) => ReactNode;
 }) {
+  const t = useDsText();
   /* Unbounded rather than mod 360: a CSS transition from 270 back to 0 would
      spin the content the long way round. Callers apply it as `rotate(Ndeg)`,
      which is happy with 450, and reduce it themselves where they need to. */
@@ -695,7 +697,7 @@ export function FullscreenViewer({
       {/* No default line any more: the zoom viewers' controls speak for
           themselves. Only a caller that has something to say gets one — the
           Spotlight lightbox, whose gestures aren't otherwise visible. */}
-      {hint && <div className="ncr-fs-hint idfs-hint">{hint}</div>}
+      {hint && <div className="ncr-fs-hint idfs-hint">{(typeof hint === "string" ? t(hint) : hint)}</div>}
     </div>
   );
 }

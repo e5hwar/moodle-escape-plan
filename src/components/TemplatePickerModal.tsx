@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { templateUsageCount, type Award, type AwardDesignTemplate } from "../data/awards";
 import { PrmModal } from "./PrmModal";
@@ -54,6 +55,7 @@ export function TemplatePickerModal({
   /** The picked template's id, or undefined for the "no template" row. */
   onPick: (id: string | undefined) => void;
 }) {
+  const t = useDsText();
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "name", dir: "asc" });
@@ -122,7 +124,7 @@ export function TemplatePickerModal({
             pick();
           }}
         >
-          Select Template
+          {t("Select Template")}
           <RowChevronIcon />
         </button>
       </div>
@@ -145,7 +147,7 @@ export function TemplatePickerModal({
             </span>
             <input
               className="search-input"
-              placeholder="Search Design Templates..."
+              placeholder={t("Search Design Templates...")}
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -162,8 +164,8 @@ export function TemplatePickerModal({
                 <tr>
                   <th className="tpm-col-thumb no-sort">Preview</th>
                   <Th label="Name" k="name" sort={sort} onClick={toggleSort} />
-                  <Th label="Used By" k="usage" sort={sort} onClick={toggleSort} />
-                  <Th label="Date Modified" k="dateModified" sort={sort} onClick={toggleSort} />
+                  <Th label={t("Used By")} k="usage" sort={sort} onClick={toggleSort} />
+                  <Th label={t("Date Modified")} k="dateModified" sort={sort} onClick={toggleSort} />
                   <th className="col-actions no-sort" />
                 </tr>
               </thead>
@@ -245,11 +247,12 @@ function Th({
   sort: { key: SortKey; dir: SortDir };
   onClick: (k: SortKey) => void;
 }) {
+  const t = useDsText();
   const active = sort.key === k;
   return (
     <th onClick={() => onClick(k)}>
       <span className="th-content">
-        {label}
+        {t(label)}
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>

@@ -1,3 +1,4 @@
+import { useDsText } from "../designSystem";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
   masteryUsing,
@@ -197,6 +198,7 @@ export function SkillsPage({
   setMastery: Dispatch<SetStateAction<MasterySkill[]>>;
   onBackToTasks: () => void;
 }) {
+  const t = useDsText();
   const [mode, setMode] = useState<Mode>({ kind: "list" });
   const [modal, setModal] = useState<Modal>({ kind: "none" });
   /* Raised here, not in the wizard: a save closes the wizard back onto this
@@ -473,24 +475,24 @@ export function SkillsPage({
           {/* Skills has no sidebar entry — it is reached from the Tasks
               header — so the crumb's "Tasks" is the way back. */}
           <nav className="rvc-crumbs" aria-label="Breadcrumb">
-            <button className="rvc-crumb" onClick={onBackToTasks} title="Back to Tasks">
+            <button className="rvc-crumb" onClick={onBackToTasks} title={t("Back to Tasks")}>
               Tasks
             </button>
           </nav>
           <header className="tasks-header">
             <div className="rvc-pagehead">
-              <h1 className="tasks-title">Skills</h1>
+              <h1 className="tasks-title">{t("Skills")}</h1>
               {/* Page subtext (Figma 742:1061): the counts, then the 14px
                   info glyph 4px after, carrying the page's explainer as the
                   shared tooltip (a plain `title`, auto-adopted — see
                   [[tooltip-and-hover-convention]]). Same shape as Awards'
                   "13 Awards · 12 Active" and Spotlight's subtext + glyph. */}
               <div className="tasks-subtitle">
-                {skills.length} Skill{skills.length === 1 ? "" : "s"} · {mastery.length} Mastery Skill{mastery.length === 1 ? "" : "s"}
+                {t(`${skills.length} Skill${skills.length === 1 ? "" : "s"} · ${mastery.length} Mastery Skill${mastery.length === 1 ? "" : "s"}`)}
                 <span
                   className="tasks-subtitle-info"
                   tabIndex={0}
-                  aria-label="About Skills"
+                  aria-label={t("About Skills")}
                   title={
                     "Skill: A practical task a user has been trained to do on the job, like \"Braze a Copper Joint\". It's earned by completing its linked Tasks, whichever Certification they're in.\n\n" +
                     "Mastery Skill: A bigger job made up of smaller Skills, like \"Install a Mini-Split System.\" It's earned by holding all of its Skills."
@@ -506,11 +508,11 @@ export function SkillsPage({
                   is the primary (and the C shortcut); Create Mastery Skill is
                   the quiet sibling. */}
               <button className="cta-quiet" onClick={() => setMode({ kind: "new", type: "mastery" })}>
-                Create Mastery Skill
-              </button>
+{t("Create Mastery Skill")}
+</button>
               <button className="new-task" onClick={() => setMode({ kind: "new", type: "skill" })}>
                 <AddIcon />
-                Create Skill
+                {t("Create Skill")}
                 <span className="cta-kbd">C</span>
               </button>
             </div>
@@ -525,7 +527,7 @@ export function SkillsPage({
                     table only ever filters on the applied query. */}
                 <EntitySearch
                   scopes={scopes}
-                  placeholder="Search Skills and Mastery Skills..."
+                  placeholder={t("Search Skills and Mastery Skills...")}
                   query={query}
                   onCommit={setQuery}
                 />
@@ -536,22 +538,22 @@ export function SkillsPage({
                     2026-10-01); everything else lives behind More Filters. */}
                 <TypePill value={typeFilter} onApply={setTypeFilter} />
                 <MultiPill
-                  label="Linked Skill"
+                  label={t("Linked Skill")}
                   all={skillOptions}
                   value={linkedSkillFilter}
                   onApply={setLinkedSkillFilter}
                   searchable
-                  searchPlaceholder="Search Skills..."
+                  searchPlaceholder={t("Search Skills...")}
                   width={300}
                   tip={TIPS.linkedSkill}
                 />
                 <MultiPill
-                  label="Linked Mastery Skill"
+                  label={t("Linked Mastery Skill")}
                   all={masteryOptions}
                   value={linkedMasteryFilter}
                   onApply={setLinkedMasteryFilter}
                   searchable
-                  searchPlaceholder="Search Mastery Skills..."
+                  searchPlaceholder={t("Search Mastery Skills...")}
                   width={300}
                   tip={TIPS.linkedMastery}
                 />
@@ -567,8 +569,8 @@ export function SkillsPage({
                 />
                 {filterCount > 0 && (
                   <button className="filter-clear-link" onClick={clearFilters}>
-                    Clear Filters
-                  </button>
+{t("Clear Filters")}
+</button>
                 )}
               </div>
 
@@ -708,8 +710,8 @@ export function SkillsPage({
       {/* ─── Confirmation flows ─── */}
       {modal.kind === "archive-skill" && (
         <ConfirmModal
-          title="Archive this Skill?"
-          confirmLabel="Archive Skill"
+          title={t("Archive this Skill?")}
+          confirmLabel={t("Archive Skill")}
           danger
           doubleConfirm={
             <>
@@ -729,8 +731,8 @@ export function SkillsPage({
 
       {modal.kind === "archive-mastery" && (
         <ConfirmModal
-          title="Archive this Mastery Skill?"
-          confirmLabel="Archive Mastery Skill"
+          title={t("Archive this Mastery Skill?")}
+          confirmLabel={t("Archive Mastery Skill")}
           danger
           doubleConfirm={
             <>
@@ -750,8 +752,8 @@ export function SkillsPage({
 
       {modal.kind === "delete-skill" && (
         <ConfirmModal
-          title="Delete this Skill?"
-          confirmLabel="Delete Skill"
+          title={t("Delete this Skill?")}
+          confirmLabel={t("Delete Skill")}
           danger
           doubleConfirm={
             <>
@@ -772,8 +774,8 @@ export function SkillsPage({
 
       {modal.kind === "delete-mastery" && (
         <ConfirmModal
-          title="Delete this Mastery Skill?"
-          confirmLabel="Delete Mastery Skill"
+          title={t("Delete this Mastery Skill?")}
+          confirmLabel={t("Delete Mastery Skill")}
           danger
           doubleConfirm={
             <>
@@ -888,6 +890,7 @@ function SkillPanel({
   onClose: () => void;
   onMore: (rect: DOMRect) => void;
 }) {
+  const t = useDsText();
   const r = recOf(rec);
   const isSkill = rec.kind === "skill";
   const certs = recCerts(rec);
@@ -925,11 +928,11 @@ function SkillPanel({
       {isSkill ? (
         <>
           <ListCard
-            title="Linked Tasks"
+            title={t("Linked Tasks")}
             items={tasks.map(({ id, task }) => ({ key: id, name: task?.name ?? id, meta: task?.type }))}
           />
           <ListCard
-            title="Linked Mastery Skills"
+            title={t("Linked Mastery Skills")}
             items={rec.linkedMastery.map((m) => ({
               key: m.id,
               name: m.name,
@@ -939,7 +942,7 @@ function SkillPanel({
         </>
       ) : (
         <ListCard
-          title="Linked Skills"
+          title={t("Linked Skills")}
           items={rec.members.map((sk) => ({
             key: sk.id,
             name: sk.name,
@@ -995,10 +998,11 @@ function SortableHeader({
   toggle: (k: string) => void;
   sortable?: boolean;
 }) {
+  const t = useDsText();
   if (!sortable) {
     return (
       <th className={`${className ?? ""} no-sort`.trim()}>
-        <span className="th-content">{label}</span>
+        <span className="th-content">{t(label)}</span>
       </th>
     );
   }
@@ -1006,7 +1010,7 @@ function SortableHeader({
   return (
     <th className={className} onClick={() => toggle(col)}>
       <span className="th-content">
-        {label}
+        {t(label)}
         <SortIcon active={active} dir={active ? sort.dir : undefined} />
       </span>
     </th>
@@ -1036,6 +1040,7 @@ function ActionsMenu({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const t = useDsText();
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
 
@@ -1084,7 +1089,7 @@ function ActionsMenu({
       onClick={(e) => { e.stopPropagation(); onPick(); onClose(); }}
     >
       <span className="u-menu-item-icon">{icon}</span>
-      {label}
+      {t(label)}
     </button>
   );
 
@@ -1092,7 +1097,7 @@ function ActionsMenu({
     <button className={`u-menu-item ${danger ? "u-menu-item--danger" : ""}`} disabled>
       <span className="u-menu-item-icon">{icon}</span>
       <span className="u-menu-item-text">
-        {label}
+        {t(label)}
         <span className="u-menu-item-sub">{why}</span>
       </span>
     </button>
@@ -1170,13 +1175,14 @@ function MoreFiltersPill({
   value: MoreFilters;
   onApply: (v: MoreFilters) => void;
 }) {
+  const t = useDsText();
   const count = MORE_KEYS.reduce((n, k) => n + value[k].length, 0);
   return (
     <Dropdown
       width={320}
       trigger={({ open, toggle }) => (
         <PillTrigger
-          label="More Filters"
+          label={t("More Filters")}
           value={count > 0 ? `${count} Active` : null}
           open={open}
           toggle={toggle}
