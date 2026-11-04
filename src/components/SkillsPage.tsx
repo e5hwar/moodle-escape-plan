@@ -866,7 +866,6 @@ function RecRow({
   return (
     <tr className={`skg-row ${archived ? "skg-archived" : ""} ${menuOpen ? "menu-open" : ""}`} onClick={onOpen}>
       <td className="col-name">
-        <img className="skg-icon" src={r.image.url} alt="" />
         <span className="skg-name" data-tip={r.name}>{r.name}</span>
         {archived && <span className="pr-name-flag pr-name-flag--grey">Archived</span>}
       </td>

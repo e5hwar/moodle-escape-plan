@@ -28,6 +28,16 @@ Everything else is Compact — including the wizard form controls. **Validated a
   - Spotlight (`.sp-table`, 48 head, 64 rows).
   - The two artwork tables, Award Templates and the Card / Certificate Design picker. They keep Default's 48 head, and their 144×76 tiles set the row height.
 
+## Primary columns follow the Play Area (Eshwar, 2026-11-04)
+
+- The DS primary-text cell (#FCFCFC, Medium) goes on every column the Play Area emphasises, not only Name: Hands-On's Task column and the Question Bank's Question column. Question stays Regular, as it is in the Play Area.
+
+## Hidden / archived rows use the DS disabled row (Eshwar, 2026-11-04)
+
+- Rows the Play Area dims follow the Table / Row Disabled look (18832:2230): every cell's text is #7A7A7A, including the name, data, mono values and dates. These are hidden Tasks and Certifications, archived Certifications, Skills and Questions, disabled Feedback Forms and the dimmed picker rows. In the Play Area the name is #7a7a7a and the other cells are #404040.
+- Status labels and the Hidden / Disabled flags keep their own colours.
+- **Deviation:** the kebab stays live and white. The DS greys it on a disabled row, but Unhide and Restore live in that menu.
+
 ## Status labels: two sizes, mapped from the Play Area (Eshwar, 2026-11-03)
 
 - The DS has **Default** (Compact 28, SemiBold 14, 8 inset, 14 icon) and **Small** (20, SemiBold 12 on 15.6, 6 inset, 12 icon), both radius 8 with the tone colour on its 10% tint (17086:18962 / 17013:311). Each pill takes the size that matches its size in the Play Area. The DS line "Small … for tags inside table cells" is **not** used to pick the size.
@@ -74,9 +84,9 @@ The 23 screens on "LMS Design - new Components" are a rough layout brief, not th
 | --- | --- | --- |
 | Tasks, row menu · Create task menu · Delete task | Title row, 54 filled search, chips, table, DS row menu with reasons, DS create menu with keycaps, dialog with Secondary Cancel + Destructive Delete | Cell values ("Hands-On Task") are data and stay Title Case. |
 | Create task, steps 1–5 | Rail (CREATING, name 24, mono step numbers, grey check on done steps), 40-inset form, Compact fields (see above), bilingual boxes with counters, time field, segmented control, Choice cards, steppers, toggle card table, upload zones, #1B1B1B footer with ghost close | The footer keeps our Back / Create task / Continue set; Eric hides Back on step 1 — ours hides it too. Help texts built from expressions keep their case. |
-| Skills · Question bank | Header-held title row, search 54, chips / Recent-searches chips, Categories index (4 columns, mono letters, 30px rows), Skill / Mastery skill as Status Label Small | Breadcrumbs over list titles are hidden in this look (Eric draws none). |
+| Skills · Question bank | Header-held title row, search 54, chips / Recent-searches chips, Categories index (mono letters, 30px rows; names Regular 14 and the column count / width / 40–48 gap from the Play Area's `indexLayout` — Eric's SemiBold names and fixed 24 gap were dropped 2026-11-04, Eshwar: "horribly spaced", "the text is regular in mine"), Skill / Mastery skill as Status Label Small | Breadcrumbs over list titles are hidden in this look (Eric draws none). |
 | Certifications · Certification menu · Create certification menu · Edit certification, audience | Setup banner as DS Banner (count 32, Secondary CTA, ghost close) in the head grid; menus; wizard rules cover the Audience step's select + checkbox menu | Our seed shows no incomplete setups today, so the banner only appears when there are some. |
-| Exam reviews list · Hands-on submissions list | Title row, four equal run cards (64 tall, count 24, chevron), search, chips, chevron rows | Card labels ("All Reviews", "Review Type") come from data. |
+| Exam reviews list · Hands-on submissions list | Title row, search, chips, chevron rows. The run cards (`.rr-card`) keep the Play Area look — count 32 with its hairline divider, 70 tall, title 16 / sub 14 — in this look too (Eshwar 2026-11-04). Eric's "Stat card (pattern)" (1:2860) is a hand-drawn frame, not a SkillCat UI component, so there was nothing in the library to follow; the earlier 64-tall / count-24 restyle was removed. | Card labels ("All Reviews", "Review Type") come from data. |
 | Exam review · Hands-on review | Head (crumb 12, name 24, line 16), section heads 20, DS frames with red flagged edge, surface rail, score boxes as 40px chips, console footer (#1B1B1B, Link Back, Secondary Skip, Destructive / Positive) | — |
 | Users · Companies, date range | Users banner static (morph off); summary lines sentence-cased through `dsText()` like every other label ("460 users · 65 subscribers") — no CSS `text-transform`, which would also drop a line's first capital (fixed 2026-11-03); Date range opens on the preset shortcuts (apply on pick) with "Custom range" revealing the two-month calendar — Eshwar's comment, not Eric's screen | The calendar's footer keeps Clear + Apply (Eric shows Cancel + Apply); Clear has a job here. |
 | Spotlight · Create spotlight · Product config | 64px rows with 96×44 backdrops, Positive / Destructive Approve + Reject; preview rail title; tabs; every boxed table on Product Config is the DS card table (Eshwar's comment) | Tab labels and the subscription / status pills are data and keep their case. |
@@ -110,7 +120,18 @@ Every list page, row-menu screen, wizard step, modal, console, preview panel, At
 - Hands-on review: the ten Score buttons were a fixed 40 and ran 21 past the rail at 1440 ("10" over the edge). They are up to 40 and give way to fit (38 at 1440).
 - Exam review: the name sat 8 right of the "Exam Reviews" crumb and 32 below it. The head is 32 inset like the crumb and the sections, and the name is the crumb's 4 below it.
 
+- Question editor (and the Task wizard's field stacks): fields sat 56 apart — the look's 24 field margin landed on top of the stack's 32 gap. Every wizard field is now 24 from the next, as in the Skill / Certification / Company wizards; sections stay 40 apart (Eshwar, 2026-11-04). Product config keeps its 32.
+
 **Checked and left as is** (deliberate DS sizes, not drift): the dual-language upload's English / Español labels sit at the start (Field label) rather than centred; wizard content is 40 inset while the footer ✕ sits at 24 + its 32 box; the Question bank Categories head is a left label with the add button at the far right; Product config's ✕ is a 28 ghost box.
+
+## Fixes (Eshwar, 2026-11-04)
+
+- Banner button (every tinted NoteCard: Users › Review Names, Certifications › Continue Setup, Merge / Transfer › Swap Roles): per Banner / Trailing=Button (19004:4287) it uses the see-through on-tint fill (white 8%) with a white 16% edge so it picks up the banner tone. It is not the page Secondary on opaque #0d0d0d. The banner title is SemiBold (600), not Bold.
+- Per-Seat Price: the currency cell stretches to the full 38px, so USD sits on the same line as the amount.
+- Certification builder (Add Tasks): the flush content area keeps 0 padding. The DS wizard 40px gutter no longer insets it.
+- Merge / Transfer comparison tables: cells keep 10px above and below with top alignment, so text no longer sits on a row's top line.
+- Picker tables in modals (`.stm-table--preview`: Find a Deep Link, Add Existing Tasks): the sticky action column, header included, uses the modal surface rather than the page's #0d0d0d. Its hover and ticked washes are laid on the modal surface too.
+- Product Config: the tab bar has no bottom margin. The body's 32px padding is the only gap, as in the Play Area (it was 56).
 
 ## Not restyled yet (still the Play Area look under the SkillCat switch)
 

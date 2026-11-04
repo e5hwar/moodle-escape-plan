@@ -19868,19 +19868,6 @@ body:has(.pm-overlay) .pl-copied-toast {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* The record's uploaded icon, 24px ahead of the name (the Industries row's
-   icon slot). An archived record shows it greyed, as unearned badges are. */
-.table tbody tr.skg-row td.col-name > .skg-icon {
-  width: 24px;
-  height: 24px;
-  margin-right: 12px;
-  border-radius: 4px;
-  object-fit: contain;
-}
-.table tbody tr.skg-row.skg-archived td.col-name > .skg-icon {
-  filter: grayscale(1);
-}
-
 /* A Skill row does nothing on click — selecting one had no use, so it was
    removed — and must not offer the shared `.table tbody tr` pointer. Only the
    group row (which folds) and the row-action buttons stay clickable. */
@@ -25316,10 +25303,9 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   background-color: rgba(122, 122, 122, 0.05);
 }
 
-/* Figma 682:2567 header row: an unsorted column is Medium with NO icon — only
-   the sorted column ("Column Header - Sorted Descending", 684:2631) goes
-   SemiBold and carries the 14px arrow. The app-wide table (79:445) shows the
-   idle double chevron on every sortable column; this node does not. */
+/* Figma 682:2567 header row: an unsorted column is Medium, the sorted one
+   SemiBold. Every sortable column keeps its idle double chevron at rest, as on
+   the app-wide table (79:445) — it used to appear only on hover (2026-11-04). */
 .stm-table thead th {
   font-weight: 500;
 }
@@ -25328,17 +25314,5122 @@ button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
   font-weight: 600;
 }
 
-.stm-table thead th .sort-icon:not(.sort-icon--active) {
-  display: none;
+.stm-table-wrap {
+  flex: 1;
+  min-height: 0;
+}
+.prm.tpm .stm-table-wrap > .table-xscroll {
+  flex: 1 1 200px;
+  min-height: 200px;
 }
 
-/* …but a column still has to LOOK sortable, or nobody clicks it. The node draws
-   the RESTING state, where only the sorted column carries a glyph; hovering a
-   header brings its idle double-chevron back, so every sortable column
-   advertises itself without adding permanent furniture the node doesn't have.
-   Every header here sorts — Name, Type, Certifications, Industry, Edited On. */
-.stm-table thead th:hover .sort-icon:not(.sort-icon--active) {
+/* Card / Certificate Design picker (TemplatePickerModal) — Spotlight-style
+   rows (558:2046): the 144×76 artwork tile + 12px top/bottom = a 100px row,
+   16px text, name white over the #a8a8a8 data columns. The tile is the
+   Spotlights `.sp-thumb` box filled with the template's swatch; like the
+   Award Templates thumbnail it is artwork, so it is an exception to the
+   plain-text cell rule (colour on `--swatch`, which that rule can't wipe). */
+.tpm .stm-table tbody td {
+  height: 100px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  color: #a8a8a8;
+}
+.tpm .stm-table tbody td.col-name {
+  color: #fff;
+  font-weight: 500;
+}
+.table tbody td.tpm-col-thumb:not(.col-actions) .tpm-thumb {
+  display: flex !important;
+  width: 144px;
+  height: 76px;
+  border: 1px solid #404040 !important;
+  border-radius: 8px !important;
+  background: #000 !important;
+  font-size: 12px;
+}
+/* "No Card" / "No Certificate": the field's dashed empty box at tile size. */
+.table tbody td.tpm-col-thumb:not(.col-actions) .tpm-thumb--none {
+  background: transparent !important;
+  border: 1px dashed var(--border-strong) !important;
+}
+
+/* ── Award form — preview rail ──
+   The same right-hand rail the company wizard's billing preview runs in
+   (`.cw-impact`, Figma 616:969): 32px gutter, a 0.1 grey wash over #0d0d0d.
+   480px, Manage Subscription's width rather than the create wizard's 380
+   (user, 2026-10-07) — it is a single-step page, and the artwork needs the
+   room. It renders whatever Design Templates are picked, so the artwork is
+   actually on screen. */
+.aw-preview {
+  width: 480px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 32px;
+  overflow-y: auto;
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.1), rgba(122, 122, 122, 0.1)),
+    #0d0d0d;
+}
+.aw-preview-title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 32px;
+  font-weight: 600;
+  line-height: normal;
+  color: #fff;
+}
+/* Each appearance reads as a form field (`.form-group`): the shared label,
+   the artwork in the control's place, the template's name as subtext. The
+   rail's 24px gap spaces it, plus 8 more between two fields (the forms'
+   32px rhythm). */
+.aw-preview-slot.form-group {
+  margin: 0;
+}
+.aw-preview-slot + .aw-preview-slot {
+  margin-top: 8px;
+}
+.aw-preview-empty {
+  padding: 28px 16px;
+  border: 1px dashed #404040;
+  border-radius: 10px;
+  text-align: center;
+  font-size: 14px;
+  color: #7a7a7a;
+}
+
+/* The Award preview's placeholders (`.art-ph`) at each appearance's shape. */
+.aw-art--card {
+  /* 8:5, the Portfolio card's shape. */
+  aspect-ratio: 8 / 5;
+}
+.aw-art--cert {
+  /* Landscape document, the shape a diploma prints at. */
+  aspect-ratio: 1.41 / 1;
+}
+
+/* ── Design Template wizard — background picker ── */
+.aw-bg-picker {
+  display: flex;
+  gap: 18px;
+  margin-top: 8px;
+  align-items: flex-start;
+}
+.aw-bg-preview {
+  width: 280px;
+  height: 176px;
+  flex: none;
+}
+.aw-bg-filename {
+  font-family: var(--font-mono);
+  font-size: 10pt;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.35);
+  padding: 4px 9px;
+  border-radius: 6px;
+}
+.aw-bg-empty { color: rgba(255, 255, 255, 0.4); font-size: 14px; }
+.aw-bg-side { flex: 1; }
+
+/* ============== Manage IDs page ============== */
+/* The table is the shared `.table` system (same columns/paging chrome as the
+   Proctoring queue), so all this page adds is the ID popup's sizing. */
+
+/* ── ID popup (view + replace in one modal) ──
+   Figma 460:1792 (Approved) / 460:2445 (Review Pending) / 460:2546 (Reupload
+   Requested): the shared PrmModal shell (667:884) around a 640px ID inside its
+   24px padding, the name + "ID Status" line as title and description, and the
+   footer holding Replace ID (+ Approve while the ID still needs a decision). */
+.prm.mid-modal {
+  /* 640px card + 2×24px padding. */
+  max-width: 688px;
+}
+/* The status value is the hover target for the ID timeline card (Figma
+   679:2039). Styled like the name link: plain until hovered, so the line still
+   reads as a subtitle rather than a control. */
+.mid-head-status {
+  /* The whole "ID Status: …" line is one #A8A8A8 (the user, 2026-10-13); the
+     value keeps its Medium weight. */
+  color: #a8a8a8;
+  font-weight: 500;
+}
+.udh-anchor:hover > .mid-head-status {
+  color: #f05523;
+  text-decoration: underline;
+  text-decoration-thickness: from-font;
+  text-underline-position: from-font;
+}
+
+/* ── Upload step (Figma 467:673 empty / 467:950 file added) ──
+   A narrower dialog than the ID view, stacked over it: 420px of document inside
+   the same 24px padding. Until a file is picked the drop zone stands in for the
+   document at the same size, so the dialog does not resize when one is chosen. */
+.prm.mid-modal--upload {
+  max-width: 468px;
+}
+
+.mid-drop {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  /* The document the drop zone stands in for is 420 × 265. */
+  min-height: 265px;
+  padding: 0 40px;
+  /* Figma's 1px dashed #7a7a7a. */
+  border: 1px dashed #7a7a7a;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.12s, background 0.12s;
+}
+.mid-drop:hover {
+  border-color: var(--accent);
+  background: rgba(122, 122, 122, 0.06);
+}
+.mid-drop-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.mid-drop-icon {
+  color: #a8a8a8;
+  line-height: 0;
+}
+.mid-drop-title {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: #a8a8a8;
+}
+.mid-drop-hint {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.35;
+  color: #7a7a7a;
+}
+/* A refused file (wrong type, over 100MB) — the field-error red, on the zone
+   and in a line under the hint. */
+.mid-drop.has-error {
+  border-color: var(--field-error);
+}
+.mid-drop-error {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--field-error);
+}
+/* The chosen file itself, in the box the drop zone held (420 × 265). */
+.mid-upload-preview {
+  display: block;
+  width: 100%;
+  height: 265px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: rgba(122, 122, 122, 0.06);
+}
+
+/* ============== Attempt Viewer (View Attempt page) ============== */
+/* Dark, self-contained report shown when an attempt's "View Attempt" is
+   clicked. Hover affordances mirror the original bundled prototype. */
+.av-row:hover { background: rgba(255, 255, 255, 0.025) !important; }
+.av-cell:hover { filter: brightness(1.35); }
+.av-secjump:hover span:first-child { color: #fff; }
+
+/* =============================================================
+ * Question Bank — redesigned editor (.qed), row-click preview
+ * panel (.qprev) and version-history modal (.qh)
+ * ============================================================= */
+
+/* ─── Editor page shell ───
+   The create/edit-question screen is assembled from the shared design system
+   (Figma "Components" page 11:15114) rather than styled here:
+     · breadcrumb             → .rvc-crumbs (1356:1829)
+     · page header + subtext  → .tasks-title / .tasks-subtitle (46:314)
+     · section dividers       → <PageBreak /> (104:376)
+     · label + field subtext  → .form-label / .form-help (49:367, 49:370)
+     · text & dropdown inputs → .form-input / .form-select (49:343, 101:272)
+     · dual-language input    → .lang-field (49:348)
+     · rich text              → .rte-field + RteToolbar (327:137)
+     · single-select          → .seg-control / .seg-btn (359:2373)
+     · radio cards            → .radio-card (134:1790 / 136:294)
+     · toggles                → .toggle-row (361:2434 / 362:2440)
+     · add affordance         → .add-card (341:2764)
+     · status pills           → .co-status-pill--* (109:1237)
+     · buttons + footer       → .btn-publish / .btn-save-draft / .wizard-footer
+                                (73:473, 73:495, 73:515)
+   What is left below is the repeating option/pair row, which the design system
+   has no component for — it is built on the .radio-card shell's tokens (1px
+   #404040, radius 9, 12px padding, 12px gap) so it drops in when one exists. */
+/* The question editor runs the Task wizard's shell (.wizard > .wizard-body >
+   .wizard-main) as ONE column for every type — the 380px settings rail
+   (`.qed-side`) was folded into it 2026-09-29, and its CSS deleted. */
+/* No page-break dividers between sections here (Question / Options / Feedback
+   read as one flowing form), so the gap between them is a plain margin. */
+.qed .wizard-content > .wizard-fields + .wizard-fields {
+  margin-top: 40px;
+}
+
+/* The type-titled header (Figma 739:1508) carries no subtext on a new
+   question, so the title takes over .wizard-desc's 28px bottom gap. */
+.qed-title-solo {
+  margin-bottom: 28px;
+}
+
+/* The title keeps its own bottom gap, so the shared .rvc-pagehead column adds
+   nothing below itself. */
+.qed-pagehead .tasks-title {
+  margin-top: 0;
+}
+
+/* ─── Option / pair rows ─── */
+/* Combined Feedback rows (Figma 1481:3600, re-cut 2026-10-03) — a fixed 94px
+   label column beside the field, centred against it, rather than a label
+   stacked above. Medium, not SemiBold. Wraps to two or three lines, so the
+   leading is specified. */
+.qed-fb-label {
+  flex: none;
+  width: 94px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 19px;
+  color: #fff;
+}
+
+/* The label greys with the field it names (Figma 1481:3619: #7a7a7a). */
+.qed-fb-label.is-disabled {
+  color: #7a7a7a;
+}
+
+/* A / B / C … down the left of each option (Figma 414:427). Replaces the
+   radio/checkbox correct-marker — the score dropdown carries that meaning. */
+.qed-row-letter {
+  flex: none;
+  min-width: 12px;
+  text-align: center;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  color: #a8a8a8;
+}
+
+/* Per-option grade (Figma 814:1703) — the design-system dropdown at its own
+   12px inset; `.qed-tbl-hd-grade` spans it + the gap + the remove icon. It
+   reads as a plain white value: the sign-tinted variant this had was dropped
+   with the re-sync. */
+/* The grade picker is the shared `SelectField` (2026-09-10), so the width has
+   to be pinned on the wrapper as well as the control — the component's own
+   shrink-to-widest-option sizer would otherwise decide it. */
+/* Grade field (Figma 814:1703, re-issued 2026-09-10): 92px = 12px insets +
+   a 40px value + a 12px gap + the 14px chevron. The width is pinned on the
+   WRAPPER as well, or the component's shrink-to-widest-option sizer decides
+   it. Its menu (1090:1153) is the same 92px, which is what SelectField opens
+   at by default. */
+.qed-tbl-row > .selectfield,
+.select-field.qed-grade {
+  width: 92px;
+  min-width: 0;
+  flex: none;
+}
+.select-field.qed-grade {
+  grid-template-columns: 40px 14px;
+  padding: 12px;
+  gap: 12px;
+}
+.select-field.qed-grade svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ─── Options / Combined Feedback card (Figma 814:1679 "Create Question -
+ * MCQ", 814:1770) ───
+ * The same boxed table as the Quiz wizard's questions card (.qz, 750:1672):
+ * rgba(122,122,122,.1) on a 12px radius, 16px gutters, rows split by a
+ * rgba(64,64,64,.5) hairline that also closes the bottom edge. Header cells
+ * are 14px muted; the rows carry the real controls. */
+.qed-tbl {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.qed-tbl-hd,
+.qed-tbl-row,
+.qed-tbl-foot {
+  display: flex;
+  align-items: center;
+}
+
+/* The add row holds one link; its gap is the link's own, not a column gap. */
+.qed-tbl-foot {
+  gap: 16px;
+}
+
+/* Figma's bottom insets (9 / 13) include the hairline; CSS draws it outside
+   the padding, so each is the node's minus 1 — the same rule `.qz` / `.qsec`
+   follow. Was 9 / 13, which made every row here 1px taller than the node. */
+.qed-tbl-hd {
+  padding: 8px 16px 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #a8a8a8;
+}
+
+.qed-tbl-row,
+.qed-tbl-foot {
+  padding: 12px 16px 12px;
+}
+
+/* "Add N More Options" (Figma 1091:1178): a text link, not the Primary CTA it
+   used to be — 16px SemiBold in the brand orange behind a 16px plus. */
+.qed-tbl-add {
   display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: normal;
+  color: #f05523;
+  cursor: pointer;
+}
+
+.qed-tbl-add svg {
+  width: 16px;
+  height: 16px;
+}
+
+.qed-tbl-add:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+/* At the cap (10 options / pairs) — the same solid #404040 as a locked Add
+   Section (1570:3468), not a fade. */
+.qed-tbl-add:disabled {
+  color: #404040;
+  cursor: not-allowed;
+}
+
+.qed-tbl-hd-opt {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Covers the rows' grade dropdown + gap + remove icon (92 + gap + 16), so
+   GRADE starts exactly over the dropdown. Was 90 until the field was re-issued
+   at 92px (814:1703, 2026-09-10), which left the label 2px right of it. */
+.qed-tbl-hd-grade {
+  width: calc(108px + var(--card-table-gap));
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Info glyph (Figma 814:1689 / 814:1829) on its row's own 4px gap. The 14px
+   `InfoIcon14` cut, as on every page subtext (742:1061) — the 11px `InfoIcon`
+   in a 12px box read thin and undersized beside the 14px caps (2026-10-03,
+   user). Brightens on hover like the other tooltip triggers. */
+.qed-tbl-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: #a8a8a8;
+  cursor: default;
+  transition: color 0.12s ease;
+}
+
+.qed-tbl-info:hover {
+  color: #fff;
+}
+
+/* Drag handle + letter gutter: 16px "move" (751:2524) + 4px + the letter. */
+/* 32px: the 16px handle, 4px, a 12px letter cell (1481:3507 and 1198:1941,
+   both re-cut 2026-10-03) — so OPTION / QUESTION and every field start at the
+   same x. */
+.qed-tbl-ord {
+  width: 32px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.qed-tbl-grip {
+  display: inline-flex;
+  color: #a8a8a8;
+  cursor: grab;
+}
+
+.qed-tbl-grip:hover {
+  color: #fff;
+}
+
+.qed-tbl-grip:active {
+  cursor: grabbing;
+}
+
+/* The "Other" row (Figma 1094:1183): a caption line, not an option — the name
+   and its explanation 8px apart, both at 16px, standing 44px against an option
+   row's 114. The node's grip is dropped (nothing to reorder), but its 20px
+   gutter is kept so "Other" sits in the same column as the option letters. */
+.qed-tbl-row--other {
+  gap: 0;
+  padding-left: 36px;
+}
+
+.qed-tbl-other {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 16px;
+  /* The inherited 1.45 would make the line 23px and the row 49 against the
+     node's 44. */
+  line-height: normal;
+}
+
+.qed-tbl-other-name {
+  font-weight: 600;
+  color: #fff;
+}
+
+.qed-tbl-other-desc {
+  font-weight: 400;
+  color: #a8a8a8;
+}
+
+/* Drag states — the app's shared pair: the row being carried fades, and the
+   row it would land on takes an accent line along its top edge. */
+.qed-tbl-row.is-dragging,
+.qsec-row.is-dragging {
+  opacity: 0.4;
+}
+
+.qed-tbl-row.is-drop-target,
+.qsec-row.is-drop-target {
+  box-shadow: inset 0 2px 0 0 var(--accent);
+}
+
+.qed-tbl-letter {
+  width: 12px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.qed-tbl-field {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Match the Following (Figma 1198:1934): the options table with two equal
+   text columns instead of one-plus-grade, on the same 32px number column. The
+   row number runs to 10 (~18px), wider than the 12px cell, so it starts at the
+   cell's left edge and a second digit runs on into the 24px gap — never back
+   into the handle. The node only draws rows 1–4. */
+.qed-tbl--pairs .qed-tbl-letter {
+  text-align: left;
+  white-space: nowrap;
+}
+
+/* Header spacer over the rows' remove ✕, so QUESTION and ANSWER sit above the
+   columns they name rather than drifting 16px right of them. */
+.qed-tbl-hd-x {
+  width: 16px;
+  flex: none;
+}
+
+.qed-tbl-static {
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  color: #a8a8a8;
+}
+
+.qed-tbl-x {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  color: #7a7a7a;
+  cursor: pointer;
+}
+
+.qed-tbl-x:hover:not(:disabled):not([aria-disabled="true"]) {
+  color: #fff;
+}
+
+.qed-tbl-x:disabled,
+.qed-tbl-x[aria-disabled="true"] {
+  color: #404040; /* 1570:3468 — solid, not a fade */
+  cursor: not-allowed;
+}
+
+/* ─── Linear scale ─── */
+.qed-inline-fields {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Both ends share the row evenly and run to the rail's edge. The wrapper needs
+   the flex basis as well as the button's `select-field--full`: the component's
+   shrink-to-widest-option sizer would otherwise size the wrapper, leaving slack
+   on the right and making the "0 / 1" end narrower than the "2 … 10" one. */
+.qed-inline-fields > .selectfield {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The separator between the two ends of the range: 16px SemiBold #a8a8a8 — it
+   sits between two 45px controls, so it carries the fields' own weight rather
+   than reading as help text. */
+.qed-range-to {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  color: #a8a8a8;
+}
+
+/* ─── Grading toggles ─── */
+/* ─── Version history modal ─── */
+/* Version-history modal — the shared .pm-modal shell, sized for a scrolling
+   list and given a two-part head (title block + close button). */
+.pm-modal.qh-modal {
+  max-width: 600px;
+  max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+}
+
+.qh-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.qh-sub {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 480px;
+}
+
+.qh-sub-text {
+  font-style: italic;
+}
+
+.qh-list {
+  padding: 6px 24px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.qh-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.qh-row:last-child {
+  border-bottom: none;
+}
+
+.qh-vcol {
+  width: 64px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.qh-vtag {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--bg-pill-strong);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 2px 10px;
+}
+
+.qh-row.is-current .qh-vtag {
+  color: #f05523;
+  border-color: rgba(240, 85, 35, 0.4);
+  background: rgba(240, 85, 35, 0.1);
+}
+
+.qh-current-pill {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #f05523;
+}
+
+.qh-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.qh-note {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.qh-meta {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.qh-usage {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+.qh-usage.is-unused {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+.qh-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.qh-action-btn {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 5px 12px;
+}
+
+.qh-action-btn:hover {
+  color: var(--text);
+  background: var(--bg-pill-strong);
+}
+
+.qh-action-btn--danger {
+  color: #f08a72;
+  border-color: rgba(240, 138, 114, 0.35);
+}
+
+.qh-action-btn--danger:hover {
+  color: #f08a72;
+  background: rgba(240, 138, 114, 0.08);
+}
+
+.qh-empty {
+  padding: 22px 0;
+  text-align: center;
+  font-family: var(--font-sans);
+  font-size: 11.5pt;
+  color: var(--text-muted);
+}
+
+.qh-foot-note {
+  padding: 12px 24px 18px;
+  border-top: 1px solid var(--border);
+  font-family: var(--font-sans);
+  font-size: 10pt;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+/* ─── Version History — full page (Question Bank row menu) ─── */
+/* The page is the shared list-page shell — .tasks / .tasks-header / .table /
+   .pagination, the same chrome Quiz Attempts and Who Paid wear — so these are
+   only the column rules the version table adds. The `.qh-*` rules above still
+   belong to the question editor's read-only history peek. */
+
+/* The subtext is "<id> · <question>" and the question is already cut to 200
+   characters, so the row holds one line and ellipses anything left over on a
+   narrow page. The full stem is on the hover tip. */
+.tasks-subtitle .qvh-sub-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Version is the row's name column; the rest hold one line each. The question
+   stem is the only cell long enough to need an ellipsis (its full text is on
+   the cell's tooltip). */
+.table tbody td.qvh-col-version,
+.table tbody td.qvh-col-date,
+.table tbody td.qvh-col-num {
+  white-space: nowrap;
+}
+
+.table tbody td.qvh-col-question {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── Row-click preview panel ─── */
+.qb-row {
+  cursor: pointer;
+}
+
+.qb-row.is-selected td {
+  background: var(--bg-row-selected);
+}
+
+.qprev {
+  width: 360px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.qprev-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 20px 20px 0;
+}
+
+.qprev-head-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.qprev-id {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.qprev-vtag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-pill-strong);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.qprev-close {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 7px;
+  color: var(--text-muted);
+}
+
+.qprev-close:hover {
+  color: var(--text);
+  background: var(--bg-pill-strong);
+}
+
+.qprev-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 12px 20px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.qprev-grading-tag {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 1px 10px;
+}
+
+.qprev-grading-tag.is-graded {
+  color: #5fcf80;
+  border-color: rgba(95, 207, 128, 0.35);
+  background: rgba(95, 207, 128, 0.07);
+}
+
+.qprev-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 20px;
+}
+
+.qprev-sec {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.qprev-sec:last-child {
+  border-bottom: none;
+}
+
+.qprev-sec-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 10px;
+}
+
+.qprev-qtext {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.qprev-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.qprev-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 11.5pt;
+  color: var(--text-muted);
+}
+
+.qprev-opt.is-correct {
+  border-color: rgba(95, 207, 128, 0.4);
+  background: rgba(95, 207, 128, 0.07);
+  color: var(--text);
+}
+
+.qprev-opt--other {
+  border-style: dashed;
+  font-style: italic;
+}
+
+.qprev-opt-letter {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-faint);
+  width: 14px;
+  flex-shrink: 0;
+}
+
+.qprev-opt-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.qprev-opt-check {
+  display: inline-flex;
+  color: #5fcf80;
+  flex-shrink: 0;
+}
+
+.qprev-opt-check svg {
+  width: 13px;
+  height: 13px;
+}
+
+.qprev-grade {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.qprev-grade.is-pos {
+  color: #5fcf80;
+}
+
+.qprev-grade.is-neg {
+  color: #f08a72;
+}
+
+.qprev-pair {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  font-family: var(--font-sans);
+  font-size: 11.5pt;
+}
+
+.qprev-pair-left {
+  color: var(--text);
+}
+
+.qprev-pair-distractor {
+  font-style: italic;
+  color: var(--text-faint);
+}
+
+.qprev-pair-arrow {
+  color: var(--text-faint);
+}
+
+.qprev-pair-right {
+  color: var(--text-muted);
+}
+
+.qprev-answer-note {
+  font-family: var(--font-sans);
+  font-size: 11.5pt;
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.qprev-scale-range {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.qprev-scale-labels {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.qprev-fb-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 12px;
+}
+
+.qprev-fb-row:last-child {
+  margin-bottom: 0;
+}
+
+.qprev-fb-row .qe-fb-label {
+  margin-bottom: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.qprev-fb-text {
+  font-family: var(--font-sans);
+  font-size: 11.5pt;
+  color: var(--text-muted);
+}
+
+.qprev-detail-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  font-family: var(--font-sans);
+  font-size: 11.5pt;
+}
+
+.qprev-detail-label {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.qprev-detail-value {
+  color: var(--text);
+  text-align: right;
+  min-width: 0;
+}
+
+.qprev-usage-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  font-family: var(--font-sans);
+  font-size: 11.5pt;
+  color: var(--text);
+}
+
+.qprev-usage-kind {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #f05523;
+  border: 1px solid rgba(240, 85, 35, 0.35);
+  border-radius: 5px;
+  padding: 1px 6px;
+  flex-shrink: 0;
+}
+
+.qprev-usage-kind--form {
+  color: #79bbff;
+  border-color: rgba(78, 161, 255, 0.35);
+}
+
+.qprev-usage-empty {
+  font-family: var(--font-sans);
+  font-size: 11.5pt;
+  font-style: italic;
+  color: var(--text-faint);
+}
+
+.qprev-foot {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  padding: 14px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.qprev-edit-btn {
+  width: 100%;
+}
+
+.qprev-foot-links {
+  display: flex;
+  justify-content: space-between;
+}
+
+.qprev-link {
+  font-family: var(--font-sans);
+  font-size: 11pt;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.qprev-link:hover {
+  color: var(--text);
+}
+
+.qprev-link--danger {
+  color: #f08a72;
+}
+
+.qprev-link--danger:hover {
+  color: #f08a72;
+  text-decoration: underline;
+}
+
+.qprev-link:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+/* =============================================================
+ * Feedback Forms — Question Bank links (spec 13, 2026-07-09)
+ * ============================================================= */
+
+.fb-link-banner {
+  padding: 12px 16px;
+  border: 1px solid rgba(96, 165, 250, 0.25);
+  background: rgba(96, 165, 250, 0.07);
+  border-radius: 10px;
+  font-size: 11pt;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.fb-link-banner strong {
+  color: var(--text);
+}
+
+.fb-link-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: none;
+}
+
+.fb-link-row {
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  border-radius: 10px;
+  transition: border-color 0.12s ease;
+}
+
+.fb-link-row:hover {
+  border-color: var(--border-strong);
+}
+
+.fb-link-row.is-inactive {
+  opacity: 0.72;
+  background: transparent;
+}
+
+.fb-link-row.is-missing {
+  padding: 12px 14px;
+  border-style: dashed;
+}
+
+.fb-link-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+
+.fb-link-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.fb-link-text {
+  font-size: 11.5pt;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.fb-link-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.fb-link-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.fb-link-actions .fb-q-toggle {
+  font-size: 14px;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.fb-link-detail {
+  padding: 0 14px 14px 50px;
+  font-size: 11pt;
+  color: var(--text-muted);
+}
+
+.fb-link-options {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.fb-link-detail-line {
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
+
+/* ----- Question Bank picker modal ----- */
+
+.fb-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 12px 24px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  color: var(--text);
+  transition: background 0.12s ease;
+}
+
+.fb-picker-row:last-child {
+  border-bottom: none;
+}
+
+.fb-picker-row:hover:not(:disabled) {
+  background: var(--bg-row-hover);
+}
+
+.fb-picker-row:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.fb-picker-row.is-linked .fb-trigger-pick-cta {
+  color: #6ee7a3;
+}
+
+/* ----- Triggers: archived + behavior rules ----- */
+
+/* The inactive callout sits above the triggers table, on the body's rhythm. */
+.fb-inactive-note {
+  margin-bottom: 12px;
+}
+
+/* ----- Responses: inactive questions, de-identification ----- */
+
+.fb-summary-divider {
+  margin-top: 12px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--border-strong);
+}
+
+.fb-anon {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+/* ─────────────── Feedback Response Viewer v2 ─────────────── */
+/* One page header + .tabbar over two views: the aggregate Overview and the
+   master–detail Responses browser (design "Feedback Response Viewer v2"). */
+
+.fb-type-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--bg-pill);
+  border: 1px solid var(--border);
+  font-size: 9.5pt;
+  color: #a8a8a8;
+}
+
+.fb-picker-row.is-selected {
+  background: rgba(233, 114, 55, 0.08);
+}
+
+.fb-picker-row.is-selected:hover:not(:disabled) {
+  background: rgba(233, 114, 55, 0.12);
+}
+
+.fb-picker-row.is-selected .fb-trigger-pick-cta {
+  color: var(--accent-strong);
+}
+
+/* Selection-order badge — statics join the Quiz in the order they're picked. */
+.qpick-order {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 9.5pt;
+  font-weight: 600;
+}
+
+/* ----- In-quiz resources: existing-Resource checkboxes ----- */
+
+/* ----- In-Quiz Resources: the add CTA and its two panels (Figma 1218:1414) --
+   The CTA is the same orange text-link recipe as the Sections table's Add
+   Section (`.qsec-add`) and the Questions table's Add Questions row: 16px
+   SemiBold #f05523, a 16px plus, 4px between them. It is repeated rather than
+   shared because both of those are rows INSIDE a bordered card and carry that
+   card's gutters; this one is a bare field-level CTA. */
+.res-add-wrap {
+  position: relative;
+  align-self: flex-start;
+}
+
+.res-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 19px;
+  color: #f05523;
+  cursor: pointer;
+}
+
+.res-add svg {
+  width: 16px;
+  height: 16px;
+}
+
+.res-add:hover {
+  text-decoration: underline;
+}
+
+/* The chooser. `.qz-menu` is the same panel on the Questions step, but it is
+   anchored to a full-width table row and re-says that row's 16px gutter; this
+   one hangs off the CTA itself, so it starts at 0. */
+.res-menu {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  width: max-content;
+  min-width: 241px;
+  z-index: 50;
+}
+
+.res-menu-item {
+  white-space: nowrap;
+}
+
+/* 774:1298's own 304px. The `.dropdown` shell brings the wash, hairline, radius
+   and shadow; `.dropdown-list` + `CheckRow` + `.dropdown-footer` bring the rest,
+   so nothing here restates them. */
+.res-picker {
+  width: 304px;
+  left: 0;
+  top: calc(100% + 6px);
+}
+
+/* Files staged in the upload modal sit under the drop zone, which is `flex: 1`
+   — without this the list would be squeezed to nothing. */
+.res-staged {
+  flex: 0 0 auto;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+/* ═══════════════ Review Console (Hands-On submissions) ═══════════════
+   Queue-driven review screen for Hands-On submissions.
+
+   Chrome is assembled from the shared design system (Figma "Components"
+   page 11:15114) rather than restyled here:
+     · header eyebrow + title  → .wizard-brand-eyebrow / .wizard-brand-name (78:395)
+     · status & verdict pills  → .co-status-pill--* (Table Pills 109:1237)
+     · inherited filter chips  → .filter-applied / .filter-applied-main (12:15221)
+     · section dividers        → <PageBreak /> (104:376)
+     · field label + textarea  → .form-label / .form-input / .form-help (49:367, 49:343)
+     · buttons                 → .btn-publish (73:473), .btn-save-draft (73:495)
+     · footer                  → .wizard-footer / .wizard-cancel (73:515)
+     · inline link             → .text-link (1550:2626 / 1550:2646)
+
+   What remains below is only the review-specific structure that the design
+   system has no component for yet: the media stage + thumbnail strip, the
+   queue strip and progress meter, the attempt switcher, the 1–10 score pad,
+   the read-only banner/callout, and the toast. Those are built on design
+   system tokens (32px gutters, 32px controls, 8px radius, the 12/14/16/28
+   type ramp, rgba(122,122,122,.5) dividers, #404040 control borders and the
+   Table Pill palette) so they drop in cleanly once components exist. */
+
+.rvc-root {
+  --rvc-divider: rgba(122, 122, 122, 0.5); /* DS structural divider */
+  --rvc-ctl: #404040; /* DS control border */
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg);
+}
+
+.rvc-flex { flex: 1; }
+
+/* ── two-column shell (Figma 756:2985) ──
+   The Hands-On console lays out as two full-height columns rather than the
+   header/body/footer stack: the submission scrolls on the left, and the review
+   rail owns the right 516px with its own footer pinned to the bottom of it.
+   `.rvc-hor` scopes that to this console — ProctoringConsole still stacks. */
+.rvc-hor { flex-direction: row; }
+/* …except the root itself, which now stacks that row over the page-wide footer
+   (1164:1508 + 1164:1509). `.rvc-cols` is the row. */
+.rvc-hor.rvc-root { flex-direction: column; }
+.rvc-cols {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+}
+/* Left column (756:2986) — page header, write-up, voice note and media, all
+   scrolling together behind a 32px gutter. */
+.rvc-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 32px;
+  overflow-y: auto;
+}
+/* Right column (756:3091) — no rule between the columns: the 15% grey wash IS
+   the divider, and it runs behind the footer too. */
+.rvc-railcol {
+  width: 516px;
+  flex: none;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(rgba(122, 122, 122, 0.15), rgba(122, 122, 122, 0.15)), #0d0d0d;
+}
+
+/* ── header (Figma 293:849) ──
+   Breadcrumb over the DS page header (title + subtitle), no bottom rule, on
+   the app's even 32px page gutter. The task and submitter now live here, which
+   is why there's no separate submission bar; the attempt switcher rides on the
+   right of the same row.
+
+   The 28px below the subtext is the wizard's own subtext-to-first-field step
+   (`.wizard-desc`'s margin). It lives HERE rather than on `.rvc-stagecol`
+   because the stage is the scroll container: top padding on it would sit
+   inside the sticky constraint box and leave the pinned section rail stopping
+   28px short of the scrollport edge. On the header it is outside the scroller,
+   so scrolling is untouched. */
+.rvc-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 32px 32px 28px;
+  flex: none;
+}
+/* In the split layout the column owns the gutter, so the header only keeps the
+   28px down to the submission's write-up (756:3783 → 756:3140). */
+/* The switcher sits at the top of the header row, centred on the 38px title
+   LINE (Figma 1441:2092 "Page Header Buttons": 3px above and below the 32px
+   button), not on the two-line title. 24px down to the write-up (1441:1903,
+   re-synced 2026-10-02 — was 28). */
+.rvc-hor .rvc-header { position: relative; padding: 0 0 24px; align-items: flex-start; }
+.rvc-hor .rvc-att { margin-top: 3px; }
+/* The attempts panel hangs off the HEADER (the left column's content box), not
+   the trigger, so it can never run past the column onto the nav: it keeps the
+   design's 887px where that fits and shrinks to the column where it doesn't,
+   the Feedback column giving up the width. Top = the trigger's 3px offset +
+   its 32px + the 8px drop. */
+.rvc-hor .rvc-att { position: static; }
+.rvc-hor .rvc-apanel { top: calc(3px + 32px + 8px); max-width: 100%; }
+/* The Exam Reviews console pads its header, not its root, so the crumb row
+   takes the header's 32px top and gutter itself. */
+.rvc-root > .rvc-crumbs { padding: 32px 32px 0; }
+.rvc-root > .rvc-crumbs + .rvc-header { padding-top: 0; }
+/* The page header (Figma 1356:1828) is the title + subtext only — no gap, so
+   the DS 2px between them holds. */
+.rvc-pagehead { display: flex; flex-direction: column; min-width: 0; }
+/* Page header (Figma 1429:1446 "Atomic Component - Page Header", 2026-10-01):
+   the 17px crumb row is the header's top line, 4px over the title row — in the
+   page's flow, under the shell's 32px top padding (it no longer sits up in the
+   padding, the 1417:1395 strip). It is the page's first child, a sibling just
+   before `.tasks-header` (or `.rvc-pagehead` in the wizards), so it spans the
+   title AND the action buttons' row. */
+.rvc-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+  flex: none;
+}
+/* Breadcrumb atom (Figma 1415:1354): only the pages ABOVE this one — the
+   current page is the title, never a crumb. Every crumb is a navigating
+   <button>, 14px Medium #a8a8a8 (17px row), with the 14px CrumbChevronIcon
+   between them, 4px apart. */
+.rvc-crumb {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: normal;
+  font-weight: 500;
+  color: #a8a8a8;
+  white-space: nowrap;
+  padding: 0;
+}
+button.rvc-crumb { cursor: pointer; }
+button.rvc-crumb:hover { color: #fff; text-decoration: underline; }
+.rvc-crumbs svg { width: 14px; height: 14px; color: #a8a8a8; flex: none; }
+/* A flex column, not a block: the subtitle is an inline-flex, and as an INLINE
+   box it would sit on a line box sized by the container's 1.45 line-height —
+   4px taller than the subtitle itself, which pushed the header past the
+   design's 82px. As a flex item it contributes its own height and nothing more. */
+.rvc-pagehead-id {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+/* Task name and submitter open their own tab — styled as plain text until
+   hovered so the header still reads as a heading. */
+.rvc-headlink {
+  font: inherit;
+  color: inherit;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+/* Plain text at rest; on hover the inline link's hover look (1550:2646). */
+.rvc-headlink:hover {
+  color: #f05523;
+  text-decoration: underline;
+  text-decoration-thickness: from-font;
+  text-underline-position: from-font;
+}
+/* Hands-On console title (Figma 1441:1859 "Page Header + Button"): the Task
+   name is plain heading text with a 16px open-in-new-tab icon 8px after it.
+   Only the icon is clickable and only it hovers — #a8a8a8 at rest, white on
+   hover. */
+.rvc-headtitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.rvc-headicon {
+  display: inline-flex;
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #a8a8a8;
+  cursor: pointer;
+  transition: color 0.12s ease;
+}
+.rvc-headicon:hover,
+.rvc-headicon.is-open { color: #fff; }
+.rvc-headicon:focus-visible {
+  outline: 1px solid #404040;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* The review queue popover (Figma 263:1587) is gone (user, 2026-10-07); its
+   keycap legend below lives on as the Attempts dropdown's footer. */
+/* Keycap legend (263:1607). */
+.rvc-qpanel-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 18px;
+  border-top: 1px solid var(--border-strong);
+  flex: none;
+}
+.rvc-qhints { display: flex; align-items: center; gap: 16px; }
+.rvc-qhint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  color: #7a7a7a;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* ── attempts dropdown (Figma 1169:1598 trigger / 1169:2024 panel) ──
+   Replaced the "PAST SUBMISSIONS" V5…V1 chip row (295:882): one Secondary
+   Button naming the attempt on screen, opening a table of every attempt. The
+   panel hangs off the header's right edge, so this wrapper is its anchor. */
+.rvc-att { position: relative; flex: none; }
+/* `.btn-save-draft` already IS the Figma Secondary Button (32px, 0 16px, gap 8,
+   14/600 white), so the trigger only has to tint its caret — a SOLID 16px wedge
+   at #a8a8a8 (1169:1600), not one of the stroked chevrons, and it does not
+   rotate: the frame only ever shows this one state. */
+.rvc-att-caret { display: inline-flex; color: #a8a8a8; }
+/* Arrowing through the panel leaves keyboard focus on the trigger, and the UA
+   focus ring around it read as a stray white border. The open panel IS the
+   affordance, so the ring is suppressed only while it's open — a trigger with a
+   closed panel still shows focus. */
+.rvc-att-trigger[aria-expanded="true"]:focus-visible { outline: none; }
+
+/* 887px panel, 8px below the trigger and right-aligned to it (1169:2024;
+   re-synced 2026-10-02 to 1441:2113 — 16px row insets, a 15% #737373 wash). */
+.rvc-apanel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 100;
+  width: 887px;
+  max-width: calc(100vw - 80px);
+  display: flex;
+  flex-direction: column;
+  max-height: min(60vh, 420px);
+  border: 1px solid var(--rvc-ctl);
+  border-radius: 8px;
+  overflow: hidden;
+  background: linear-gradient(rgba(115, 115, 115, 0.15), rgba(115, 115, 115, 0.15)), #0d0d0d;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55);
+}
+/* Head and rows share the 16px side insets and 24px gaps, so the columns line
+   up without a shared table element; rows are 12px tall-padded, the head 8px
+   (1441:2114 / 1441:2141). */
+.rvc-arow {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: normal;
+  color: #a8a8a8;
+  text-align: left;
+}
+.rvc-arow--head {
+  flex: none;
+  font-size: 14px;
+  font-weight: 500;
+  text-transform: uppercase;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  /* Drawn inside the 33px row, as Figma's stroke is — a border would add 1px. */
+  box-shadow: inset 0 -1px 0 rgba(64, 64, 64, 0.5);
+}
+/* Every head cell is the same grey — it must out-rank the per-column colours. */
+.rvc-arow--head .rvc-ac { color: #a8a8a8; }
+.rvc-ac {
+  flex: none;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Per-column colour, fixed for every row (1441:2113): the index, reviewer and
+   date are secondary, the feedback is primary, and Result carries the verdict
+   tone. */
+.rvc-ac--idx { width: 17px; text-align: right; }
+.rvc-ac--date { width: 92px; }
+.rvc-ac--who { width: 140px; }
+.rvc-ac--result { width: 108px; }
+/* Feedback wraps to two lines, then ellipsizes (1441:2140). It's the one
+   flexible column: 400px in the full 887px panel, less when the panel is
+   capped to a narrower column. */
+.rvc-ac--fb {
+  flex: 1 1 0;
+  max-width: 400px;
+  color: #fff;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.rvc-arow--head .rvc-ac--fb { display: block; }
+.rvc-alist { overflow-y: auto; flex: 1; min-height: 0; }
+.rvc-arow:not(.rvc-arow--head) { cursor: pointer; }
+/* Hover — and the keyboard highlight, which is the same state (1169:2068): the
+   wash ALONE, since the row's text already sits at its final colours. Nothing
+   marks the attempt on screen; the trigger already names it. */
+.rvc-arow.is-hi { background: rgba(122, 122, 122, 0.2); }
+/* Verdict tones — the Result column is this table's primary column. */
+.rvc-ac--result.is-pass { font-weight: 500; color: #14b867; }
+.rvc-ac--result.is-fail { font-weight: 500; color: #ff1f31; }
+/* An attempt still awaiting review dims its blank cells (1169:2135); a reviewed
+   row's own blanks keep the row colour (1169:2084). */
+.rvc-arow.is-ungraded .rvc-ac.is-empty { color: #7a7a7a; }
+
+/* Legend (1169:2086) — the queue popover's atoms, on this node's own rule and
+   padding. */
+.rvc-apanel .rvc-qpanel-foot {
+  padding: 8px 16px; /* + the 1px rule = Figma's 37px row */
+  border-top: 1px solid rgba(64, 64, 64, 0.5);
+}
+
+/* ── body ── */
+.rvc-body {
+  display: flex;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.rvc-stagecol {
+  flex: 1;
+  min-width: 0;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+/* 12px between the write-up, the voice note and the media (Figma 1441:2107,
+   the full-screen re-sync of 2026-10-02 — it was 20px off 756:3140). */
+.rvc-hor .rvc-stagecol { padding: 0; overflow: visible; gap: 12px; }
+/* Media — a 4:3 main stage with the remaining media stacked down its right
+   side. No design system component yet (see handoff note). */
+/* The stage governs the row height (it's the 4:3 element); the media rail is
+   pinned alongside it so a long rail scrolls instead of stretching the row —
+   the design fixes the stage height and gives the rail `h-full` + overflow. */
+.rvc-media {
+  position: relative;
+  display: flex;
+  flex: none;
+}
+.rvc-media.has-thumbs { padding-right: 172px; /* 160 rail + 12 gap */ }
+.rvc-stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  aspect-ratio: 4 / 3;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--rvc-ctl);
+  background: var(--bg-panel);
+}
+.rvc-stage > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+/* Stage overlay controls are all the Secondary Button (Figma 295:1014-1020):
+   the same grey-over-#0d0d0d fill and 0.5px hairline, 16px from the edges. */
+.rvc-stage-play,
+.rvc-stage-nav,
+.rvc-stage-chip {
+  position: absolute;
+  border: 0.5px solid rgba(122, 122, 122, 0.1);
+  background: linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)), #0d0d0d;
+  color: #fff;
+  cursor: pointer;
+  user-select: none;
+}
+.rvc-stage-play:hover,
+.rvc-stage-nav:hover,
+.rvc-stage-chip:hover { filter: brightness(1.15); }
+/* 40px play button, centred (295:1014). */
+.rvc-stage-play {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 48px;
+  display: grid;
+  place-items: center;
+  cursor: default;
+}
+.rvc-stage-play svg { width: 24px; height: 24px; }
+/* 32px nav button (295:1018) — only rendered when there's somewhere to go. */
+.rvc-stage-nav {
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  border-radius: 48px;
+  display: grid;
+  place-items: center;
+}
+.rvc-stage-nav svg { width: 16px; height: 16px; }
+.rvc-stage-nav--prev { left: 16px; }
+.rvc-stage-nav--next { right: 16px; }
+/* 24px chips — duration (295:1016) and download (295:1020). */
+.rvc-stage-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 24px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+}
+.rvc-stage-chip svg { width: 12px; height: 12px; flex: none; }
+.rvc-stage-dur { top: 16px; right: 16px; cursor: default; }
+.rvc-stage-download { bottom: 16px; right: 16px; }
+
+/* Additional media — a column to the right of the stage, scrolling with it. */
+.rvc-thumbs {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.rvc-thumbs::-webkit-scrollbar { display: none; }
+/* 160x120 at most (the design's size), but they SHRINK to fit rather than
+   letting the last one clip: the stage's 4:3 governs the row height, and a
+   narrow window makes that shorter than 4 thumbs stacked. `aspect-ratio` sets
+   the flex base, `flex-shrink` takes over once they'd overflow, and object-fit
+   keeps the images filled. */
+.rvc-thumb {
+  position: relative;
+  width: 160px;
+  aspect-ratio: 4 / 3;
+  flex: 0 1 auto;
+  min-height: 0;
+  cursor: pointer;
+  border-radius: 8px;
+  border: 1px solid var(--rvc-ctl);
+  overflow: hidden;
+  padding: 0;
+  background: var(--bg-panel);
+}
+.rvc-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0.75; }
+.rvc-thumb.is-active { border-color: #f05523; box-shadow: 0 0 0 1px #f05523; }
+.rvc-thumb.is-active img { opacity: 1; }
+.rvc-thumb-play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: rgba(13, 13, 13, 0.35);
+}
+.rvc-thumb-play svg { width: 20px; height: 20px; }
+/* The submission's own write-up leads the column under a "Learner's Notes"
+   label (Figma 1441:1852 — no colon since 2026-10-02; it was 1108:1069's
+   "Learner's Notes:"). Label and body are both 16px, 8px apart; the label is
+   the DS field-label grey. */
+.rvc-notes { display: flex; flex-direction: column; gap: 8px; }
+.rvc-notes-label {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: normal;
+  color: #a8a8a8;
+}
+.rvc-desc {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: normal;
+  color: #fff;
+}
+
+/* ── right rail ── */
+/* The fields fill the top of the right column and scroll under a fixed footer
+   (Figma 756:3762). The card treatment it used to carry (492px, 12px radius,
+   its own margin) is gone: `.rvc-railcol` paints the fill now, and the 32px
+   padding here is what keeps the content column at the design's 452px. */
+.rvc-rail {
+  flex: 1;
+  min-height: 0;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.rvc-rail .section-heading { margin: 0 0 12px; }
+
+/* Field group — label + subtext, then 8px to the control (Figma 263:1015,
+   263:865, 263:1045). Label and subtext sit flush against each other. */
+.rvc-field { display: flex; flex-direction: column; gap: 8px; }
+/* Groups are 28px apart with NO hairline between them (Figma 1172:2197) — the
+   rail's only rule is the one under the checklist, below. */
+.rvc-field + .rvc-field { margin-top: 28px; }
+/* That rule: full-width, 28px clear on both sides (1172:2245). */
+.rvc-rail-rule {
+  flex: none;
+  height: 1px;
+  margin: 28px 0;
+  background: rgba(64, 64, 64, 0.5);
+}
+/* The 8px flex gap owns the rhythm inside a field, so the shared label's and
+   subtext's own margins are cleared wherever they sit — otherwise the feedback
+   box picks up 16px above and below instead of the design's 8 (756:3819). */
+.rvc-field .form-label { margin-bottom: 0; }
+/* Field titles sit on a 19px line (Figma 1441:1939/1949/1979 — 16px text,
+   auto line height), not the inherited 1.45 (23.2px). `.form-label` is
+   `normal` app-wide now; the head row still needs it. */
+.rvc-hor .rvc-field-head { line-height: normal; }
+.rvc-field .form-help { margin: 0; }
+
+/* Reviewer's checklist (Figma 1172:2190) — authored content, read-only. The body
+   is 16px secondary grey on an 8px inset; the "Fail if:" run is preceded by a
+   blank line in the design, which at 16px/normal is the 19px margin below.
+   Its grey subtext is gone: the title now carries a 14px info glyph whose
+   tooltip says the same thing ([[tooltip-and-hover-convention]]). */
+.rvc-check-label { display: inline-flex; align-items: center; gap: 4px; }
+.rvc-check-info {
+  display: inline-flex;
+  flex: none;
+  color: #fff;
+  cursor: default;
+}
+.rvc-check-info:focus-visible { outline: none; }
+.rvc-checklist {
+  padding: 0 8px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: normal;
+  color: #a8a8a8;
+}
+.rvc-checklist ul {
+  margin: 0;
+  padding-left: 24px;
+  list-style: disc;
+}
+/* The checklist is the wizard's one rich-text field: bulleted lines become
+   lists, other lines paragraphs, a blank line (19px at 16px/normal) apart. */
+.rvc-checklist p { margin: 0; }
+.rvc-checklist > * + * { margin-top: 19px; }
+
+/* Scoring scale (Figma 263:1021) — ten 38×41 cells, 8px apart. The selected
+   cell carries the verdict: green fill for a pass, red for a rejection. */
+.rvc-scores { display: flex; gap: 8px; align-items: center; }
+.rvc-score {
+  flex: none;
+  width: 38px;
+  height: 41px;
+  padding: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--rvc-ctl);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  color: #a8a8a8;
+  user-select: none;
+}
+.rvc-score:hover { border-color: #7a7a7a; color: #fff; }
+.rvc-score.is-pass {
+  background: #14b867;
+  border-color: #00572b;
+  color: #fff;
+  font-weight: 600;
+}
+.rvc-score.is-fail {
+  background: #ff1f31;
+  border-color: #700009;
+  color: #fff;
+  font-weight: 600;
+}
+/* Threshold legend (Figma 756:3746) — the active side turns bold + verdict
+   colour. Leading is `normal` per the design, not the app's 1.45 body ramp. */
+.rvc-scale-legend {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: normal;
+  color: #a8a8a8;
+  white-space: nowrap;
+}
+.rvc-legend-fail.is-on { font-weight: 600; color: #ff1f31; }
+.rvc-legend-pass.is-on { font-weight: 600; color: #14b867; }
+
+/* Feedback field (Figma 263:871) — 197px box: 171px of text + 12px padding. */
+.rvc-feedback {
+  flex: none;
+  min-height: 197px;
+  line-height: normal;
+  resize: vertical;
+}
+
+/* The rail's Read-Only card is the shared `NoteCard` (Figma 1448:2554); the
+   rail only spaces it. */
+.rvc-notice { flex: none; margin-bottom: 20px; }
+
+/* Read-only scale (Figma 1446:2440 "Score - Disabled", 2026-10-02) — past
+   attempts and graded/company tasks. Unpicked cells keep the full #404040
+   edge with their numbers at #7a7a7a (no opacity — that faded the edge too);
+   the graded cell keeps its verdict fill; the legend's inactive side greys to
+   #7a7a7a while the verdict side stays bold in its colour. */
+.rvc-score:disabled { cursor: default; color: #7a7a7a; }
+.rvc-score:disabled:hover { border-color: var(--rvc-ctl); color: #7a7a7a; }
+.rvc-score:disabled.is-pass,
+.rvc-score:disabled.is-fail { color: #fff; }
+.rvc-scale-legend.is-locked > span:not(.is-on) { color: #7a7a7a; }
+.rvc-score:disabled.is-pass:hover { border-color: #00572b; color: #fff; }
+.rvc-score:disabled.is-fail:hover { border-color: #700009; color: #fff; }
+/* Submitted feedback reads as content, not a disabled field. */
+.rvc-feedback[readonly] { color: #fff; }
+
+/* ── footer (shared .wizard-footer + Figma 267:1985) ──
+   Same 20px/40px box as the wizard footer, but with a 2px top rule, a bolder
+   left-hand link, then the footer buttons 12px apart (1441:1988). */
+.rvc-footer { gap: 16px; border-top-width: 2px; }
+.rvc-footer .wizard-cancel { font-weight: 600; color: #a8a8a8; padding: 0; }
+/* Figma 1441:1986: a 0.5px top hairline drawn INSIDE a 72px footer (20 + 32 +
+   20). As a real border it added 1px (73px) — so it's an inset shadow here. */
+.rvc-hor .rvc-footer {
+  border-top: 0;
+  box-shadow: inset 0 0.5px 0 rgba(122, 122, 122, 0.5);
+}
+.rvc-footer .wizard-cancel:hover { color: #fff; }
+/* Hands-On (1164:1509): the footer left the rail and spans both columns again,
+   on the page background behind the design's 0.5px rule. */
+.rvc-hor .rvc-footer {
+  position: relative;
+  border-top-width: 0.5px;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+/* Skip + the primary CTA, 12px apart (1441:1988). */
+.rvc-foot-actions { display: flex; align-items: center; gap: 12px; }
+/* "Skip" (756:3836) and "Back To Current Attempt" (297:1040) are the same
+   Secondary-Button-plus-keycap atom — the design reuses the component. */
+.rvc-back-current,
+.rvc-skip { gap: 8px; font-weight: 500; }
+/* Skip names the queue it advances into (1164:1513): the label is one text run
+   so the count reads as a phrase, not a second control. */
+.rvc-skip-label { white-space: nowrap; }
+.rvc-skip-count { color: #a8a8a8; }
+
+/* ── toast — no design system component yet (see handoff note) ── */
+@keyframes rvcToastIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rvc-toast {
+  position: fixed;
+  right: 40px;
+  bottom: 88px;
+  z-index: 9;
+  background: #0d0d0d;
+  border: 1px solid rgba(240, 85, 35, 0.5);
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: #fff;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  animation: rvcToastIn 0.18s ease;
+}
+
+/* ── Proctoring console (ProctoringConsole.tsx) ──
+   Page shell + queue chrome reuse the .rvc-* classes above as-is (header,
+   body, footer, "View Queue" popover). Unlike ReviewConsole this page is a
+   SINGLE column — there's no review rail to grade in, so `.rvc-stagecol`
+   runs full width and the integrity note is a full-width card heading it,
+   above the ID. Only the footer's right-hand button group and the narrower
+   queue panel (4 columns, not 5) are specific to this page. */
+/* The Integrity Note groups its title + detail inside the row's 12px gap
+   (Figma 458:590), so the icon sits apart from the pair. */
+.prc-banner-text {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* ── The header's exam + date line ──
+   Plain text when there's no attempt to open; a link to the quiz attempt when
+   there is, in the same "plain until hovered" style as the candidate's name
+   above it (.rvc-headlink). What it opens is in its tooltip (Figma 451:545). */
+.prc-subtitle {
+  cursor: default;
+}
+
+.prc-subtitle--link {
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.prc-subtitle--link:hover {
+  color: #f05523;
+  text-decoration: underline;
+  text-decoration-thickness: from-font;
+  text-underline-position: from-font;
+}
+
+/* ── Review footer (Figma 445:878, re-checked 2026-10-02) ──
+   Laid out like Hands-On (2026-10-13): Back on the left; Skip and the CTAs
+   together on the right, 12px apart. The shell (space-
+   between, 20px padding, the app's 32px side gutter) comes from .wizard-footer
+   + .rvc-footer. The 2px top rule is drawn INSIDE the node's 72px (20 + 32 +
+   20), so it's an inset shadow — as a border it stood the footer at 74. */
+.rvc-footer.prc-footer {
+  border-top: 0;
+  box-shadow: inset 0 2px 0 rgba(122, 122, 122, 0.5);
+}
+.prc-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Sections need the modal's old 28px separation, not the media column's 10px.
+   No top padding on the stage: the section rails pin with `top: 0`, and a
+   scroll container's top padding sits INSIDE the sticky constraint box, so the
+   pinned rail would stop 32px short of the scrollport edge with frames visible
+   above it. A rail that leads the stage therefore sits at rest exactly where it
+   sits pinned (its own 26px top padding under the page header) — only a
+   leading Integrity Note keeps the page's 32px gutter. */
+.prc-stagecol {
+  /* No flex gap: the sections must ABUT so the footage rail's top edge is what
+     pushes the ID rail out (a gap between the containing blocks would push the
+     ID rail away 28px before the next rail arrives — an odd, empty handoff).
+     The 28px separation lives on the banner's bottom margin and on each
+     section body's bottom padding instead. */
+  gap: 0;
+  padding-top: 0;
+  /* Reaching either end must not hand the wheel to an ancestor, and the
+     browser must not re-anchor the scroll position mid-scroll when a rail's
+     state flips — nothing above the reader ever changes size here. */
+  overscroll-behavior: contain;
+  overflow-anchor: none;
+}
+.prc-stagecol > :first-child:not(.prc-section) {
+  margin-top: 32px;
+}
+.prc-stagecol > :not(.prc-section) {
+  margin-bottom: 28px;
+}
+/* The shared ZoomableIdCard's magnifier panel is anchored to the right of the
+   card (left: 100% + 26px). Name Change Requests bounds it naturally with a
+   two-column layout; here the column is full width, so cap the card at the
+   SVG's natural 520px — that leaves room for the 400px panel alongside it. */
+.prc-idcard {
+  max-width: 520px;
+}
+/* ID card left, name-mismatch prompt right. The card can shrink below its 520px
+   natural width on narrow viewports (the SVG is width:100%, so it just scales).
+   Note the magnifier panel opens over this right-hand column — same as it
+   overlays the form pane on Name Change Requests. */
+.prc-idrow {
+  display: flex;
+  align-items: flex-start;
+  gap: 26px;
+  width: 100%;
+}
+.prc-idrow .prc-idcard {
+  flex: 0 1 520px;
+}
+.prc-idrow .prc-mismatch {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Name Mismatch card (Figma 308:2299) ──
+   The Secondary-Button-at-10% card shell, same construction as .rvc-rail — NOT
+   the old amber warning banner (`.pr-mismatch`, still used by the kept-for-revert
+   ProctoringDetailModal). Reuses the DS form atoms (.form-label/.req/.form-input/
+   .form-help) and only overrides where the design differs from them. */
+.prc-mismatch {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 20.5px;
+  border-radius: 12px;
+  background:
+    linear-gradient(rgba(122, 122, 122, 0.1), rgba(122, 122, 122, 0.1)),
+    #0d0d0d;
+  /* Inset so the 0.5px stroke doesn't grow the card (Chrome rounds it to 1px). */
+  box-shadow: inset 0 0 0 0.5px rgba(122, 122, 122, 0.1);
+}
+
+/* Title and subtext sit flush — no gap in the design. */
+.prc-mismatch-head {
+  display: flex;
+  flex-direction: column;
+}
+.prc-mismatch-title {
+  font-family: var(--font-sans);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: normal;
+  color: #e7e7e8;
+}
+.prc-mismatch-sub {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: normal;
+  color: #a8a8a8;
+}
+
+/* Label, input and the detected-name line, 8px apart (Figma 1014:1439). The
+   input is the plain shared `.form-input` — no fill, no hairline above the
+   group; the card's own 24px gap does the separating. */
+.prc-mismatch-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* The 8px gap already spaces the group — drop the atoms' own margins. */
+.prc-mismatch-field .form-label {
+  margin-bottom: 0;
+}
+
+/* "ID reads <name> · Use This" — a plain line under the input, not a boxed row. */
+.prc-mismatch-detected {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin: 0;
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: normal;
+  color: #a8a8a8;
+}
+.prc-mismatch-detected > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.prc-mismatch-use {
+  flex: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: normal;
+  color: #f05523;
+  white-space: nowrap;
+}
+
+.prc-mismatch-use:hover {
+  color: #f5875f;
+}
+/* The same line under Review Name Change's Requested Name field, which
+   carries the form's 8px subtext gap (`.form-help`) instead of the card's own
+   8px column gap. */
+.ncr-fields .prc-mismatch-detected {
+  margin-top: 8px;
+}
+/* Empty state inside a review section ("no flagged frames"). Lost its rule when
+   the old `.pr-table` block was deleted, so it was rendering on inherited
+   styles. Also used by the kept-for-revert ProctoringDetailModal. */
+.pr-empty {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: #a8a8a8;
+}
+
+/* ── Past Attempts Flagged (Figma 457:577) ──
+   The shared NoteCard (`danger`, clickable, single-line) since 2026-10-02 —
+   this is only its PLACEMENT: on the RIGHT of the console header, beside the
+   candidate. A FIXED 615px card (457:577 re-cut 2026-10-02: the text column
+   fills, so the open icon pins to the right edge whatever the note's length),
+   pushed over by the auto margin; it may shrink in a tight header, and the
+   note line ellipses.
+   `align-self` rather than the header's own `align-items`, which is shared
+   with the Hands-On review console: the card tops out level with the
+   breadcrumb instead of centring in the taller title stack. */
+.note-card.prc-inote {
+  flex: 0 1 615px;
+  align-self: flex-start;
+  min-width: 0;
+  margin-left: auto;
+}
+
+/* ==================================================================
+   Manage Completions (ContentOverridesPage) — `.mc-*`
+   ==================================================================
+   Rebuilt on the shared design system (Figma "Components" page 11:15114);
+   the 2026-08-28 pass mapped Claude Design "Progress Admin - Prototype" onto
+   it, and the 2026-09-05 revision of that prototype dropped the cohort scope:
+   every lookup is now one employee × (certification | task), with a learner
+   header + metrics strip over each view and "mark incomplete" alongside
+   "mark complete". Mapping:
+     · page header            → .tasks-title / .tasks-subtitle (46:314)
+     · scope pickers          → .usearch-* combobox + .usearch-scope token
+     · status & staged pills  → .co-status-pill--{green|accent|red|grey} (109:1237)
+     · buttons                → .btn-publish (73:473) / .btn-save-draft (73:495)
+     · 3-dot menus            → .u-menu (386:269 family), danger row 559:2215
+     · modals                 → PrmModal (483:588) + .prm-field / Stepper (618:1264)
+     · footer                 → .wizard-footer / .wizard-actions (73:515)
+     · grade prompt           → .pm-overlay / .pm-modal + .form-label/.form-input/.form-help
+     · tables                 → the large-table tokens (190:285 head / 190:309 row)
+     · toast                  → .rvc-toast (no DS component yet — see its note)
+   What remains below is the lookup-specific structure the design system has no
+   component for: the view header, the metrics strip, the task table's column
+   plan and hover-revealed actions, the review-dialog change list and the
+   attempt-detail answers list. All are built on DS tokens — 32px page gutters,
+   32px controls, 8px radius, the 12/14/16/28 type ramp, rgba(122,122,122,.5)
+   structural rules and #404040 control borders. */
+
+.mc-root {
+  --mc-divider: rgba(122, 122, 122, 0.5); /* DS structural rule */
+  --mc-hairline: rgba(64, 64, 64, 0.5); /* DS in-card rule */
+  --mc-ctl: #404040; /* DS control border */
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg);
+  font-family: var(--font-sans);
+}
+
+.mc-header {
+  flex: none;
+  padding: 32px 32px 0;
+}
+
+/* ── scope pickers ── */
+.mc-scoperow {
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 24px 32px 0; /* 24 under the header (user, 2026-10-04); 32 gutter level with .mc-header */
+}
+
+/* ── the scope bar (Figma 1159:1249) ──
+   ONE 43px shell holding both pickers as equal halves, split by the same
+   hairline the shell is drawn in. The shell owns the search chrome; each
+   half's own `.usearch-bar` is stripped back to its contents so the two read
+   as a single control. */
+.mc-scopebar {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  height: var(--search-h);
+  /* Dual Search (1542:1963 / 1542:1970) sits on the floating-panel surface —
+     15% #7a7a7a over #0d0d0d inside a half-strength #404040 hairline — not
+     the search bars' 20% #737373. */
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+}
+
+/* Hover: the search family's +10 points of wash. */
+.mc-scopebar:has(.usearch-bar:hover) {
+  background: linear-gradient(rgba(122, 122, 122, 0.25), rgba(122, 122, 122, 0.25)), #0d0d0d;
+}
+
+.mc-scopebar > .mc-search {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: none;
+}
+
+.mc-scopebar .usearch-bar {
+  height: 100%;
+  padding: 0 16px;
+  background: none;
+  border: none;
+  border-radius: 0;
+}
+
+/* The divider belongs to the first half. It is the only border either half
+   keeps — including on `.open`, where the panel below is the state cue. */
+.mc-scopebar > .mc-search:first-child .usearch-bar,
+.mc-scopebar > .mc-search:first-child .usearch-bar.open {
+  border-right: 1px solid var(--panel-border);
+}
+/* 1542:1963 puts the first half's text 40px from the shell's OUTER edge, so
+   its left inset is 16 less the shell's 1px border. */
+.mc-scopebar > .mc-search:first-child .usearch-bar {
+  padding-left: 15px;
+}
+.mc-scopebar > .mc-search + .mc-search .usearch-bar.open {
+  border-color: transparent;
+}
+
+.mc-search {
+  width: auto;
+}
+
+/* The committed selection is a scope token, so the bar always has to keep
+   enough room to type a replacement beside it. */
+/* A committed pick is the field's own value (Figma 1160:1286) — white, in the
+   input's Medium 16px, sitting where the placeholder does. The input already
+   takes the free space, which is what pins the ✕ to the half's right edge. */
+.mc-scopebar .usearch-bar.is-picked .usearch-input::placeholder {
+  color: #fff;
+}
+
+/* ── expanded panel (Figma 1162:1312 / 1162:1385 / 1162:1454) ──
+   The shell, the 16px insets and the keyboard-legend footer are the shared
+   panel's already; these are the two places this one differs. */
+
+/* The keyboard legend stays put while the list scrolls under it. It needs its
+   own background for that — the panel's is on the panel, not each child. */
+.mc-search .usearch-foot {
+  position: sticky;
+  bottom: 0;
+  background: var(--search-bg);
+}
+
+/* 8px rows: 35px on one line, 52px when a person's second line is there. */
+.mc-search .usearch-row {
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 12px;
+}
+
+.mc-opt-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mc-opt-name {
+  /* Regular, with the typed text in Medium (`HighlightMatch`, 1542:2278). */
+  font-size: 16px;
+  font-weight: 400;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mc-opt-sub {
+  font-size: 14px;
+  font-weight: 400;
+  color: #a8a8a8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* What kind of thing the row is, held at the panel's right inset. */
+.mc-opt-kind {
+  flex: none;
+  font-size: 14px; /* 1542:2174 */
+  font-weight: 400;
+  color: #a8a8a8;
+  white-space: nowrap;
+}
+
+.mc-typeicon {
+  display: inline-flex;
+  align-items: center;
+  color: #a8a8a8;
+  flex: none;
+}
+
+.mc-typeicon svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+/* No-photo avatar (UserAvatar.tsx, Figma 1571:3660): #404040 circle, the
+   #a8a8a8 person glyph 47/48 wide, 7/48 down, clipped by the circle. */
+.user-avatar {
+  position: relative;
+  flex: none;
+  display: inline-block;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #404040;
+  color: #a8a8a8;
+}
+.user-avatar svg {
+  position: absolute;
+  left: 1.04%;
+  top: 14.58%;
+  width: 97.92%;
+  height: 97.92%;
+}
+
+/* Compact variant of the DS buttons for table rows / matrix cells. */
+.mc-btn-sm {
+  height: 28px;
+  padding: 0 12px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.mc-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 8px;
+  border: 1px solid var(--mc-ctl);
+  color: #a8a8a8;
+}
+
+.mc-iconbtn:hover {
+  color: #fff;
+  border-color: #7a7a7a;
+}
+
+.mc-iconbtn svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+/* ── body ── */
+.mc-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-top: 24px; /* search bar → card: the page's 24px rhythm */
+}
+
+/* ── empty / half states ── */
+/* Every empty state on this page is the record it is about to load, drawn as
+   a backdrop (`.mc-ghost`) with the question centred over it. Same insets as
+   `.mc-scroll`, so the outline sits where the content will. */
+.mc-empty {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 32px 32px; /* the app-wide 32px gutter — level with .mc-header (was 36) */
+  overflow: hidden;
+}
+
+/* Skeleton State Overlay (Figma 1418:1402) — `SkeletonOverlay.tsx`, the
+   question every empty state asks over its ghost backdrop (Manage Completions,
+   Merge Accounts, Transfer Subscription, Content Links). It floats over the
+   middle of the backdrop rather than pushing it around: sized by its own text,
+   capped at the node's 614px reading column. Title 20px Medium white, 8px to a
+   16px #a8a8a8 line, 20px to the Secondary Button and its ⌘K. */
+.skel-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: max-content;
+  max-width: min(614px, calc(100% - 72px));
+  text-align: center;
+  transition: opacity 0.12s ease;
+}
+
+/* A search the overlay prompted is open: the question recedes rather than
+   competing with the panel — still there, no longer the thing being read.
+   Nothing in it is clickable while it sits back, so a stray click on the CTA
+   closes the panel instead of re-opening the half it is already showing. */
+.skel-overlay.is-dull {
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+.skel-overlay-title {
+  font-family: var(--font-sans);
+  font-size: 20px;
+  font-weight: 500;
+  line-height: normal;
+  color: #fff;
+}
+
+.skel-overlay-sub {
+  margin-top: 8px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: normal;
+  color: #a8a8a8;
+}
+
+/* A name the line is about (Manage Completions' "Dana's record loads here")
+   reads in the title's weight and colour. */
+.skel-overlay-sub strong {
+  font-weight: 500;
+  color: #fff;
+}
+
+.skel-overlay-cta {
+  margin-top: 20px;
+}
+
+/* The ⌘ and K caps are the header CTA's `.cta-kbd` (20px, r4, 4% white,
+   mono 500 12px white), 3px apart. */
+.skel-overlay-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* ── empty-state backdrop (`.mc-ghost`) ──
+   Behind the question, the page draws the record it is about to load: the
+   real `.mc-certcard` over the real `.mct` table, with every value replaced
+   by a bar. Nothing here introduces a shell, a border or a colour of its own
+   — the card, the hairlines and the column widths come from those two
+   components, and the bars are the neutral wash the card already carries — so
+   the outline sits exactly where the content will.
+
+   It is the backdrop, not the message: it never takes the pointer, and it sits
+   at the very bottom of the page's contrast — just enough of an outline to
+   read as "the record lands here", never enough to compete with the question
+   in front of it or with an open scope dropdown. */
+.mc-ghost {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  opacity: 0.08;
+  pointer-events: none;
+  user-select: none;
+}
+
+.mc-ghost-bar {
+  display: block;
+  flex: none;
+  width: 70%;
+  height: 10px;
+  border-radius: 4px;
+  background: rgba(122, 122, 122, 0.2);
+}
+
+/* Card: the two text lines and the round ⋯, at the metrics of the real ones —
+   12 + 14 + 10 is the card's 36px text block, so the ghost is 60px too. */
+.mc-ghost-card .note-card-text {
+  gap: 14px;
+}
+
+.mc-ghost-card .note-card-title,
+.mc-ghost-card .note-card-body {
+  display: flex;
+}
+
+.mc-ghost-bar--title {
+  width: 172px;
+  height: 12px;
+}
+
+.mc-ghost-bar--sub {
+  width: 108px;
+}
+
+.mc-ghost-dot {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  margin-right: -8px; /* where the real ⋯ chip sits */
+  border-radius: 50%;
+  background: rgba(122, 122, 122, 0.2);
+}
+
+/* Table: the head keeps its band, the rows their height and hairlines, and the
+   whole thing fills the page and clips its last row the way the real one clips
+   its own scroll — rather than floating a short block mid-body. */
+.mc-ghost .mct {
+  flex: 1;
+}
+
+.mc-ghost .mct-rows {
+  overflow: hidden;
+}
+
+/* The task bar varies row to row, so the column reads as names of different
+   lengths rather than a stack of identical blocks. */
+.mc-ghost-row .mct-c-task .mc-ghost-bar {
+  width: 62%;
+}
+
+.mc-ghost-row:nth-child(2n) .mct-c-task .mc-ghost-bar {
+  width: 78%;
+}
+
+.mc-ghost-row:nth-child(3n) .mct-c-task .mc-ghost-bar {
+  width: 45%;
+}
+
+.mc-ghost-row:nth-child(5n) .mct-c-task .mc-ghost-bar {
+  width: 88%;
+}
+
+.mc-ghost-row.mct-hd .mc-ghost-bar {
+  height: 11px;
+}
+
+/* The actions cell sizes anything inside it to the 40px control box, which
+   would make this bar read as a button. */
+.mc-ghost-row .mct-c-menu .mc-ghost-bar {
+  width: 16px;
+  margin-left: auto;
+}
+
+/* ── scoped view (employee × certification / employee × task) ──
+   The page never scrolls: this column clips, and the task table's rows are
+   the one scrolling region (like every other table). */
+.mc-scroll {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 32px 32px; /* the app-wide 32px gutter — level with .mc-header (was 36) */
+}
+
+/* ── certification card (Figma 1151:1098 / 1153:1129 / 1157:1219) ──
+   The shared `NoteCard` — p12, 60px, 16/600 title over 14 #a8a8a8 body, grey
+   0.5px 10% edge in every state — with the ⋯ holding every certification
+   action in its trailing slot. 24px down to the task table — the page's one
+   vertical rhythm, header → search → card → table (user, 2026-10-04).
+
+   The card IS the progress bar: its wash reads how far along the learner is,
+   so the three states are three fills rather than three components. Lone washes, no #0d0d0d base:
+   the node's black layer is the page it was drawn on. */
+.note-card.mc-certcard {
+  flex: none;
+  margin-bottom: 24px;
+  /* 60px even with one line (a task In Progress has no subtext) — the card
+     holds the node's height and the title centres in it (user, 2026-10-04). */
+  min-height: 60px;
+}
+
+/* In progress (1151:1098): flat amber out to the percentage itself — the stop
+   is `--mc-pct`, set on the element — then a ramp into its own shadow across
+   whatever is left. The whole card fills as the learner advances. */
+.note-card.mc-certcard.is-progress {
+  background: linear-gradient(90deg, rgba(255, 197, 36, 0.2) var(--mc-pct, 0%), rgba(107, 78, 0, 0.2) 100%);
+}
+
+/* Not Started (Figma 1504:1483) — a certification at 0% or an untouched task:
+   a darker #404040 wash than NoteCard's own grey, and the title alone. */
+.note-card.mc-certcard.is-idle {
+  background: rgba(64, 64, 64, 0.2);
+}
+
+/* Certified (Figma 1153:1129): there is no "rest of the card" left to ramp
+   into, so the green is flat. Its own green — rgba(41,182,115,.2) from the
+   node, a shade off the status pill's #14b867 tint. */
+.note-card.mc-certcard.is-complete {
+  background: rgba(41, 182, 115, 0.2);
+}
+
+/* ── single-task card (`.mc-taskstate`) ──
+   Same three fills. In progress it takes the ramp above with `--mc-pct` pinned
+   at 50% (set inline) — a single task has no percentage of its own. */
+
+/* The card's ⋯ is a standalone control rather than a table row's, so its hover
+   chip is ROUND (Figma 1151:1097) — the square wash `.row-action-btn:hover`
+   gives table kebabs would read as a stray cell on a card with no grid. Square
+   box, 50% radius: the 16px glyph stays centred and the chip is a true circle. */
+.mc-certcard .row-action-btn.lone-dots {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  /* The chip spills 8px into the card's padding so the 16px GLYPH sits at the
+     node's 12px inset (1151:1106), not 20px in. */
+  margin-right: -8px;
+}
+
+/* Learner header over each view: name + what is being looked at on the left,
+   the view's actions on the right. Wraps under a narrow workspace. */
+.mc-viewhead {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.mc-viewhead-text {
+  flex: 1;
+  min-width: 260px;
+}
+
+.mc-viewhead-name {
+  font-family: var(--font-sans);
+  font-size: 20px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.mc-viewhead-sub {
+  margin-top: 4px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  color: #a8a8a8;
+}
+
+/* Task view: the task's type glyph + name (+ Final pill) before the cert. */
+.mc-viewhead-task {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  vertical-align: bottom;
+}
+
+/* The actions sit level with the name, not the two-line text block. */
+.mc-viewhead-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  min-height: 32px;
+}
+
+.mc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-sans);
+}
+
+.mc-table thead th {
+  text-align: left;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  padding: 0 16px 8px 0;
+  border-bottom: 2px solid var(--mc-divider);
+  white-space: nowrap;
+}
+
+.mc-table tbody tr {
+  border-bottom: 1px solid var(--mc-divider);
+  cursor: pointer;
+}
+
+.mc-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.mc-table tbody tr:hover {
+  background: var(--bg-row-hover);
+}
+
+.mc-table tbody tr.is-focus {
+  background: rgba(240, 85, 35, 0.08);
+  box-shadow: inset 2px 0 0 #f05523;
+}
+
+.mc-table tbody td {
+  padding: 12px 16px 12px 0;
+  vertical-align: middle;
+  font-size: 16px;
+  font-weight: 400;
+  color: #a8a8a8;
+}
+
+.mc-cell-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.mc-cell-user-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mc-cell-user-name {
+  font-size: 16px;
+  font-weight: 500;
+  color: #e7e7e8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mc-cell-user-sub {
+  font-size: 14px;
+  color: #7a7a7a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mc-grade {
+  margin-left: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #a8a8a8;
+}
+
+/* ── task table (Figma 960:980, the "Quiz Questions" card in its table role) ──
+   A half-strength #404040 hairline on r8 around transparent 40px rows; only
+   the header row carries the 122-grey wash, with 16px medium white labels.
+   16px gutters and a 40px column gap. Every column after Task takes the
+   design's fixed width so the numbers line up row to row; Task takes the
+   rest and ellipsises. */
+.mct {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid rgba(64, 64, 64, 0.5);
+  border-radius: 8px;
+  overflow: hidden;
+  font-family: var(--font-sans);
+}
+
+/* The rows are the page's only scrolling region; the header stays pinned.
+   Both reserve a scrollbar gutter so the header's columns stay over the
+   rows' — without it the scrollbar narrows the rows and every value sits a
+   scrollbar-width left of its label. Reserved on both sides of the split, so
+   platforms with overlay scrollbars (gutter 0) line up too. */
+.mct-rows {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.mct-hd {
+  flex: none;
+  overflow: hidden;
+  scrollbar-gutter: stable;
+}
+
+/* Task takes a fixed 440px and every other column its own fixed width, so the
+   leftover width has nowhere to pool: `space-between` hands it to the gaps
+   instead, spreading the value columns evenly across the row and landing the
+   kebab on the right edge. The 40px gap is the floor — below that the row is
+   out of room and Task gives way first (`flex: 0 1`). */
+.mct-hd,
+.mct-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 40px;
+  padding: 0 16px;
+  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
+}
+
+.mct-hd {
+  padding-top: 8px;
+  padding-bottom: 9px;
+  background: rgba(122, 122, 122, 0.1);
+  font-size: 16px;
+  font-weight: 500;
+  color: #fff;
+}
+
+.mct-row {
+  height: 40px;
+  font-size: 16px;
+  color: #a8a8a8;
+}
+
+.mct-rows > .mct-row:last-child {
+  border-bottom: none;
+}
+
+/* A staged row is marked until Review & Save applies it — with the table's
+   own row wash, not a tinted one. The 5% accent this used to carry read as a
+   red cast against the neutral rows around it. */
+.mct-row.is-staged {
+  background: var(--bg-row-hover);
+}
+
+/* TASK: white name, "· Type" in the 14px muted register, then any pills. */
+.mct-c-task {
+  flex: 0 1 440px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.mct-name {
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mct-type {
+  flex: none;
+  font-size: 14px;
+}
+
+.mct-c-task .co-status-pill {
+  flex: none;
+  margin-left: 4px;
+}
+
+/* Fixed columns — the design's widths, the date's widened for its flag. */
+.mct-c-time { width: 82px; }
+.mct-c-date { width: 118px; }
+/* Wide enough for a Hands-On score on its own scale ("18/25"), not just the
+   quiz percentage the Figma row was cut with. */
+.mct-c-grade { width: 60px; }
+.mct-c-att { width: 67px; }
+/* Actions cell — the shared table's 40px right-aligned control box, so
+   `.row-action-bar`'s tuned offset drops its kebab onto the resting one. */
+.mct-c-menu {
+  width: 40px;
+  position: relative;
+  text-align: right;
+}
+
+/* The resting kebab fills the control box, exactly as `.table .col-actions`
+   does it — that is what centres its glyph 20px from the right edge, which is
+   the distance `.row-action-bar`'s offset is tuned against. Without it the
+   glyph jumps sideways as the bar swaps in. */
+.mct-c-menu > :not(.row-action-bar) {
+  width: 40px;
+}
+.mct-c-time,
+.mct-c-date,
+.mct-c-grade,
+.mct-c-att,
+.mct-c-menu {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* A manual completion: the date and its flag, sharing one tooltip. */
+.mct-manual {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: default;
+}
+
+/* The attempts count with its state glyph: medium-weight amber with a 16px
+   hourglass while pending review, red with the 16px error triangle once
+   exhausted — the glyph takes the same colour. Also the task view's Attempts
+   metric. */
+.mct-att {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.mct-att.is-pending,
+.mct-att.is-exhausted {
+  font-weight: 500;
+}
+.mct-att.is-pending { color: #ffc524; }
+.mct-att.is-exhausted { color: #ff1f31; }
+
+/* Each state glyph is its own hover target so the tooltip explaining it is
+   scoped to the icon, not to the whole Attempts cell. */
+.mct-att-glyph {
+  display: inline-flex;
+}
+
+.mct-manual svg,
+.mct-att svg {
+  display: block;
+  flex: none;
+}
+.mct-manual svg {
+  width: 12px;
+  height: 12px;
+}
+.mct-att svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Row actions follow the shared table convention (Figma 386:269) rather than
+   restyling a bare kebab: the row washes on hover, the resting `.lone-dots`
+   kebab gives way to the `.row-action-bar` pill, and an open menu holds both
+   open with the orange hairline. The bar carries just the kebab on most rows
+   (`:only-child` rounds it on both ends); an attempt-capped row puts a second
+   icon cell — Grant Additional Attempts — in front of it. */
+.mct-row:hover,
+.mct-row.is-menu {
+  background: var(--bg-row-hover);
+}
+
+.mct-row:hover .lone-dots,
+.mct-row.is-menu .lone-dots {
+  visibility: hidden;
+}
+
+.mct-row:hover .row-action-bar,
+.mct-row.is-menu .row-action-bar {
+  display: inline-flex;
+}
+
+.mct-row.is-menu .row-action-bar > .row-action-btn:last-child {
+  border-color: #f05523;
+  position: relative;
+  z-index: 1;
+}
+
+/* The shared save-footer bleeds -32px for the Spotlights page's own gutter;
+   this page is not that page, so the bar spans its column instead — otherwise
+   it runs under the sidebar on one side and off-screen on the other. Footer
+   padding is 32px everywhere (user, 2026-10-02; was 36 here, as was the
+   page's gutter). */
+.mc-root .sp-save-footer {
+  margin: 0;
+  padding: 20px 32px;
+}
+
+/* ── "N Changes Made" + its hover card (Figma 1155:1140) ──
+   The footer label is the only summary; the changes themselves live in a card
+   that opens on hover, one row each, every row droppable on its own. */
+.mc-changes {
+  position: relative;
+  cursor: default;
+}
+
+/* Transparent bridge: the 8px gap to the label is this wrapper's padding, so
+   the pointer stays inside `.mc-changes` while travelling into the card. */
+.mc-changes-pop {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  padding-bottom: 8px;
+  z-index: 40;
+}
+
+.mc-changes-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 3px 11px; /* 1155:1140's 4/12, less the border */
+  background: var(--tip-bg);
+  border: 1px solid var(--tip-border);
+  border-radius: 8px;
+}
+
+/* Row: subject → action on the left, its dismiss on the right. Every row but
+   the last carries the hairline. */
+.mc-change-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0 5px;
+  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
+  white-space: nowrap;
+}
+.mc-change-row:last-child {
+  padding-bottom: 4px;
+  border-bottom: none;
+}
+
+.mc-change-text {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: normal;
+  color: #fff;
+}
+
+.mc-change-text svg {
+  flex: none;
+  color: #a8a8a8;
+}
+
+.mc-change-drop {
+  display: inline-flex;
+  flex: none;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: #7a7a7a;
+  cursor: pointer;
+}
+.mc-change-drop:hover {
+  color: var(--text);
+}
+
+/* ── review-changes dialog list ── */
+/* ── confirm-dialog change list ──
+   One change per line, stacked. Plain text on the modal's own surface — the
+   boxed, icon-led rows this used to draw made a confirmation look like a form.
+   Same `subject → action` phrasing as the footer's Changes Made card. */
+.mc-review-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mc-review-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: normal;
+  color: #fff;
+}
+.mc-review-item svg {
+  flex: none;
+  color: #a8a8a8;
+}
+
+/* ── metrics strip ──
+   Under the view header: three cells on the certification view, five on the
+   task view. Sits 20px over the task table it summarises. */
+.mc-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin-bottom: 20px;
+  border: 1px solid var(--mc-hairline);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.mc-metrics--5 { grid-template-columns: repeat(5, 1fr); }
+
+.mc-metric {
+  padding: 10px 14px;
+  border-right: 1px solid var(--mc-hairline);
+}
+
+.mc-metric:last-child {
+  border-right: none;
+}
+
+.mc-metric-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #a8a8a8;
+  margin-bottom: 4px;
+}
+
+/* A value is text or a status pill; both sit on the same 24px line so an
+   empty cell keeps the strip's height. */
+.mc-metric-value {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+
+/* ── grade prompt field (Figma 1554:2972 "Input + Suffix") ──
+   The plain text input's shell — 1px #404040, r8, 12px padding, 16px — with
+   the scale in flow at the right: "/100" in Per-Seat Price's unit look (16px
+   Regular, 67% #a8a8a8). Focus whitens the shell like any field. */
+.mc-gradefield {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #404040;
+  border-radius: 8px;
+  background: transparent;
+}
+.mc-gradefield:focus-within {
+  border-color: var(--field-focus);
+}
+/* Over the scale: the shared error edge, which beats focus (1369:1478). */
+.mc-gradefield.has-error,
+.mc-gradefield.has-error:focus-within {
+  border-color: var(--field-error);
+}
+.mc-gradefield-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: normal;
+  outline: none;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.mc-gradefield-input::placeholder {
+  color: #404040;
+}
+.mc-gradefield-input::-webkit-outer-spin-button,
+.mc-gradefield-input::-webkit-inner-spin-button {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+}
+.mc-gradefield-suffix {
+  flex: none;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: normal;
+  color: rgba(168, 168, 168, 0.67);
+}
+
+/* ── User details hover card (Figma 436:572) ────────────────────────────────
+   Peek at the learner behind a submission from the table's name column. Fixed
+   positioning: the table scrolls, so an in-row popover would be clipped. */
+.udh-anchor {
+  /* The card is the affordance, so the name itself stays plain — but the cell
+     must not stretch the hover area past the text. */
+  display: inline-block;
+}
+.udh-card {
+  position: fixed;
+  /* Above .pm-overlay (200) and .pr-confirm-overlay (400): the card hangs off
+     names inside the Manage IDs popup AND the Change Account Holder modal's
+     "Current:" line, so it must clear both shells. */
+  z-index: 500;
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 3px 11px; /* 436:572's 4/12, less the border */
+  background: var(--tip-bg);
+  border: 1px solid var(--tip-border);
+  border-radius: 8px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+/* ID details variant (Figma 679:2039) — the same card carrying the document's
+   timeline rows. It hugs its rows rather than taking the user card's fixed
+   260px, because the label column runs from "Uploaded:" to the much wider
+   "Reupload Requested:". */
+.udh-card--auto {
+  width: auto;
+  max-width: 340px;
+}
+/* Figma 668:972 surface rule — floated over a modal card the hover card takes
+   the popup-context wash instead, so it separates from the popup behind it. */
+.udh-card--popup {
+  background:
+    linear-gradient(rgba(115, 115, 115, 0.2), rgba(115, 115, 115, 0.2)),
+    #0d0d0d;
+  cursor: default;
+}
+.udh-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0 5px;
+  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
+  min-width: 0;
+}
+.udh-row--head {
+  justify-content: space-between;
+}
+.udh-row--last {
+  padding-bottom: 4px;
+  border-bottom: 0;
+}
+.udh-label {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: #a8a8a8;
+  white-space: nowrap;
+}
+.udh-value {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: #ffffff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.udh-icon-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: #a8a8a8;
+  cursor: pointer;
+}
+.udh-icon-btn svg {
+  width: 14px;
+  height: 14px;
+}
+.udh-icon-btn:hover { color: #ffffff; }
+.udh-icon-btn.is-copied { color: var(--accent, #e0621f); }
+
+/* ── Keyboard-shortcut hover hint (Figma 437:638) ───────────────────────────
+   Same shell as the user-details card, one row: what the key does + the cap. */
+.ksh-card {
+  position: fixed;
+  /* Same ceiling as the shared `.hover-tip` (1000), not the 60 it used to sit
+     at: these hints hang off controls inside the fullscreen viewer, whose
+     overlay is z-index 300 — the card was painting behind it. The two tooltips
+     never coexist (HoverTooltip skips anything inside a [data-hover-card]), so
+     sharing the top of the stack is safe. */
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  /* Figma 437:638 (695:1223 re-cut): the shared tooltip shell; the 6px row
+     padding is the only vertical padding, less the 1px border. */
+  padding: 5px 11px;
+  background: var(--tip-bg);
+  border: 1px solid var(--tip-border);
+  border-radius: 8px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+  cursor: default;
+}
+.ksh-label {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400; /* 437:641 Regular */
+  color: #ffffff;
+  white-space: nowrap;
+}
+.ksh-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 10px;
+  color: #ffffff;
+}
+/* Arrow keys are drawn, not spelled — a square cap around a 12px glyph. */
+.ksh-key--icon {
+  width: 20px;
+  padding: 0;
+  color: #a8a8a8;
+}
+
+/* ── Voice note player (Figma 440:812) — sits between the submission's notes
+   and its media, and only when that submission has audio. */
+.rvc-audio {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(122, 122, 122, 0.15);
+}
+.rvc-audio-play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 75px;
+  /* The icon-button's own fill (Figma 440:756), not a token — it reads as a
+     lighter disc on whatever it sits on. */
+  background: linear-gradient(90deg, rgba(217, 217, 217, 0.1), rgba(115, 115, 115, 0.1));
+  color: #f05523;
+  cursor: pointer;
+}
+.rvc-audio-play svg { width: 15px; height: 15px; }
+.rvc-audio-time {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  color: #fff;
+}
+
+/* ===== Collapsing landing header — Certifications, Tasks, Companies, Users =====
+   Claude Design "Certifications Prototype" (2026-09-24; Tasks, Companies and
+   Manage Users took it on 2026-09-28 — every search-first landing). The cards
+   and rail landings (Exam Reviews, Hands-On, Question Bank) keep the landing
+   morph below.
+
+   The page is ONE scroller — the table's own `.table-xscroll`
+   (`.clh-scroll`) — and the page header lives inside it (`.clh-head`). At
+   scrollTop 0 that header is the landing: the Enlarged Header (1356:1865 —
+   56px title, 20px summary) dropped below the header actions, the Large
+   search bar (1362:1945) and extra air above the table header. The first --clh-d px of scroll
+   collapse it into the standard table-page header, the exact geometry the
+   other list pages show in their table state. useCollapsingHeader writes the
+   progress as --clh (0 landing … 1 collapsed) on `.clh-head` and on the
+   table's header row — nowhere else, so a scroll frame restyles two elements,
+   not every row.
+
+   Every shrinking part is linear in --clh and --clh-d is their SUM, so the
+   header loses exactly as much height as the page has scrolled. `.clh-head`
+   hands that height back as margin-bottom, which keeps its flow footprint
+   constant: the table header's natural spot is always the header's bottom
+   edge, and the rows ride up glued to it. Resize a part here and the distance
+   follows; a NEW shrinking part has to join the sum. */
+@property --clh-d {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+/* The collapse runs on the compositor (2026-09-28 — the user: "make the
+   transition a little smoother"), and uniformly (same day: "it first all goes
+   vertically up for a bit and then transitions. It should be a uniform
+   pattern throughout"). It used to restyle and re-lay-out the header on every
+   scroll event (font sizes, heights, margins) — 3–5ms of main-thread work a
+   frame, a frame behind the natively scrolled rows, so it juddered. A first
+   compositor version pinned each piece with its own `sticky` top, which made
+   them rise with the page and then stop one after another. Now:
+   - the header block is pinned from the start (sticky `top: 0`) and keeps its
+     landing layout — nothing in it re-lays-out while scrolling;
+   - every piece moves by ONE linear scroll-driven transform across the whole
+     collapse, from its landing spot to its collapsed spot (the --clh-rise-*
+     distances below) — the proportional pattern of the original design, every
+     piece in step — plus its own scale / fade (title 56 → 32, the Large bar →
+     Default, the summary / banner / note fades, the table header's shadow);
+   - the table follows in normal flow, so it rides up at scroll speed, exactly
+     as fast as the header's bottom edge closes in: glued by construction.
+   All of it is transform and opacity on the scroller's `--clh` timeline,
+   which the compositor runs in lockstep with the scroll. Browsers without
+   scroll timelines get the same transforms from JS instead (the
+   `@supports not` block; useCollapsingHeader feeds it). */
+.tasks.clh {
+  /* The collapse distance D: the header's landing height minus its collapsed
+     height, as the sum of the parts that differ. The landing's title +
+     summary pair is Figma 1356:1865 "Atomic Component - Enlarged Header": a
+     56px title on its 67.2px leading-normal line, the 20px summary flush
+     beneath it on a 24px line. */
+  --clh-title-drop: 56px; /* the title's drop below the header actions' top */
+  --clh-title-grow: 28.8px; /* its 67.2px landing line over the base 38.4px (32 × 1.2) */
+  --clh-sub-h: 40px; /* the 24px summary line + 16px — with the header's 24px, 40px above the search */
+  --clh-bar-grow: calc(var(--search-h-lg) - var(--search-h)); /* Large 56 → Default 43 */
+  --clh-gap-grow: 18px; /* extra air above the table header, 42 → 24 */
+  /* A landing banner and the header note it turns into — zero unless the page
+     shows them (`.clh--banner`, Manage Users). The note only exists in the
+     collapsed header, so it enters the sum negatively. */
+  --clh-banner-h: 0px;
+  --clh-note-h: 0px;
+  --clh-d: calc(
+    var(--clh-title-drop) + var(--clh-title-grow) + var(--clh-sub-h) +
+      var(--clh-bar-grow) + var(--clh-gap-grow) + var(--clh-banner-h) - var(--clh-note-h)
+  );
+  /* How far each piece rises over the collapse — its landing top minus its
+     collapsed top. The header block never moves, so this IS each piece's
+     motion; the filters' rise plus the gap they close is the distance. */
+  --clh-rise-under: calc(var(--clh-title-drop) + var(--clh-title-grow)); /* the title's bottom edge */
+  --clh-rise-bar: calc(
+    var(--clh-rise-under) + var(--clh-sub-h) + var(--clh-banner-h) - var(--clh-note-h)
+  );
+  --clh-rise-filters: calc(var(--clh-rise-bar) + var(--clh-bar-grow));
+}
+/* The timeline every collapse animation runs on. Nothing here should ever
+   re-anchor the scroll. */
+.tasks.clh .clh-scroll {
+  overflow-anchor: none;
+  scroll-timeline: --clh block;
+}
+/* Everything the scroller moves. At least the table's width, so the pinned
+   header has room to hold still (sticky left) while a wide table scrolls
+   sideways; at least one collapse taller than the scrollport, so a short list
+   can still scroll far enough to collapse the header (the body takes the
+   slack). */
+.tasks.clh .clh-canvas {
+  display: flex;
+  flex-direction: column;
+  min-width: var(--table-min, auto);
+  min-height: calc(100% + var(--clh-d));
+}
+/* The header block, in its landing layout, pinned from the start on both
+   axes (as wide as the scrollport — measured, the canvas can be wider). Its
+   box keeps the landing height while its pieces close up, so it lets the
+   pointer through (the table rides up under its empty lower part) and paints
+   only the collapsed band — opaque, so rows pass beneath it once pinned but
+   never before. */
+.tasks.clh .clh-head {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 6;
+  flex: none;
+  align-self: flex-start;
+  width: var(--clh-vw, 100%);
+  pointer-events: none;
+}
+.tasks.clh .clh-head > * {
+  pointer-events: auto;
+}
+.tasks.clh .clh-head::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: -1;
+  height: var(--clh-stick, 0px);
+  background: #0d0d0d;
+  /* The band is opaque, so it has to be solid to the pointer too — the head
+     lets the pointer through, and without this a row passing under the gaps
+     between the pieces took the hover (its name tooltip over the title). */
+  pointer-events: auto;
+}
+/* The landing's extra air above the table header. */
+.tasks.clh .clh-head::after {
+  content: "";
+  display: block;
+  height: var(--clh-gap-grow);
+}
+/* The action buttons never move — top-right from the start. The title sits
+   one drop below their row's top, and collapsed it rises to that top: the row
+   is one 32px-title line tall (38.4px, `.tasks-header-actions`), so the
+   buttons centre on the collapsed heading (Figma 1429:1446). Pieces stack:
+   actions over everything (their menu), the title and note over what passes
+   under them, the search bar over the filters (its suggestions), the summary
+   and banner lowest. */
+.tasks.clh .clh-head > .clh-actions {
+  position: relative;
+  z-index: 5;
+  width: max-content;
+  margin: 0 0 calc(var(--clh-title-drop) - 32px * 1.2) auto;
+}
+/* 1356:1862 "Page Header Enlarged" — Fira Sans SemiBold 56 at the landing,
+   the base 32px title once collapsed: it rises its drop into the actions' row
+   while shrinking (a scale — no re-layout), both across the whole collapse. */
+.tasks.clh .clh-head > .tasks-title {
+  position: relative;
+  z-index: 4;
+  width: max-content;
+  max-width: 100%;
+  font-size: 56px;
+  line-height: 1.2;
+  white-space: nowrap;
+  transform-origin: 0 0;
+}
+/* Manage Users: the banner's collapsed form, one accent line under the
+   collapsed title (Figma 1268:1736). It takes no room at the landing
+   (negative margin) and rides the title's bottom edge; its pieces arrive from
+   the card, which condenses into it (the `.clh--banner` morph below). Its
+   overflow shows, so those pieces can start inside the card. */
+.tasks.clh.clh--banner {
+  --clh-banner-h: 86px; /* the 70px card + 16px above the search */
+  --clh-note-h: 19px; /* the note's line */
+}
+.tasks.clh .clh-head > .tasks-note {
+  --clh-rise: var(--clh-rise-under);
+  position: relative;
+  z-index: 4;
+  width: max-content;
+  height: var(--clh-note-h);
+  margin-bottom: calc(-1 * var(--clh-note-h));
+}
+.tasks.clh .clh-head[data-clh="landing"] > .tasks-note {
+  visibility: hidden;
+}
+/* 1356:1863 "Page Subtext Enlarged": Fira Sans Regular 20 #a8a8a8, flush
+   under the title — it rides the title's bottom edge (under the note, when
+   there is one) and fades out by 62.5%. */
+.tasks.clh .clh-head > .clh-sub {
+  --clh-rise: calc(var(--clh-rise-under) - var(--clh-note-h));
+  position: relative;
+  z-index: 1;
+  display: block;
+  margin: 0 0 calc(var(--clh-sub-h) - 24px + 24px);
+  font-size: 20px;
+  line-height: 24px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Manage Users: the pending-queue callout between the summary and the search
+   (Figma 1268:1714), at the size the landing morph gave it. It rises with the
+   note (the title's bottom edge) and its pieces close the rest of the way onto
+   the note's — the `.clh--banner` morph below. Its own box stays at full size
+   while the card it paints shrinks, so only the painted card takes the pointer
+   (rows riding up under the empty box stay clickable). */
+.tasks.clh .clh-head > .clh-banner {
+  --clh-rise: var(--clh-rise-under);
+  position: relative;
+  z-index: 1;
+  margin-bottom: 16px;
+  pointer-events: none;
+}
+.tasks.clh .clh-head[data-clh="collapsed"] > .clh-banner {
+  visibility: hidden;
+}
+.tasks.clh .clh-banner > .lm-banner {
+  box-sizing: border-box;
+  height: 70px;
+  gap: 40px;
+  padding: 16px 20px;
+}
+/* The search bar rises to its spot under the collapsed title row. */
+.tasks.clh .clh-head > .toolbar {
+  --clh-rise: var(--clh-rise-bar);
+  position: relative;
+  z-index: 3;
+}
+/* The Large bar's lift shadow, fading as the bar settles. */
+.tasks.clh .clh-head > .toolbar::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: var(--search-h-lg);
+  border-radius: 8px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+/* The bar keeps the Large layout (Figma 1362:1945 — 56px, 20px icon and type,
+   26px caps) and SHOWS the Default one (43px, 16px, 20px caps) by the end of
+   the collapse, entirely through transforms:
+   - its box is painted as two halves, each the Default height — the top half
+     still, the bottom half sliding up the 13px the Large bar has over the
+     Default one — so it shortens without its border or corners ever being
+     scaled;
+   - its content scales to the Default sizes and lifts by half the lost
+     height, to stay centred. The badge scales 20/26: its caps land exactly on
+     the Default's, the ⌘ glyph (drawn at the node's 18px) takes a 1.011
+     counter-scale to land on 14, and the left cap slides 0.9px out so the 3px
+     gap stays 3 instead of shrinking to 2.3. The K can't be scaled apart from
+     its cap, so it is drawn at 15.6px (the node says 16) to land on exactly 12
+     — the collapsed bar has to match every other page's Default bar. */
+.tasks.clh .toolbar .usearch-bar {
+  position: relative;
+  z-index: 0;
+  height: var(--search-h-lg);
+  gap: 12px; /* Large 1362:1945; the collapse slides the text back to 8 */
+  background: none;
+  border-color: transparent;
+}
+.tasks.clh .toolbar .usearch-bar::before,
+.tasks.clh .toolbar .usearch-bar::after {
+  content: "";
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  z-index: -1;
+  box-sizing: border-box;
+  height: var(--search-h);
+  background: var(--search-bg);
+  border: 1px solid var(--search-border);
+  pointer-events: none;
+}
+.tasks.clh .toolbar .usearch-bar::before {
+  top: -1px;
+  border-bottom: 0;
+  /* Rounded all round: once collapsed the bottom half sits exactly on it and
+     its bottom corners must not poke out past the other half's. */
+  border-radius: 8px;
+}
+/* The bottom half paints over the top one, so its top edge is a TRANSPARENT
+   1px border (the top half's hairline shows through it) and its top corners
+   stay square while it slides — rounded mid-slide they'd draw a hairline
+   curve inside the bar. Fully collapsed it covers the top half exactly, so
+   they round to the Default bar's r8 (399:216); square there, they hid the
+   top half's rounded corners and the bar read as a sharp rectangle. */
+.tasks.clh .toolbar .usearch-bar::after {
+  bottom: -1px;
+  border-top-color: transparent;
+  border-radius: 0 0 8px 8px;
+}
+.tasks.clh .clh-head[data-clh="collapsed"] .usearch-bar::after {
+  border-radius: 8px;
+}
+.tasks.clh .toolbar .usearch-bar:hover::before,
+.tasks.clh .toolbar .usearch-bar:hover::after {
+  background: var(--search-bg-hover);
+}
+.tasks.clh .toolbar .usearch-bar.open::before,
+.tasks.clh .toolbar .usearch-bar.open::after {
+  border-color: var(--text-faint);
+}
+.tasks.clh .toolbar .usearch-bar.open::after {
+  border-top-color: transparent;
+}
+.tasks.clh .toolbar .usearch-icon {
+  transform-origin: left center;
+}
+.tasks.clh .toolbar .usearch-icon svg {
+  width: 20px;
+  height: 20px;
+}
+.tasks.clh .toolbar .usearch-input {
+  transform-origin: left center;
+}
+.tasks.clh .toolbar .usearch-input,
+.tasks.clh .toolbar .usearch-input::placeholder {
+  font-size: 20px;
+}
+.tasks.clh .toolbar .usearch-kbd {
+  transform-origin: right center;
+}
+.tasks.clh .toolbar .usearch-kbd .kbd-cmd,
+.tasks.clh .toolbar .usearch-kbd .kbd-letter {
+  width: 26px;
+  height: 26px;
+}
+.tasks.clh .toolbar .usearch-kbd .kbd-cmd svg {
+  width: 18px;
+  height: 18px;
+}
+.tasks.clh .toolbar .usearch-kbd .kbd-letter {
+  font-size: 15.6px;
+}
+/* Large - Search Filled (1568:3222): the bar's ✕ is 20px, scaled to the
+   Default's 16 by the collapse like the caps; a pending token is the Large
+   chip — 16px Medium, 14px ✕, 33px tall (7/5/7/9 to the edge around a 1px
+   border). The chip can't ride a transform down to the Default's 27px without
+   opening a gap before the text laid out after it, so it is Large until the
+   header is fully collapsed, then the Default chip. A token only exists while
+   a filter is being picked in the focused bar, so the switch is rarely seen. */
+.tasks.clh .toolbar .usearch-clear {
+  transform-origin: right center;
+  width: 20px;
+  height: 20px;
+}
+.tasks.clh .toolbar .usearch-clear svg {
+  width: 20px;
+  height: 20px;
+}
+.tasks.clh .clh-head:not([data-clh="collapsed"]) .usearch-bar > .usearch-scope {
+  padding: 6px 4px 6px 8px;
+  font-size: 16px;
+}
+.tasks.clh .clh-head:not([data-clh="collapsed"]) .usearch-bar > .usearch-scope .usearch-scope-x,
+.tasks.clh .clh-head:not([data-clh="collapsed"]) .usearch-bar > .usearch-scope .usearch-scope-x svg {
+  width: 14px;
+  height: 14px;
+}
+/* The filter row rises to its spot under the bar. It wraps when too long for
+   the header (which clips at the scroller's edge) — whole pills and a whole
+   "Clear Filters" onto a second line; the table header's pin is measured, so
+   it follows. At ordinary widths it's one row. */
+.tasks.clh .clh-head > .filters {
+  --clh-rise: var(--clh-rise-filters);
+  position: relative;
+  z-index: 2;
+  flex-wrap: wrap;
+}
+.tasks.clh .filter-clear-link {
+  white-space: nowrap;
+}
+/* The table header rides the page up under the header and pins right
+   beneath the collapsed one (its height is measured: the header's static
+   height less the distance). A soft shadow fades in once rows scroll under
+   it. */
+.tasks.clh .clh-canvas > .table-head {
+  position: sticky;
+  top: var(--clh-stick, 0px);
+  z-index: 5;
+  flex: none;
+  background: #0d0d0d;
+}
+.tasks.clh .clh-canvas > .table-head::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 40px;
+  background: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0));
+  pointer-events: none;
+  opacity: 0;
+}
+/* The body is in-flow content of the one scroller, never a scroller itself. */
+.tasks.clh .clh-canvas > .tasks-scroll {
+  flex: 1 0 auto;
+  overflow: visible;
+  min-width: var(--table-min, auto);
+}
+
+/* ── The motion: scroll-driven, compositor-only ── */
+@keyframes clh-title {
+  to { transform: translateY(calc(-1 * var(--clh-title-drop))) scale(0.5714); } /* 56 → 32px */
+}
+/* Each piece sets its own --clh-rise. */
+@keyframes clh-rise {
+  to { transform: translateY(calc(-1 * var(--clh-rise))); }
+}
+@keyframes clh-fade-out {
+  to { opacity: 0; }
+}
+@keyframes clh-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes clh-bar-foot {
+  to { transform: translateY(-13px); } /* --search-h-lg − --search-h */
+}
+@keyframes clh-bar-icon {
+  to { transform: translateY(-6.5px) scale(0.8); }
+}
+@keyframes clh-bar-shift {
+  to { transform: translate(-8px, -6.5px); } /* the 4px the icon gives up + 12 → 8px gap */
+}
+@keyframes clh-bar-text {
+  to { transform: translate(-8px, -6.5px) scale(0.8); }
+}
+@keyframes clh-bar-clear {
+  to { transform: translateY(-6.5px) scale(0.8); } /* 20 → 16 */
+}
+@keyframes clh-bar-caps {
+  to { transform: translateY(-6.5px) scale(0.7692); } /* 20 / 26 */
+}
+@keyframes clh-bar-cmd {
+  to { transform: translateX(-0.9px); } /* 3px gap × 0.7692 would be 2.3 */
+}
+@keyframes clh-bar-cmd-glyph {
+  to { transform: scale(1.0111); } /* 18 × 0.7692 = 13.85 → 14 */
+}
+@supports (animation-timeline: --clh) {
+  .tasks.clh .clh-head > .tasks-title {
+    animation: clh-title linear both;
+  }
+  .tasks.clh .clh-head > .toolbar,
+  .tasks.clh .clh-head > .filters,
+  .tasks.clh .clh-head > .clh-banner,
+  .tasks.clh .clh-head > .tasks-note {
+    animation: clh-rise linear both;
+  }
+  .tasks.clh .clh-head > .clh-sub {
+    animation: clh-rise linear both, clh-fade-out linear both;
+  }
+  .tasks.clh .clh-head > .toolbar::before {
+    animation: clh-fade-out linear both;
+  }
+  .tasks.clh .clh-canvas > .table-head::after {
+    animation: clh-fade-in linear both;
+  }
+  .tasks.clh .toolbar .usearch-bar::after,
+  .tasks.clh .toolbar .usearch-panel {
+    animation: clh-bar-foot linear both;
+  }
+  .tasks.clh .toolbar .usearch-icon {
+    animation: clh-bar-icon linear both;
+  }
+  .tasks.clh .toolbar .usearch-bar > .usearch-scope {
+    animation: clh-bar-shift linear both;
+  }
+  .tasks.clh .toolbar .usearch-input {
+    animation: clh-bar-text linear both;
+  }
+  .tasks.clh .toolbar .usearch-clear {
+    animation: clh-bar-clear linear both;
+  }
+  .tasks.clh .toolbar .usearch-kbd {
+    animation: clh-bar-caps linear both;
+  }
+  .tasks.clh .toolbar .usearch-kbd .kbd-cmd {
+    animation: clh-bar-cmd linear both;
+  }
+  .tasks.clh .toolbar .usearch-kbd .kbd-cmd svg {
+    animation: clh-bar-cmd-glyph linear both;
+  }
+  /* The timeline and ranges come after every shorthand above (which resets
+     them). Every rise and resize runs across the whole collapse; the summary
+     fades by 62.5% (48% under Manage Users' card — see the `.clh--banner`
+     morph, which also times the card and the note), the shadow over the first
+     40px of rows sliding under. */
+  .tasks.clh .clh-head > .tasks-title,
+  .tasks.clh .clh-head > .toolbar,
+  .tasks.clh .clh-head > .filters,
+  .tasks.clh .clh-head > .toolbar::before,
+  .tasks.clh .clh-head > .clh-sub,
+  .tasks.clh .clh-head > .clh-banner,
+  .tasks.clh .clh-head > .tasks-note,
+  .tasks.clh .clh-canvas > .table-head::after,
+  .tasks.clh .toolbar .usearch-bar::after,
+  .tasks.clh .toolbar .usearch-panel,
+  .tasks.clh .toolbar .usearch-icon,
+  .tasks.clh .toolbar .usearch-bar > .usearch-scope,
+  .tasks.clh .toolbar .usearch-input,
+  .tasks.clh .toolbar .usearch-clear,
+  .tasks.clh .toolbar .usearch-kbd,
+  .tasks.clh .toolbar .usearch-kbd .kbd-cmd,
+  .tasks.clh .toolbar .usearch-kbd .kbd-cmd svg {
+    animation-timeline: --clh;
+    animation-range: 0 var(--clh-d);
+  }
+  .tasks.clh .clh-head > .clh-sub {
+    animation-range: 0 var(--clh-d), 0 calc(var(--clh-d) * 0.625);
+  }
+  .tasks.clh .clh-canvas > .table-head::after {
+    animation-range: var(--clh-d) calc(var(--clh-d) + 40px);
+  }
+}
+/* No scroll timelines: the same curves from the scroll offset useCollapsingHeader
+   writes (--clh-s, with the distance as a number, --clh-dn). Main-thread, but
+   transforms and opacity only — still no re-layout. */
+@supports not (animation-timeline: --clh) {
+  .tasks.clh .clh-head,
+  .tasks.clh .clh-canvas > .table-head {
+    --clh-p: clamp(0, var(--clh-s, 0) / var(--clh-dn, 1), 1);
+  }
+  .tasks.clh .clh-head > .tasks-title {
+    transform: translateY(calc(-1 * var(--clh-title-drop) * var(--clh-p)))
+      scale(calc(1 - 0.4286 * var(--clh-p)));
+  }
+  .tasks.clh .clh-head > .tasks-note,
+  .tasks.clh .clh-head > .clh-sub,
+  .tasks.clh .clh-head > .clh-banner,
+  .tasks.clh .clh-head > .toolbar,
+  .tasks.clh .clh-head > .filters {
+    transform: translateY(calc(-1 * var(--clh-rise) * var(--clh-p)));
+  }
+  .tasks.clh .clh-head > .toolbar::before {
+    opacity: calc(1 - var(--clh-p));
+  }
+  .tasks.clh .clh-head > .clh-sub {
+    opacity: clamp(0, 1 - var(--clh-p) / 0.625, 1);
+  }
+  .tasks.clh .clh-canvas > .table-head::after {
+    opacity: clamp(0, (var(--clh-s, 0) - var(--clh-dn, 0)) / 40, 1);
+  }
+  .tasks.clh .toolbar .usearch-bar::after,
+  .tasks.clh .toolbar .usearch-panel {
+    transform: translateY(calc(-13px * var(--clh-p)));
+  }
+  .tasks.clh .toolbar .usearch-icon {
+    transform: translateY(calc(-6.5px * var(--clh-p))) scale(calc(1 - 0.2 * var(--clh-p)));
+  }
+  .tasks.clh .toolbar .usearch-bar > .usearch-scope {
+    transform: translate(calc(-8px * var(--clh-p)), calc(-6.5px * var(--clh-p)));
+  }
+  .tasks.clh .toolbar .usearch-input {
+    transform: translate(calc(-8px * var(--clh-p)), calc(-6.5px * var(--clh-p)))
+      scale(calc(1 - 0.2 * var(--clh-p)));
+  }
+  .tasks.clh .toolbar .usearch-clear {
+    transform: translateY(calc(-6.5px * var(--clh-p))) scale(calc(1 - 0.2 * var(--clh-p)));
+  }
+  .tasks.clh .toolbar .usearch-kbd {
+    transform: translateY(calc(-6.5px * var(--clh-p))) scale(calc(1 - 0.2308 * var(--clh-p)));
+  }
+  .tasks.clh .toolbar .usearch-kbd .kbd-cmd {
+    transform: translateX(calc(-0.9px * var(--clh-p)));
+  }
+  .tasks.clh .toolbar .usearch-kbd .kbd-cmd svg {
+    transform: scale(calc(1 + 0.0111 * var(--clh-p)));
+  }
+}
+
+/* ── Manage Users: the name-change card condenses into the title note ──
+   (2026-09-29 — the user: the card looked like it disappeared while a new one
+   appeared, "whereas it is just the same feature changing appearance".) The
+   card (1268:1714) and the note (1268:1736) are ONE callout at two sizes, so
+   the collapse turns one into the other instead of fading one out and the
+   other in:
+   - both rise with the title's bottom edge (--clh-rise-under), so every piece
+     of the card sits a fixed distance Δ from its twin in the note;
+   - every card piece travels its Δ across the whole collapse — linear, in
+     step with the rest of the header — shrinking to its twin's size: the
+     card's box onto the note's line, the 32px count onto the 16px count, the
+     title onto the label, the Review Names CTA onto the chevron (they share
+     a right edge and a centre line);
+   - every note piece runs that same path from the card's side (the inverse
+     transform), so the two copies coincide at every point and only
+     crossfade — white SemiBold into orange Medium mid-way — while the card's
+     wash drains out of the shrinking box;
+   - what has no twin (the count's divider, the grey body line) fades first.
+   Transform and opacity only, like the rest of the collapse. The box is the
+   card's paint moved onto ::before and scaled — non-uniformly (note width /
+   card width across, 19/70 down), so its corners would flatten as it
+   shrinks — which is why the wash is fully drained by half-way. CSS owns every
+   offset; the hook measures only the sizes text decides (--clh-nc-*; the
+   fallbacks are their values at 1440 with 10 pending). Card geometry: 16.5px
+   in top/bottom, 20px left/right (1268:1714's px-20), the 38px count row centred in 70px (count at 16, the text
+   column centred on 35 — Figma 1424:1416, 2026-10-02: 32px count, 70px card, 16px
+   top/bottom); note: a 19.2px line centred in 19px (−0.1). */
+.tasks.clh.clh--banner {
+  --clh-nc-drop: calc(var(--clh-sub-h) + 24px); /* card top − note top: the summary's line + its gap (64) */
+}
+/* The card's paint, on a layer of its own that can shrink under its content.
+   The layer draws the hairline too, so the card trades its 0.5px border for
+   padding — its content sits exactly 16.5px down / 20px in at any pixel density (a real
+   0.5px border rounds to 1px on a 1x screen, which would part the twins). */
+.tasks.clh.clh--banner .clh-banner > .lm-banner {
+  position: relative;
+  isolation: isolate;
+  padding: 16.5px 20px;
+  border: 0;
+  box-shadow: none; /* the base card's inset edge — the layer draws it */
+  background: none;
+}
+.tasks.clh.clh--banner .clh-banner > .lm-banner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border: 0.5px solid rgba(240, 85, 35, 0.1);
+  border-radius: 8px;
+  background: rgba(240, 85, 35, 0.2);
+  /* The card's hit area follows its paint (its own box stays full size). */
+  pointer-events: auto;
+  transform-origin: 0 0;
+  --nc-dx: 0px;
+  --nc-dy: calc(-1 * var(--clh-nc-drop));
+  --nc-kx: var(--clh-nc-sx, 0.2053); /* note width / card width */
+  --nc-ky: 0.27143; /* 19 / 70 */
+}
+.tasks.clh.clh--banner .clh-banner > .lm-banner:hover::before {
+  background: rgba(240, 85, 35, 0.28);
+}
+.tasks.clh.clh--banner .clh-banner > .lm-banner:focus-visible {
+  outline: none;
+}
+.tasks.clh.clh--banner .clh-banner > .lm-banner:focus-visible::before {
+  outline: auto;
+}
+/* The count's divider on a layer of its own, so it can leave first. */
+.tasks.clh.clh--banner .lm-banner-count {
+  position: relative;
+  padding-right: 12.5px;
+  border-right: 0;
+}
+.tasks.clh.clh--banner .lm-banner-count::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  border-right: 0.5px solid rgba(64, 64, 64, 0.5);
+}
+.tasks.clh.clh--banner .lm-banner > .cta-quiet {
+  pointer-events: auto;
+}
+/* Each pair's Δ (note spot − card spot) and scale, set once on both twins. */
+.tasks.clh.clh--banner .lm-banner-count,
+.tasks.clh.clh--banner .tasks-note-count {
+  transform-origin: 0 0;
+  --nc-dx: -20px;
+  --nc-dy: calc(-16.1px - var(--clh-nc-drop));
+  --nc-kx: 0.5; /* 32 → 16px */
+  --nc-ky: 0.5;
+}
+.tasks.clh.clh--banner .lm-banner .note-card-text,
+.tasks.clh.clh--banner .tasks-note-text {
+  transform-origin: 0 0;
+  --nc-dx: calc(var(--clh-nc-note-count-w, 20.4px) - var(--clh-nc-card-count-w, 45.6px) - 32px);
+  /* The column is centred on the card's midline (35): its top is 35 − h/2 —
+     17 for the title + body pair, higher when a narrow card wraps them. */
+  --nc-dy: calc(var(--clh-nc-card-text-h, 36px) / 2 - 35.1px - var(--clh-nc-drop));
+  --nc-kx: 1;
+  --nc-ky: 1;
+}
+.tasks.clh.clh--banner .lm-banner > .cta-quiet,
+.tasks.clh.clh--banner .tasks-note > svg {
+  transform-origin: 100% 50%;
+  --nc-dx: calc(var(--clh-nc-note-w, 262px) - var(--clh-nc-card-w, 1276px) + 20px);
+  --nc-dy: calc(-25.5px - var(--clh-nc-drop));
+  --nc-kx: 0.5; /* the 32px button closes onto the 14px chevron */
+  --nc-ky: 0.5;
+}
+.tasks.clh.clh--banner .tasks-note > svg {
+  --nc-kx: 1; /* the chevron keeps its own size — never an upscaled raster */
+  --nc-ky: 1;
+}
+/* Mid-collapse the shrinking card is the one target (the note's pieces sit on
+   top of it and pass the pointer through); at either end it's whichever one
+   shows. */
+.tasks.clh.clh--banner .clh-head[data-clh="moving"] > .tasks-note {
+  pointer-events: none;
+}
+@keyframes clh-nc-out {
+  to {
+    transform: translate(var(--nc-dx), var(--nc-dy)) scale(var(--nc-kx), var(--nc-ky));
+  }
+}
+@keyframes clh-nc-in {
+  from {
+    transform: translate(calc(-1 * var(--nc-dx)), calc(-1 * var(--nc-dy)))
+      scale(calc(1 / var(--nc-kx)), calc(1 / var(--nc-ky)));
+  }
+  to {
+    transform: translate(0px, 0px) scale(1, 1);
+  }
+}
+@supports (animation-timeline: --clh) {
+  .tasks.clh.clh--banner .clh-banner > .lm-banner::before,
+  .tasks.clh.clh--banner .lm-banner-count,
+  .tasks.clh.clh--banner .lm-banner > .cta-quiet {
+    animation: clh-nc-out linear both, clh-fade-out linear both;
+  }
+  .tasks.clh.clh--banner .lm-banner .note-card-text {
+    animation: clh-nc-out linear both;
+  }
+  .tasks.clh.clh--banner .lm-banner-count::after,
+  .tasks.clh.clh--banner .lm-banner .nc-shared,
+  .tasks.clh.clh--banner .lm-banner .note-card-body {
+    animation: clh-fade-out linear both;
+  }
+  .tasks.clh.clh--banner .tasks-note > .tasks-note-count,
+  .tasks.clh.clh--banner .tasks-note > svg {
+    animation: clh-nc-in linear both, clh-fade-in linear both;
+  }
+  .tasks.clh.clh--banner .tasks-note > .tasks-note-text {
+    animation: clh-nc-in linear both;
+  }
+  .tasks.clh.clh--banner .tasks-note-text > .nc-shared {
+    animation: clh-fade-in linear both;
+  }
+  /* The timeline and ranges after the shorthands (they reset both). Every
+     path runs across the whole collapse. The divider and body line leave
+     first (by 30% / 35%), the CTA by 30%. The card's chrome is gone by
+     half-way: the wash drains over 0–50%, while the box is still card-shaped
+     — the user, 2026-10-04: a translucent box squashing onto the note line
+     (corners flattened, CTA a tiny pill) "looks horrible" — so the second
+     half is only the words gliding into the note. The count and "Name
+     Changes Pending Review" — the title IS the label, bar the count — crossfade
+     in place, orange in over 45–65% just ahead of white out over 50–70%, so
+     they never thin out (`.nc-rest`, the hand-over for words that differed,
+     went with the copy change on 2026-10-13). The chevron, at its own size,
+     fades in over 70–100%, once it has nearly closed on the label — earlier it reads as trailing behind. The
+     summary is gone by 48% here — the moment the box's top edge reaches it. */
+  .tasks.clh.clh--banner .clh-banner > .lm-banner::before,
+  .tasks.clh.clh--banner .lm-banner-count,
+  .tasks.clh.clh--banner .lm-banner-count::after,
+  .tasks.clh.clh--banner .lm-banner .note-card-text,
+  .tasks.clh.clh--banner .lm-banner .nc-shared,
+  .tasks.clh.clh--banner .lm-banner .note-card-body,
+  .tasks.clh.clh--banner .lm-banner > .cta-quiet,
+  .tasks.clh.clh--banner .tasks-note > .tasks-note-count,
+  .tasks.clh.clh--banner .tasks-note > .tasks-note-text,
+  .tasks.clh.clh--banner .tasks-note > svg,
+  .tasks.clh.clh--banner .tasks-note-text > .nc-shared {
+    animation-timeline: --clh;
+    animation-range: 0 var(--clh-d);
+  }
+  .tasks.clh.clh--banner .clh-banner > .lm-banner::before {
+    animation-range: 0 var(--clh-d), 0 calc(var(--clh-d) * 0.5);
+  }
+  .tasks.clh.clh--banner .lm-banner-count {
+    animation-range: 0 var(--clh-d), calc(var(--clh-d) * 0.5) calc(var(--clh-d) * 0.7);
+  }
+  .tasks.clh.clh--banner .lm-banner > .cta-quiet {
+    animation-range: 0 var(--clh-d), 0 calc(var(--clh-d) * 0.3);
+  }
+  .tasks.clh.clh--banner .lm-banner-count::after {
+    animation-range: 0 calc(var(--clh-d) * 0.3);
+  }
+  .tasks.clh.clh--banner .lm-banner .nc-shared {
+    animation-range: calc(var(--clh-d) * 0.5) calc(var(--clh-d) * 0.7);
+  }
+  .tasks.clh.clh--banner .lm-banner .note-card-body {
+    animation-range: 0 calc(var(--clh-d) * 0.35);
+  }
+  .tasks.clh.clh--banner .tasks-note > .tasks-note-count {
+    animation-range: 0 var(--clh-d), calc(var(--clh-d) * 0.45) calc(var(--clh-d) * 0.65);
+  }
+  .tasks.clh.clh--banner .tasks-note-text > .nc-shared {
+    animation-range: calc(var(--clh-d) * 0.45) calc(var(--clh-d) * 0.65);
+  }
+  .tasks.clh.clh--banner .tasks-note > svg {
+    animation-range: 0 var(--clh-d), calc(var(--clh-d) * 0.7) var(--clh-d);
+  }
+  .tasks.clh.clh--banner .clh-head > .clh-sub {
+    animation-range: 0 var(--clh-d), 0 calc(var(--clh-d) * 0.48);
+  }
+}
+/* No scroll timelines: the same paths and fades from --clh-p. */
+@supports not (animation-timeline: --clh) {
+  .tasks.clh.clh--banner .clh-banner > .lm-banner::before,
+  .tasks.clh.clh--banner .lm-banner-count,
+  .tasks.clh.clh--banner .lm-banner .note-card-text,
+  .tasks.clh.clh--banner .lm-banner > .cta-quiet {
+    transform: translate(calc(var(--nc-dx) * var(--clh-p)), calc(var(--nc-dy) * var(--clh-p)))
+      scale(
+        calc(1 + (var(--nc-kx) - 1) * var(--clh-p)),
+        calc(1 + (var(--nc-ky) - 1) * var(--clh-p))
+      );
+  }
+  .tasks.clh.clh--banner .tasks-note > * {
+    transform: translate(
+        calc(var(--nc-dx) * (var(--clh-p) - 1)),
+        calc(var(--nc-dy) * (var(--clh-p) - 1))
+      )
+      scale(
+        calc(1 / var(--nc-kx) + (1 - 1 / var(--nc-kx)) * var(--clh-p)),
+        calc(1 / var(--nc-ky) + (1 - 1 / var(--nc-ky)) * var(--clh-p))
+      );
+  }
+  .tasks.clh.clh--banner .clh-banner > .lm-banner::before {
+    opacity: clamp(0, 1 - var(--clh-p) / 0.5, 1);
+  }
+  .tasks.clh.clh--banner .lm-banner-count,
+  .tasks.clh.clh--banner .lm-banner .nc-shared {
+    opacity: clamp(0, (0.7 - var(--clh-p)) / 0.2, 1);
+  }
+  .tasks.clh.clh--banner .lm-banner-count::after {
+    opacity: clamp(0, 1 - var(--clh-p) / 0.3, 1);
+  }
+  .tasks.clh.clh--banner .lm-banner .note-card-body {
+    opacity: clamp(0, 1 - var(--clh-p) / 0.35, 1);
+  }
+  .tasks.clh.clh--banner .lm-banner > .cta-quiet {
+    opacity: clamp(0, 1 - var(--clh-p) / 0.3, 1);
+  }
+  .tasks.clh.clh--banner .tasks-note > .tasks-note-count,
+  .tasks.clh.clh--banner .tasks-note-text > .nc-shared {
+    opacity: clamp(0, (var(--clh-p) - 0.45) / 0.2, 1);
+  }
+  .tasks.clh.clh--banner .tasks-note > svg {
+    opacity: clamp(0, (var(--clh-p) - 0.7) / 0.3, 1);
+  }
+  .tasks.clh.clh--banner .clh-head > .clh-sub {
+    opacity: clamp(0, 1 - var(--clh-p) / 0.48, 1);
+  }
+}
+
+/* ===== Landing morph — Claude Design "Tasks Landing 6B" =====
+   The list pages (historically Tasks / Certifications / Companies / Users —
+   all four moved to the collapsing header above on 2026-09-24/28; the cards
+   and rail landings still run on this) open as a
+   search-first landing: oversized centered search, "Suggested" quick-filter
+   pills, and a short name-only list. The wheel drives a 0→1 progress that
+   morphs the hero into the page's normal small-table view.
+
+   Driven by useLandingMorph, which sets on the `.tasks.lm` root:
+     --lm   raw progress 0…1
+     --lmf  ramp(.33…1)  — real filter row fade-in
+     --lmt  ramp(.55…1)  — table chrome fade-in / landing layer fade-out
+   plus data-lm="landing|morph|table" for the on/off bits.
+   Defaults are the table state, so anything unset renders exactly as before. */
+
+.tasks.lm {
+  --lm: 1;
+  --lmf: 1;
+  --lmt: 1;
+  /* Landing width of the caption / list / hint-bar stack (`.lm-caption`,
+     `.lm-list`, `.lm-hint-wrap`): 56% of the page = 80% of the hero search bar
+     (70%, see `.tasks.lm .toolbar`), so the collapsed list reads as a compact
+     block under the bar instead of matching its edges. (Was 72% — 2026-09-06.)
+     (The cards-hero `.lm-cards` variant that kept 72% is gone, 2026-09-30.) */
+  --lm-list-w: 56%;
+  /* The soft bottom edge every landing list ends on — ONE definition, used by
+     `.lm-list` (Tasks / Certifications / Companies / …) and the Question Bank's
+     category index. The fade used to start at 62%, ~36% of the box (~180px);
+     the user found that too strong, so it now starts at 78% — a ~21% ramp,
+     about 105px on Tasks and 115px on the index, a bit over half the old wash
+     (a 72px version, tried earlier on the index alone, read as too weak beside
+     Tasks). The +42% on both stops unwinds the mask as the table forms, so
+     nothing is masked at p=1. Weaken or strengthen the edge HERE; don't fork
+     the ramp back into the two consumers. */
+  --lm-fade-start: calc(78% + 42% * var(--lm));
+  --lm-fade-end: calc(99% + 42% * var(--lm));
+}
+
+/* The page header does NOT change between the landing and the table: Figma
+   29:16832 is one size in both states (Fira Sans SemiBold 32 / #fff, the base
+   `.tasks-title`). An earlier version grew it 4px at the landing, which read as
+   the header shrinking as the page morphed. */
+
+/* The banner's collapsed form — "Page Subtext" (Figma 1597:2681, was
+   1268:1736): one accent line under the page title, 16px Medium, then 4px and
+   the 14px chevron. The two are
+   the same statement at two sizes, so exactly one shows — this line fades in
+   (and takes its height) only as the page reaches the table. */
+.tasks-note {
+  display: flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: normal;
+  color: #f05523;
+  cursor: pointer;
+}
+.tasks-note:hover {
+  text-decoration: underline;
+}
+/* The 4px sits before the chevron only — the count and its words are one
+   phrase (the count carries its own no-break space). */
+.tasks-note > svg {
+  flex: none;
+  margin-left: 4px;
+}
+.tasks.lm .tasks-note {
+  overflow: hidden;
+  height: calc(19px * var(--lm));
+  opacity: var(--lm);
+}
+.tasks.lm:not([data-lm="table"]) .tasks-note {
+  pointer-events: none;
+}
+
+/* ── Landing banner (Figma 1268:1714 "Name Change Requests") ──
+   A callout that sits ABOVE the hero search on the landing: the shared
+   `.note-card` in its accent tone, carrying a 32px count behind a hairline
+   divider, the callout's title/body pair and a `.cta-quiet` CTA with an N
+   keycap. It belongs to the landing only — it tracks the hero's 70% measure
+   and collapses (height + padding + opacity) as the page morphs into the
+   table, so the table view is exactly what it was. */
+.tasks.lm .lm-banner {
+  box-sizing: border-box;
+  width: calc(70% * (1 - var(--lm)) + 100% * var(--lm));
+  margin: calc(56px * (1 - var(--lm))) auto 0;
+  gap: 40px;
+  height: calc(70px * (1 - var(--lm)));
+  padding-top: calc(16px * (1 - var(--lm)));
+  padding-bottom: calc(16px * (1 - var(--lm)));
+  overflow: hidden;
+  opacity: calc(1 - var(--lm));
+}
+.tasks.lm[data-lm="table"] .lm-banner {
+  display: none;
+}
+/* The banner owns the hero's top margin now; the search bar keeps a 16px gap
+   under it instead of its own 56px. */
+.tasks.lm .lm-banner + .toolbar {
+  margin-top: calc(16px * (1 - var(--lm)));
+}
+/* The whole card is the target, so it takes the pointer and lifts its wash on
+   hover; the CTA stays as the affordance (and stops the click bubbling so the
+   queue opens once). */
+.lm-banner {
+  cursor: pointer;
+}
+.lm-banner:hover {
+  background: rgba(240, 85, 35, 0.28);
+}
+.lm-banner:hover .cta-quiet {
+  background: rgba(122, 122, 122, 0.3);
+}
+
+/* The node's Secondary Button sits ON the banner, so its 20% grey wash is
+   translucent — the shared `.cta-quiet` recipe backs the same wash with an
+   opaque #0d0d0d, which paints a grey patch over the orange. Wash only here,
+   so the banner reads through it (the keycap's 4% white then lands on the
+   right base too).
+
+   Any callout's action is the same case — a Secondary Button on a toned card
+   (Merge's B2B banner) — so it takes the same translucent wash. */
+.lm-banner .cta-quiet,
+.note-card-action .cta-quiet {
+  background: rgba(122, 122, 122, 0.2);
+}
+.lm-banner .cta-quiet:hover,
+.note-card-action .cta-quiet:hover {
+  background: rgba(122, 122, 122, 0.3);
+}
+
+.lm-banner-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+.lm-banner-count {
+  flex: none;
+  padding-right: 12px;
+  border-right: 0.5px solid rgba(64, 64, 64, 0.5);
+  font-family: var(--font-sans);
+  font-size: 32px;
+  font-weight: 600;
+  line-height: normal;
+  color: #fff;
+}
+
+/* Hero search: a centered card at 70% of the page width that widens into the
+   full-width toolbar. (Was a fixed 640px — 2026-08-28.) */
+.tasks.lm .toolbar {
+  width: calc(70% * (1 - var(--lm)) + 100% * var(--lm));
+  margin-left: auto;
+  margin-right: auto;
+  margin-top: calc(56px * (1 - var(--lm)));
+}
+/* At the landing the bar IS Figma 1362:1945 "Search Bar - Large": 56px tall
+   (16px padding around a 24px line) with a 20px icon and 20px type, morphing
+   down to the 43px "Search Bar - Default". The radius is 8 in both nodes now —
+   it used to grow to 10 at the landing. */
+.tasks.lm .toolbar .usearch-bar,
+.tasks.lm .toolbar .search-input {
+  height: calc(var(--search-h) + (var(--search-h-lg) - var(--search-h)) * (1 - var(--lm)));
+  border-radius: 8px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, calc(0.45 - 0.45 * var(--lm)));
+  font-size: calc(16px + 4px * (1 - var(--lm)));
+}
+/* The 16px edge padding holds at both sizes; the icon→text gap is 8px on
+   Default and 12px on Large, so the text inset grows 40px → 48px with the
+   icon and the gap, and the right inset with the badge: 59px → 71px
+   (16 + 26 + 3 + 26). */
+.tasks.lm .toolbar .usearch-bar {
+  gap: calc(8px + 4px * (1 - var(--lm)));
+}
+.tasks.lm .toolbar .search-input {
+  padding-left: calc(39px + 8px * (1 - var(--lm)));
+  padding-right: calc(58px + 12px * (1 - var(--lm)));
+}
+/* ⌘K badge, Figma 1362:1949: 26px caps (24 until the 2026-09-28 re-issue)
+   holding an 18px glyph and a 16px K, 3px apart. */
+.tasks.lm .toolbar .search-kbd {
+  height: calc(20px + 6px * (1 - var(--lm)));
+}
+.tasks.lm .toolbar .search-kbd .kbd-cmd,
+.tasks.lm .toolbar .search-kbd .kbd-letter,
+.tasks.lm .toolbar .usearch-kbd .kbd-cmd,
+.tasks.lm .toolbar .usearch-kbd .kbd-letter {
+  width: calc(20px + 6px * (1 - var(--lm)));
+  height: calc(20px + 6px * (1 - var(--lm)));
+}
+.tasks.lm .toolbar .search-kbd .kbd-cmd svg,
+.tasks.lm .toolbar .usearch-kbd .kbd-cmd svg {
+  width: calc(14px + 4px * (1 - var(--lm)));
+  height: calc(14px + 4px * (1 - var(--lm)));
+}
+.tasks.lm .toolbar .search-kbd .kbd-letter,
+.tasks.lm .toolbar .usearch-kbd .kbd-letter {
+  font-size: calc(12px + 4px * (1 - var(--lm)));
+}
+.tasks.lm .toolbar .search-input::placeholder,
+.tasks.lm .toolbar .usearch-input,
+.tasks.lm .toolbar .usearch-input::placeholder {
+  font-size: calc(16px + 4px * (1 - var(--lm)));
+}
+.tasks.lm .toolbar .search-wrap > .search-icon svg,
+.tasks.lm .toolbar .usearch-icon svg {
+  width: calc(16px + 4px * (1 - var(--lm)));
+  height: calc(16px + 4px * (1 - var(--lm)));
+}
+
+/* ── Filter row: ONE row for both states. It widens from the centered landing
+   width to full width (same motion as the search bar above it), the "Quick
+   Filters" label collapses, the quick-filter pills persist, and the real
+   Filters row unfolds after them (--lmf) — pills transition between states
+   rather than one set crossfading into another.
+
+   Landing width = 64.4% of the page = 92% of the hero search bar (which is 70%
+   of the page, see `.tasks.lm .toolbar`), so the quick filters can never run
+   wider than the bar they sit under. ── */
+.tasks.lm .lm-filter-slot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(64.4% * (1 - var(--lm)) + 100% * var(--lm));
+  margin: 0 auto;
+  min-width: 0;
+  padding-bottom: 14px; /* matches .filters' bottom spacing */
+  overflow: hidden; /* clip the sliding pills mid-morph */
+}
+/* Centering the landing pills without breaking the morph: `justify-content`
+   can't be interpolated, so two zero-basis flex spacers take the slack and
+   their grow factor fades to 0 as the row becomes the table's left-aligned
+   filter row. The -8px margins cancel the spacers' own flex gap, so at p=1
+   they occupy nothing at all and the row lays out exactly as it did before. */
+.tasks.lm .lm-filter-slot::before,
+.tasks.lm .lm-filter-slot::after {
+  content: "";
+  flex-grow: calc(1 - var(--lm));
+  flex-shrink: 0;
+  flex-basis: 0;
+  min-width: 0;
+}
+.tasks.lm .lm-filter-slot::before {
+  margin-right: -8px;
+}
+.tasks.lm .lm-filter-slot::after {
+  margin-left: -8px;
+}
+.tasks.lm[data-lm="table"] .lm-filter-slot {
+  overflow: visible; /* the filter pills' dropdown panels must escape */
+}
+.tasks.lm[data-lm="table"] .lm-filter-slot::before,
+.tasks.lm[data-lm="table"] .lm-filter-slot::after {
+  display: none;
+}
+/* The quick-filter pills persist through the morph, then compress away as the
+   table chrome forms (--lmt) — the real filter pills slide left into their
+   place, so the row reads as one set transitioning into the other. */
+.tasks.lm .lm-pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  min-width: 0;
+  overflow: hidden;
+  max-width: calc(600px * (1 - var(--lmt)));
+  opacity: calc(1 - var(--lmt));
+  margin-right: calc(-8px * var(--lmt));
+}
+.tasks.lm[data-lm="table"] .lm-pills {
+  display: none;
+}
+/* "Quick Filters" — the landing-only eyebrow before the pills (was "Suggested";
+   the cap is 90px because the longer label needs the extra room). */
+.lm-quick-label {
+  flex: none;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  /* Set in caps (Figma 956:1017) the way the app's other eyebrow labels are —
+     the transform lives here so the markup stays readable. */
+  text-transform: uppercase;
+  /* #a8a8a8 verbatim from the node (2026-09-12) — it had been on --text-faint
+     (#5a5a5e), a step dimmer than the pills it labels. */
+  color: #a8a8a8;
+  white-space: nowrap;
+  overflow: hidden;
+  /* Caps + the colon run wider than the old mixed-case "Quick Filters". */
+  max-width: calc(112px * (1 - var(--lm)));
+  opacity: calc(1 - 2.4 * var(--lm));
+  /* At p=1 the zero-width label would still leave a stray flex gap — pull it in. */
+  margin-right: calc(2px - 10px * var(--lm));
+}
+/* The real Filters row unfolds after the suggested pills. */
+.tasks.lm .lm-filters-flow {
+  display: flex;
+  min-width: 0;
+  max-width: calc(2000px * var(--lmf));
+  opacity: var(--lmf);
+  overflow: hidden;
+  margin-left: calc(-8px * (1 - var(--lmf)));
+}
+.tasks.lm[data-lm="landing"] .lm-filters-flow {
+  pointer-events: none;
+}
+/* Fully unfolded: uncap and unclip so the filter pills' dropdown panels open.
+   The flow also takes the row's remaining width, so a .filters-end element
+   (the Companies Date Range pill) can hold the right edge. */
+.tasks.lm[data-lm="table"] .lm-filters-flow {
+  max-width: none;
+  overflow: visible;
+  margin-left: 0;
+  flex: 1;
+}
+/* …but only the SETTLED table gets that full-width flow, so mid-morph a
+   .filters-end pill sits packed against the last filter and then snaps to the
+   right edge at p=1. Anchor it to the slot for the whole gesture instead: it
+   fades up (--lmf) already on the right edge, and at p=1 the in-flow
+   margin-left:auto lands it in exactly the same place, so the hand-off is
+   invisible. Its containing block is the slot — outside the flow's clip and
+   outside its opacity group — so it escapes both; the explicit opacity and the
+   flow's inherited pointer-events keep it hidden and inert at the landing. */
+.tasks.lm .lm-filter-slot {
+  position: relative;
+}
+.tasks.lm:not([data-lm="table"]) .lm-filters-flow .filters-end {
+  position: absolute;
+  top: 0;
+  right: 0;
+  opacity: var(--lmf);
+}
+.tasks.lm .lm-filters-flow > .filters {
+  padding-bottom: 0;
+  flex-shrink: 0;
+  flex-grow: 1;
+}
+/* ── Quick-filter pill — Figma 956:1009 "Quick Filter" (2026-09-06) ──
+   The landing's own pill atom, written out rather than reusing the shared
+   12:15164 "Filters - Unapplied": the node's border is SOLID #404040, where the
+   shared one is dashed. Everything else matches it exactly — r20, 12px insets,
+   6px gap to the 14px add-circle, Fira Sans Medium 14 #a8a8a8 — so the two
+   still read as one family while the row carries both mid-morph.
+   Height is the row's 28px, not the node's 25px hug, for the same reason
+   `.filter-pill-dashed` takes 28: the real Filters row unfolds INTO this row as
+   the table forms, so both sets have to sit on one row height. */
+.lm-quick-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  /* Holds its width inside the clipped .lm-pills track. */
+  flex: none;
+  height: 28px;
+  padding: 0 12px;
+  background: transparent;
+  border: 1px solid #404040;
+  border-radius: 20px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: #a8a8a8;
+  white-space: nowrap;
+}
+.lm-quick-pill:hover {
+  background: var(--bg-pill);
+  border-color: var(--text-faint);
+}
+.lm-quick-pill .icon {
+  color: #a8a8a8;
+  display: inline-flex;
+  align-items: center;
+}
+.lm-quick-pill .icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ── "More filters" — Figma 977:1014, the icon-only Quick Filter closing the
+   row: a 14px right chevron centred in the same pill shell, saying the quick
+   filters are not all of them. Clicking it jumps to the full table (the list's
+   "View full table" destination). Square like the node, at the row's 28px
+   rather than its 25px for the same reason the pills take 28. Its hover is the
+   pills' — it sits among them and should not read as a different control — with
+   the glyph brightening since it carries no label to do that job. */
+.lm-more-filters {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid #404040;
+  border-radius: 20px;
+  color: #a8a8a8;
+}
+.lm-more-filters:hover {
+  background: var(--bg-pill);
+  border-color: var(--text-faint);
+  color: #fff;
+}
+
+/* The solid-bordered `.lm-pill` variant was retired 2026-09-04: Exam Reviews
+   was its last user, and its kind pills are now one "Status" pill on the shared
+   `.filters` row (.filter-pill-dashed / .filter-applied like every other list
+   page). */
+
+/* ── Stage: the landing layer sits over the real table block and they
+   crossfade over the last part of the gesture (--lmt). ── */
+.tasks.lm .lm-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.tasks.lm .lm-table {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* One list, not two: the landing list IS the visible list for the whole
+   gesture (its columns grow into the table layout below), and the real table
+   only takes over at p=1 through a short crossfade — the two are column-
+   aligned by then, so it reads as the same list settling, not a swap. */
+.tasks.lm .lm-table .table-xscroll,
+.tasks.lm .lm-table .co-panel {
+  opacity: 1;
+  transition: opacity 0.25s ease;
+}
+.tasks.lm:not([data-lm="table"]) .lm-table .table-xscroll,
+.tasks.lm:not([data-lm="table"]) .lm-table .co-panel {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s ease, visibility 0s 0.25s;
+}
+/* The footer fades in with the table chrome, like the reference. */
+.tasks.lm .lm-table .pagination {
+  opacity: var(--lmt);
+}
+
+/* No horizontal scrollbar while the list is collapsed: the real table is still
+   laid out at its full --table-min behind the landing layer, so the scrollport
+   would show a bar for columns nobody can see yet. Switching overflow-x off
+   also hides the custom bar — customScrollbars only draws one for a scrollport
+   whose computed overflow-x is auto/scroll. The expanded table keeps its bar. */
+.tasks.lm:not([data-lm="table"]) .lm-table .table-xscroll {
+  overflow-x: hidden;
+}
+
+.tasks.lm .lm-land {
+  position: absolute;
+  inset: 0;
+  /* Stop above the footer as it fades in, so late-morph rows never overlap it. */
+  bottom: calc(40px * var(--lmt));
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.25s ease;
+}
+.tasks.lm[data-lm="landing"] .lm-land {
+  pointer-events: auto;
+}
+.tasks.lm[data-lm="table"] .lm-land {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s ease, visibility 0s 0.25s;
+}
+
+/* Minimal-state header row — Figma 760:4642 "Atomic Component - Minimal State
+   - Header Row": a 40px row holding ONE left-aligned page description. This is
+   the table's header row while the page is still the landing; it collapses to
+   0 height as --lm drives the morph into the real header (79:445). The design
+   used to pair the label with an "ALL n ↓" jump on the right — that was removed
+   from the component, so the row is a single flex item now and `.lm-hint`
+   ("keep scrolling to see the table") is the only click-through left. Shared by
+   every landing that uses the minimal table. */
+.lm-caption {
+  width: calc(var(--lm-list-w) * (1 - var(--lm)) + 100% * var(--lm));
+  margin-top: calc(65px * (1 - var(--lm)));
+  height: calc(40px * (1 - var(--lm)));
+  opacity: calc(1 - 2.4 * var(--lm));
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  padding: 0 2px;
+  flex-shrink: 0;
+}
+/* Same atom as the mid-page section heading (Figma 715:1575) — the landing's
+   "RECENTLY CREATED" / "LONGEST WAITING" caption is one of its uses. */
+.lm-caption-label {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  text-transform: uppercase;
+  color: #a8a8a8;
+  white-space: nowrap;
+}
+.lm-list {
+  width: calc(var(--lm-list-w) * (1 - var(--lm)) + 100% * var(--lm));
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    #000 var(--lm-fade-start),
+    transparent var(--lm-fade-end)
+  );
+  mask-image: linear-gradient(180deg, #000 var(--lm-fade-start), transparent var(--lm-fade-end));
+}
+/* Morphing header row — grows in with the table chrome (--lmt) and matches
+   the real thead's metrics at p=1 (Figma 79:445: 40px, 16px/600 white,
+   1px #404040 rule below). */
+.lm-head {
+  display: grid; /* template comes inline from LandingOverlay */
+  align-items: center;
+  height: calc(40px * var(--lmt));
+  opacity: var(--lmt);
+  overflow: hidden;
+  border-bottom: 1px solid rgba(64, 64, 64, var(--lmt));
+}
+.lm-head .lm-cell {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+
+/* The table rows' right-edge wash (Figma 79:446 / 435:516) fades in with the
+   table chrome — the collapsed row atom (600:1462) has no gradient. The
+   100%−40px peak assumes a 40px ⋯ gutter, exact only when the table sits at
+   --table-min; on stretched tables the real table's `.col-actions::before`
+   ramp lands at the stretched column's left edge instead. The hand-off offset
+   is invisible at 2% alpha, so this keeps the simple stops. */
+.lm-head,
+.lm-row {
+  background-image: linear-gradient(
+    90deg,
+    rgba(122, 122, 122, 0) calc(100% - 90px),
+    rgba(122, 122, 122, calc(0.02 * var(--lmt))) calc(100% - 40px),
+    rgba(122, 122, 122, 0) calc(100% - 40px)
+  );
+}
+
+/* Rows are the table's exact 40px in both states (Figma 435:515 / 600:1461). */
+.lm-row {
+  display: grid; /* template comes inline from LandingOverlay */
+  position: relative; /* anchors the pinned ⋯ gutter */
+  align-items: center;
+  height: 40px;
+  border-top: 1px solid rgba(64, 64, 64, 0.5);
+  cursor: pointer;
+}
+.lm-head + .lm-row {
+  border-top-color: transparent;
+}
+.lm-row:hover {
+  background: var(--bg-row-hover);
+}
+
+/* Cells share the table's metrics in both states (Figma 600:1461: same 16px
+   type and 12px inset as the full row), so the p=1 hand-off lines up. */
+.lm-cell {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  color: #a8a8a8;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  padding: 0 12px;
+}
+.lm-cell--name {
+  font-weight: 500;
+  color: #fff;
+}
+/* Columns that grow in from zero width fade in with the filter chrome. */
+.lm-cell--grow {
+  opacity: var(--lmf);
+}
+/* The ⋯ gutter mirrors the real table's row-end CONTROL, not its cell: a 40px
+   box pinned to the row's visible right edge, which lands the glyph 20px in
+   from that edge — exactly where `.table .col-actions > *` centres its own 40px
+   button. That holds in both of the fixed layout's regimes: overflowing, the
+   column is sticky right:0 at 40px; stretched, the column grows past 40px but
+   the button stays 40px against its right edge (the same 40px gutter
+   `.col-actions::before` ramps up to). The box is absolutely positioned, so
+   this is purely visual — the grid template reserves the real track and keeps
+   the width budget intact.
+   It used to take the column's STRETCHED width and centre the glyph across all
+   of it, which sat the landing glyph ~6px left of the control it hands off to
+   on any viewport wide enough to stretch the table. */
+.lm-cell--dots {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(40px * var(--lm));
+  color: #7a7a7a;
+  text-align: center;
+  padding: 0;
+}
+/* Hands-On rests its rows on the chevron rather than the kebab, so its gutter
+   mirrors that glyph — and the #a8a8a8 of `.lone-dots.row-chevron`, not the
+   kebab's grey. Without this the whole morph showed a ⋯ that became a chevron
+   the instant the real table took over at p=1, swapping one control for another
+   in place. `flex: none` keeps the 16px box intact so the collapsing track
+   clips it the way it clips the ⋯, instead of squashing the glyph. */
+.lm-cell--chevron {
+  color: #a8a8a8;
+}
+.lm-cell--chevron svg {
+  display: block;
+  flex: none;
+}
+.lm-row--dim .lm-cell {
+  color: var(--text-faint);
+}
+
+/* "View full table" — Figma 716:1648 "Atomic Component - Minimal State - Keep
+   Scrolling". A full-width bar closing the collapsed list: the label then a
+   12px down arrow, 4px apart and centred on the row. The design dropped the
+   #404040 top rule this bar used to carry, so it is now unruled — the list's
+   own fade mask is what ends the rows. */
+.lm-hint-wrap {
+  /* The bar is exactly the node's 40px tall (its 14px label row centred in the
+     frame — re-synced 2026-09-09, the component grew 30 → 40px so it matches
+     the table's row height), and exactly as wide as the list rows above it —
+     same width expression as .lm-list, so it lines up with the row edges in
+     both states instead of running the full page width. */
+  height: calc(40px * (1 - var(--lm)));
+  width: calc(var(--lm-list-w) * (1 - var(--lm)) + 100% * var(--lm));
+  opacity: calc(1 - 2.6 * var(--lm));
+  overflow: hidden;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.lm-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  color: #a8a8a8;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.lm-hint:hover {
+  color: var(--accent);
+}
+
+/* "↑ Back to search" — first child of the page's .pagination row. */
+.lm-back {
+  margin-right: auto;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: #a8a8a8;
+  white-space: nowrap;
+}
+.lm-back:hover {
+  color: #fff;
+}
+
+/* ═══════════ Table-picker modals (Figma 682:2321) ═══════════
+   A compact list table inside the shared PrmModal shell — the Skill wizard's
+   Select Tasks and Merge Accounts' Select Users both run on this. The chrome is all
+   borrowed: `.prm*` for the card/header/footer, `.table` for the 40px rows and
+   their hairlines, `.filters`/`PillTrigger` for the pills, `.pagination` for
+   the footer row — every one of those already matches this node's spec. What
+   follows is only the column geometry plus the two colours the node states
+   differently from the app-wide search bar. */
+.stm {
+  display: flex;
+  flex-direction: column;
+  /* Figma 682:2495 — 20px between the search block and the table. The 24px
+     above it comes from .prm-body's own gap. */
+  gap: 20px;
+  min-width: 0;
+}
+
+.stm-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px; /* Figma 682:2496 — search bar → pill row */
+}
+
+/* The picker's bar is the app-wide "Search Bar - Default" (399:216) with its
+   ⌘K / ✕ trailing slot — ⌘K reaches it because App.tsx scopes the shortcut to
+   the topmost modal. It used to be 682:2497, a 40px bar on a 10% wash that
+   sat lighter than the card; the 2026-09-28 surface (20% #737373 over
+   #0d0d0d) is itself lighter than the card's 15% wash, so it no longer reads
+   as a dark well and the override went. */
+.stm-search {
+  margin-bottom: 0;
+}
+
+/* Figma 682:2501 "Filters" (2026-09-12 re-sync): the pills went BACK to the
+   shared Quick Filters spec (12:15164) the app already draws — 28px tall, 14px
+   Medium label, 14px glyph, 8px apart — so the 32px/16px overrides that used to
+   live here are gone. Only the bottom padding is still ours: the row's gap down
+   to the table comes from `.stm`'s own 20px. */
+.stm-filters {
+  padding-bottom: 0;
+}
+
+/* Hover matches the TABLE ROW hover in the same card (`rgba(122,122,122,0.05)`)
+   rather than the app-wide `--bg-pill` #161618 — a flat dark that sits BELOW
+   this 20%-washed card, exactly the inversion the row states had. Translucent,
+   so a pill lifts on hover the way a row does. The dashed ring still brightens:
+   that is the shared component's own hover. */
+.stm-filters .filter-pill-dashed:hover,
+.stm-filters .filter-pill-dashed.open,
+.stm-filters .filter-applied:hover,
+.stm-filters .filter-applied.open {
+  background-color: rgba(122, 122, 122, 0.05);
 }
 
 .stm-table-wrap {

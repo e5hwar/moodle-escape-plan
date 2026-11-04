@@ -714,21 +714,41 @@ html[data-ds="skillcat"] .table tbody td {
   line-height: 20px;
   color: var(--sc-text-secondary);
 }
-html[data-ds="skillcat"] .table tbody td:not(.col-name):not(.col-actions):not(.col-checkbox) {
+/* Primary columns = the same set the Play Area emphasises (index.css's muted
+   rule exclusions): Name, plus Hands-On's Task (`.col-rh-task`) and the
+   Question Bank's Question (`.qb-col-question`, which is that table's name
+   and stays Regular like in the Play Area). */
+html[data-ds="skillcat"] .table tbody td:not(.col-name):not(.col-rh-task):not(.qb-col-question):not(.col-actions):not(.col-checkbox) {
   color: var(--sc-text-secondary);
 }
-html[data-ds="skillcat"] .table tbody td.col-name {
+html[data-ds="skillcat"] .table tbody td:is(.col-name, .col-rh-task) {
   font-size: 14px;
   font-weight: 500;
   color: var(--sc-text-primary);
 }
-html[data-ds="skillcat"] .table tbody tr.is-hidden td,
-html[data-ds="skillcat"] .table tbody tr.is-archived td,
-html[data-ds="skillcat"] .table tbody tr.is-disabled td,
-html[data-ds="skillcat"] .table tbody tr.is-hidden td.col-name,
-html[data-ds="skillcat"] .table tbody tr.is-archived td.col-name,
-html[data-ds="skillcat"] .table tbody tr.is-disabled td.col-name {
+html[data-ds="skillcat"] .table tbody td.qb-col-question {
+  color: var(--sc-text-primary);
+}
+/* Disabled row (Table / Row, 18832:2230): every cell's text #7A7A7A — name,
+   data, mono and dates alike — for Hidden, Archived and Disabled records
+   (Eshwar 2026-11-04). The Play Area's dim classes are `.task-dim` (Tasks,
+   Certifications, Feedback, Question Bank, pickers…) and `.skg-archived`
+   (Skills); it greys the name #7a7a7a and the rest #404040 at (0,6,3), so
+   `:not(#ds-dim)` lifts this past both that and the white name rule. Status
+   labels and the Hidden / Disabled flag keep their own colours; the kebab
+   stays live, since Unhide / Restore live in its menu. */
+html[data-ds="skillcat"] .table tbody tr:is(.task-dim, .skg-archived, .is-hidden, .is-archived, .is-disabled) td:not(.col-actions):not(.col-checkbox):not(#ds-dim) {
   color: var(--sc-text-tertiary);
+}
+/* Detail tables whose rows grow (Merge / Transfer comparisons `.mgf-table`):
+   their cells are top-aligned with 10 above and below, so a one-line row is
+   still 40 (10 + 20 + 10) and a wrapped value pushes the row down. The 0-
+   padding / fixed-40 cell rule above stripped the 10s, leaving the text stuck
+   to the top line of each row. */
+html[data-ds="skillcat"] .table.mgf-table tbody td {
+  height: auto;
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 /* Table size Small (19236:4922) is the size of every `.table` above: header
    and rows 40, like the Play Area's 40px tables (Eshwar 2026-11-03 — lists,
@@ -758,6 +778,21 @@ html[data-ds="skillcat"] .table tbody tr:hover .col-actions {
 }
 html[data-ds="skillcat"] .table tbody tr.selected .col-actions {
   --actions-bg: linear-gradient(var(--sc-surface-row-selected), var(--sc-surface-row-selected)), var(--sc-bg-canvas);
+}
+/* Picker tables in a modal (`.stm-table--preview`: Find a Deep Link, Add
+   Existing Tasks…) sit on the modal surface, not the page. The canvas values
+   above outrank index.css's `--prm-surface` versions and printed the sticky
+   column — header included — as a #0d0d0d block down the right edge. Same
+   washes, laid on the modal surface. (`.selected` there means ticked.) */
+html[data-ds="skillcat"] .stm-table--preview .col-actions {
+  --actions-bg: var(--prm-surface);
+}
+html[data-ds="skillcat"] .stm-table--preview tbody tr:hover .col-actions {
+  --actions-bg: linear-gradient(var(--sc-surface-row-hover-subtle), var(--sc-surface-row-hover-subtle)), var(--prm-surface);
+}
+html[data-ds="skillcat"] .stm-table--preview tbody tr.selected .col-actions,
+html[data-ds="skillcat"] .stm-table--preview tbody tr.selected:hover .col-actions {
+  --actions-bg: linear-gradient(var(--sc-surface-row-selected), var(--sc-surface-row-selected)), var(--prm-surface);
 }
 /* Row actions: Ghost icon button, Compact Small 28, 16 icon, radius 8 — the
    resting kebab / chevron only. The hover bar's cells (`.row-action-bar >
@@ -1345,7 +1380,9 @@ html[data-ds="skillcat"] .wizard-step.active .wizard-step-title {
 html[data-ds="skillcat"] .wizard-step.active .wizard-step-title {
   font-weight: 600;
 }
-html[data-ds="skillcat"] .wizard-content {
+/* Not the flush content area (the Certification builder's Add Tasks step):
+   it fills the pane edge to edge, so its gutter stays 0 as in the Play Area. */
+html[data-ds="skillcat"] .wizard-content:not(.wizard-content--flush) {
   padding: 40px;
 }
 html[data-ds="skillcat"] .wizard-content .tasks-title {
@@ -1361,6 +1398,16 @@ html[data-ds="skillcat"] .wizard-desc {
 }
 html[data-ds="skillcat"] .wizard .form-group {
   margin-bottom: 24px;
+}
+/* Fields in a `.wizard-fields` stack (Question editor, parts of the Task
+   wizard) are spaced by the stack's gap, not their margin — index.css zeroes
+   it there, but the rule above outranks that reset, so the two added up to 56.
+   Same 24 as every other wizard in this look. */
+html[data-ds="skillcat"] .wizard .wizard-fields {
+  gap: 24px;
+}
+html[data-ds="skillcat"] .wizard .wizard-fields > :is(.form-group, .form-sub-group) {
+  margin-bottom: 0;
 }
 /* Field, Compact: label Bold 16 / 20 grey, 8 above; control 40, mono 16 /
    24; message Regular 14 / 20 grey, 8 below. */
@@ -1651,8 +1698,13 @@ html[data-ds="skillcat"] .select-field-value {
   line-height: 24px;
   color: var(--sc-text-primary);
 }
+/* Empty: the placeholder is #8A8A8A. SelectField marks the `.select-field`
+   BUTTON `.is-placeholder` (not the `.selectfield` wrapper), so the wrapper
+   selector alone never matched and empty selects read white (2026-11-04). */
+html[data-ds="skillcat"] .select-field.is-placeholder .select-field-value,
 html[data-ds="skillcat"] .selectfield.is-placeholder .select-field-value,
-html[data-ds="skillcat"] .select-field-value.is-placeholder {
+html[data-ds="skillcat"] .select-field-value.is-placeholder,
+html[data-ds="skillcat"] .cw-price-value.is-placeholder {
   color: var(--sc-text-placeholder);
 }
 html[data-ds="skillcat"] .field-chevron svg {
@@ -1862,8 +1914,14 @@ html[data-ds="skillcat"] .lm-quick-pill:hover {
   background: var(--sc-surface-control-hover);
 }
 /* Categories index: "Categories · 67" Bold 16 / 20 with a ghost 32 add
-   button at the right; four 310 columns, 24 apart; letter heads mono 12
-   grey, no rule; rows 30 tall — SemiBold 14 white, the count 14 grey. */
+   button at the right; letter heads mono 12 grey, no rule; rows 30 tall —
+   Regular 14 white (as the Play Area draws it — SemiBold until 2026-11-04,
+   user: "the text is regular in mine"), the count 14 grey.
+   Spacing is the Play Area's: the column count, width AND gap come from
+   `indexLayout` (40–48 gap, set inline as --qbl-gap) — a fixed 24 here left
+   each count jammed against the next column's names. Rows keep the 8px
+   hover inset but pull it back with a −8 margin, so the names stay flush
+   with the "Categories" title and the gap between columns is all air. */
 html[data-ds="skillcat"] .qbl-index-head {
   padding: 0;
 }
@@ -1880,15 +1938,16 @@ html[data-ds="skillcat"] .qbl-index-head-label {
   color: var(--sc-text-primary);
 }
 html[data-ds="skillcat"] .qbl-index {
-  padding: 0;
-  gap: 0 24px;
+  padding: 0 8px 16px;
+  margin: 0 -8px;
+  width: calc(100% + 16px);
 }
 html[data-ds="skillcat"] .qbl-index-group {
   margin-bottom: 24px;
 }
 html[data-ds="skillcat"] .qbl-index-letter {
   padding: 0;
-  margin: 0;
+  margin: 0 0 4px;
   border-bottom: none;
   font-family: var(--font-mono);
   font-size: 12px;
@@ -1898,11 +1957,13 @@ html[data-ds="skillcat"] .qbl-index-letter {
 }
 html[data-ds="skillcat"] .qbl-index-row {
   gap: 12px;
+  width: calc(100% + 16px);
   height: 30px;
-  padding: 5px 0;
+  margin: 0 -8px;
+  padding: 5px 8px;
   border-radius: 4px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 20px;
   color: var(--sc-text-primary);
 }
@@ -1956,9 +2017,22 @@ html[data-ds="skillcat"] .lm-banner-count {
   line-height: 38px;
   color: var(--sc-text-primary);
 }
+/* Banner / Trailing=Button (19004:4287): the Small Secondary button takes a
+   see-through fill so it picks up the banner tone — color/surface/on-tint
+   (white 8%) on color/border/on-tint (white 16%), never the opaque #0d0d0d
+   base of the page Secondary (that read as a black slab on the orange).
+   On every tinted NoteCard, whatever its tone — the list banners (`.lm-banner`
+   is a NoteCard) and Merge / Transfer's red "Swap Roles" note alike. */
+html[data-ds="skillcat"] .note-card .cta-quiet {
+  background: rgba(255, 255, 255, 0.08);
+  border: 0.5px solid rgba(255, 255, 255, 0.16);
+}
+html[data-ds="skillcat"] .note-card .cta-quiet:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+}
 html[data-ds="skillcat"] .lm-banner .note-card-title {
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 20px;
   color: var(--sc-text-primary);
 }
@@ -2005,53 +2079,6 @@ html[data-ds="skillcat"] .tasks-header > div:not([class]) > .tasks-title {
   font-size: 24px;
   font-weight: 700;
   line-height: 29px;
-}
-/* The run cards: four across, equal widths, 16 apart, 64 tall on bg/surface,
-   radius 8, 16 / 20 insets — count Bold 24, title SemiBold 14 white, line 12
-   grey, a 16 chevron at the right. Selected: the 10% tint + white edge. */
-html[data-ds="skillcat"] .rr {
-  height: auto;
-  margin-bottom: 24px;
-}
-html[data-ds="skillcat"] .rr-row {
-  gap: 16px;
-}
-html[data-ds="skillcat"] .rr-card {
-  height: 64px;
-  gap: 16px;
-  padding: 12px 20px;
-  background: var(--sc-bg-surface);
-  box-shadow: none;
-  border-radius: 8px;
-}
-html[data-ds="skillcat"] .rr-card:hover {
-  background: var(--sc-bg-raised);
-}
-html[data-ds="skillcat"] .rr-card.selected {
-  background: var(--sc-surface-row-selected);
-  box-shadow: inset 0 0 0 1px var(--sc-border-muted);
-}
-html[data-ds="skillcat"] .rr-count {
-  padding-right: 0;
-  box-shadow: none;
-  font-size: 24px;
-  font-weight: 700;
-  line-height: 29px;
-}
-html[data-ds="skillcat"] .rr-title {
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 20px;
-  color: var(--sc-text-primary);
-}
-html[data-ds="skillcat"] .rr-sub {
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 16px;
-  color: var(--sc-text-secondary);
-}
-html[data-ds="skillcat"] .rr-chevron {
-  color: var(--sc-text-secondary);
 }
 /* Rows that open a record end in a 16 chevron. */
 html[data-ds="skillcat"] .row-chevron {
@@ -2460,8 +2487,10 @@ html[data-ds="skillcat"] .pc-page .tasks-header:has(> .tasks-title) {
   margin: 0 0 24px;
   border-bottom: none;
 }
+/* No bottom margin: `.pc-body` already pads its form 32 below the tab line
+   (as in the Play Area); a 24 here stacked on top made a 56 gap. */
 html[data-ds="skillcat"] .pc-tabs {
-  margin: 0 0 24px;
+  margin: 0;
   padding: 0;
 }
 html[data-ds="skillcat"] .pc-page .form-label,
@@ -2777,6 +2806,14 @@ html[data-ds="skillcat"] .cw-price-cell {
 }
 html[data-ds="skillcat"] .cw-price-cur {
   border-right-color: var(--sc-border-default);
+}
+/* The Play Area's currency cell gets its height from 12 / 12 padding inside a
+   block `.dropdown-wrap`; with the DS's 0 / 12 it shrank to its 24 line and
+   rode at the top of the shell (USD above "$40", divider half-height). The
+   wrap stretches it to the full 38 instead, like the amount side. */
+html[data-ds="skillcat"] .cw-price-field > .selectfield > .dropdown-wrap {
+  display: flex;
+  align-items: stretch;
 }
 
 /* Toast (17013:360), Success tone with the Status check: 360 wide, min 48,

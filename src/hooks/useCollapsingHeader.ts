@@ -29,7 +29,8 @@ import { useCallback, useLayoutEffect, useRef } from "react";
  *                it can hold still (sticky left) while a wide table scrolls
  *   data-clh     "landing" | "moving" | "collapsed" on the header — the coarse
  *                state CSS can't derive (what may take focus at either end);
- *                written only when it changes
+ *                written only when it changes. "static" when the distance is
+ *                0 (the SkillCat DS: a fixed head, no collapse)
  *   --clh-nc-*   Manage Users only: the sizes the name-change card's morph
  *                into its title note needs (the card's and the note's widths,
  *                each one's count, the card's text column) — sizes text
@@ -64,8 +65,16 @@ export function useCollapsingHeader(startCollapsed = false) {
     const thead = theadRef.current;
     if (!sc || !header || !thead) return;
 
-    distance.current =
-      parseFloat(getComputedStyle(sc).getPropertyValue("--clh-d")) || DEFAULT_DISTANCE;
+    // The SkillCat DS switches the collapse off by zeroing every part, so
+    // `--clh-d` resolves to 0px there — a real distance, not a missing one
+    // (an `||` fallback turned it into 167.8 and pinned the table header that
+    // far up, behind the fixed head). Re-read on every measure: flipping the
+    // design system live resizes the header, which re-measures.
+    function readDistance() {
+      const d = parseFloat(getComputedStyle(sc!).getPropertyValue("--clh-d"));
+      distance.current = Number.isFinite(d) ? Math.max(0, d) : DEFAULT_DISTANCE;
+    }
+    readDistance();
     // Before the first paint, so a deep link never flashes the landing. The
     // canvas is always at least one distance taller than the scrollport, so
     // this lands fully collapsed however short the list is.
@@ -87,7 +96,16 @@ export function useCollapsingHeader(startCollapsed = false) {
 
     function apply() {
       const s = Math.max(0, sc!.scrollTop);
-      const next = s <= 0 ? "landing" : s >= distance.current ? "collapsed" : "moving";
+      // No distance (SkillCat DS): one fixed head at every scroll offset —
+      // never "collapsed", which would hide the Users banner mid-scroll.
+      const next =
+        distance.current <= 0
+          ? "static"
+          : s <= 0
+            ? "landing"
+            : s >= distance.current
+              ? "collapsed"
+              : "moving";
       if (next !== state) {
         state = next;
         header!.dataset.clh = next;
@@ -106,6 +124,16 @@ export function useCollapsingHeader(startCollapsed = false) {
     // resize or a content change (a filter row that wraps) — so this runs
     // rarely, and writes only when something really moved.
     function measure() {
+      const before = distance.current;
+      readDistance();
+      if (distance.current !== before) {
+        if (scripted) {
+          const dn = String(distance.current);
+          header!.style.setProperty("--clh-dn", dn);
+          thead!.style.setProperty("--clh-dn", dn);
+        }
+        apply();
+      }
       const h = header!.getBoundingClientRect().height - distance.current;
       if (Math.abs(h - stick) > 0.5) {
         stick = h;
