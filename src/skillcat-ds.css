@@ -1762,46 +1762,10 @@ html[data-ds="skillcat"] .toggle {
 html[data-ds="skillcat"] .toggle.on {
   background: var(--sc-primary);
 }
-/* The boxed option tables inside wizard steps (Media file types, Force app
-   update…): the DS card table — 1px #404040 on radius 8, a 40 header in
-   Regular 12 grey, rows on 50% dividers, name SemiBold 14 white, line 14
-   grey. */
-html[data-ds="skillcat"] .wizard .qsec {
-  border: 1px solid var(--sc-border-default);
-  border-radius: 8px;
-  overflow: hidden;
-}
-html[data-ds="skillcat"] .wizard .qsec-hd {
-  min-height: 32px;
-  padding: 8px 12px;
-  background: var(--sc-surface-row-hover-subtle);
-  border-bottom: 1px solid var(--sc-border-default);
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 20px;
-  color: var(--sc-text-primary);
-}
-html[data-ds="skillcat"] .wizard .qsec-row {
-  padding: 12px;
-  border-bottom: 1px solid var(--sc-border-divider);
-}
-html[data-ds="skillcat"] .wizard .qsec-row:last-child {
-  border-bottom: none;
-}
-html[data-ds="skillcat"] .wizard .qsec-secname,
-html[data-ds="skillcat"] .wizard .qsec-name {
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 20px;
-  color: var(--sc-text-primary);
-}
-html[data-ds="skillcat"] .wizard .qsec-revsub,
-html[data-ds="skillcat"] .wizard .qsec-sub {
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 18px;
-  color: var(--sc-text-secondary);
-}
+/* The boxed option tables inside wizard steps (Quiz Sections, Media File
+   Types…) are NOT restyled in this look: they keep the Play Area's Card Table
+   base (index.css, 710:1083), the same card Completion Criteria draws —
+   Eshwar 2026-11-04: "Have it use that itself". */
 /* Dual-language upload: one bordered card holding an EN and an ES column,
    each a dashed drop zone — icon 16, "Drag and drop, or click to upload" 14
    white, the accepted-types line 12 grey. */
@@ -2490,8 +2454,8 @@ html[data-ds="skillcat"] .spc-rail {
 }
 
 /* ===== Eric's "Product config" (1:3731) =====
-   Eshwar's comment: the boxed tables (Force app update, App deep links…)
-   are the DS card table — the same card the wizard's option tables use. */
+   The boxed tables (Force App Update, App Deep Links…) are the Play Area's
+   Card Table, unstyled here (Eshwar 2026-11-04). */
 html[data-ds="skillcat"] .pc-page .tasks-header,
 html[data-ds="skillcat"] .pc-page .tasks-header:has(> .tasks-title) {
   min-height: 0;
@@ -2517,64 +2481,9 @@ html[data-ds="skillcat"] .pc-page .form-help {
   line-height: 20px;
   color: var(--sc-text-secondary);
 }
-html[data-ds="skillcat"] .pc-page .qsec,
-html[data-ds="skillcat"] .pc-page .ct-prop {
-  border: 1px solid var(--sc-border-default);
-  border-radius: 8px;
-  overflow: hidden;
-  margin-bottom: 12px;
-}
-html[data-ds="skillcat"] .pc-page .qsec-hd {
-  min-height: 40px;
-  padding: 10px 12px;
-  background: var(--sc-surface-row-hover-subtle);
-  border-bottom: 1px solid var(--sc-border-default);
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 20px;
-  color: var(--sc-text-primary);
-}
-html[data-ds="skillcat"] .pc-page .qsec-row {
-  min-height: 40px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--sc-border-divider);
-  font-size: 14px;
-  line-height: 20px;
-  color: var(--sc-text-secondary);
-}
-html[data-ds="skillcat"] .pc-page .qsec-row:last-child {
-  border-bottom: none;
-}
-html[data-ds="skillcat"] .pc-page .qsec-row .pc-strong,
-html[data-ds="skillcat"] .pc-page .qsec-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--sc-text-primary);
-}
-html[data-ds="skillcat"] .pc-page .qsec-foot {
-  padding: 8px 12px;
-  border-top: 1px solid var(--sc-border-divider);
-}
-html[data-ds="skillcat"] .pc-page .qsec-add {
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 20px;
-  color: var(--sc-text-primary);
-}
-html[data-ds="skillcat"] .pc-page .qsec-add svg {
-  width: 16px;
-  height: 16px;
-}
-html[data-ds="skillcat"] .pc-page .qsec-x {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  color: var(--sc-text-secondary);
-}
-html[data-ds="skillcat"] .pc-page .qsec-x svg {
-  width: 16px;
-  height: 16px;
-}
+/* Product Config's lists (Force App Update, App Deep Links, Tabs, Support
+   Pages, option lists) keep the Play Area's Card Table — no override here,
+   same as the wizard tables above (2026-11-04). */
 html[data-ds="skillcat"] .pc-page .deeplink-slug {
   font-family: var(--font-mono);
   font-size: 14px;

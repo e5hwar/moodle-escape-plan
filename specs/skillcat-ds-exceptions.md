@@ -124,6 +124,8 @@ Every list page, row-menu screen, wizard step, modal, console, preview panel, At
 
 - Field label → control is 8 everywhere, as Field (17062:672 / 17012:470) draws it. The look's label rules restated the base 8 bottom margin and so beat every container that zeroes it because a flex gap spaces the field: the Hands-on / Exam review Score and Feedback labels sat 16 over their controls, and label rows with a pill and toggle fields picked up a stray 8 (Eshwar, 2026-11-04).
 
+- Card tables are NOT restyled in this look (Eshwar, 2026-11-04: "Have it use that itself"). Product Config's lists (Force App Update, What's New Page, App Deep Links, Tabs, Support Pages, option lists) and the wizard `.qsec` tables (Quiz Sections, Media File Types…) had a DS card override — 1px #404040 border, r8, filled 40 header, bold names; it is deleted, so they draw the Play Area's Card Table base (710:1083) exactly like Completion Criteria.
+
 **Checked and left as is** (deliberate DS sizes, not drift): the dual-language upload's English / Español labels sit at the start (Field label) rather than centred; wizard content is 40 inset while the footer ✕ sits at 24 + its 32 box; the Question bank Categories head is a left label with the add button at the far right; Product config's ✕ is a 28 ghost box.
 
 ## Fixes (Eshwar, 2026-11-04)
