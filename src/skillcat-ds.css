@@ -1011,16 +1011,24 @@ html[data-ds="skillcat"] .tab[aria-selected="true"]::after {
    Mono Regular 16 white, placeholder #8A8A8A, border #404040 → hover
    #7A7A7A → focus #FCFCFC with an orange caret; error #FF1F17, warning
    #FFC524; read-only on a 14% grey wash with a 16 lock. Multiline min 142. */
+/* No margin here: index.css's base label already leaves 8 under it, and
+   setting it at this weight beat every container that zeroes it because a
+   flex gap does the spacing (review console Score / Feedback, label rows with
+   a pill, toggle fields) — the label sat 16 over its control (2026-11-04). */
 html[data-ds="skillcat"] .form-label,
 html[data-ds="skillcat"] .form-sub-label {
   font-size: 16px;
   font-weight: 700;
   line-height: 20px;
   color: var(--sc-text-secondary);
-  margin-bottom: 8px;
 }
 html[data-ds="skillcat"] .form-label .req {
   color: var(--sc-primary);
+}
+/* The two contexts whose Play Area label margin isn't 8 (Spotlight sections
+   10, `.pm-field` 6) keep the Field's 8 in this look. */
+html[data-ds="skillcat"] :is(.sp-section, .pm-field) .form-label {
+  margin-bottom: 8px;
 }
 html[data-ds="skillcat"] .form-input,
 html[data-ds="skillcat"] .form-select {
@@ -1418,6 +1426,10 @@ html[data-ds="skillcat"] .wizard .prm-label {
   font-weight: 700;
   line-height: 20px;
   color: var(--sc-text-secondary);
+}
+/* Only `.prm-label` needs the 8 set here — `.form-label`'s comes from its
+   base rule (see the Field note above). */
+html[data-ds="skillcat"] .wizard .prm-label {
   margin-bottom: 8px;
 }
 html[data-ds="skillcat"] .wizard .form-label .req,

@@ -122,6 +122,8 @@ Every list page, row-menu screen, wizard step, modal, console, preview panel, At
 
 - Question editor (and the Task wizard's field stacks): fields sat 56 apart — the look's 24 field margin landed on top of the stack's 32 gap. Every wizard field is now 24 from the next, as in the Skill / Certification / Company wizards; sections stay 40 apart (Eshwar, 2026-11-04). Product config keeps its 32.
 
+- Field label → control is 8 everywhere, as Field (17062:672 / 17012:470) draws it. The look's label rules restated the base 8 bottom margin and so beat every container that zeroes it because a flex gap spaces the field: the Hands-on / Exam review Score and Feedback labels sat 16 over their controls, and label rows with a pill and toggle fields picked up a stray 8 (Eshwar, 2026-11-04).
+
 **Checked and left as is** (deliberate DS sizes, not drift): the dual-language upload's English / Español labels sit at the start (Field label) rather than centred; wizard content is 40 inset while the footer ✕ sits at 24 + its 32 box; the Question bank Categories head is a left label with the add button at the far right; Product config's ✕ is a 28 ghost box.
 
 ## Fixes (Eshwar, 2026-11-04)
