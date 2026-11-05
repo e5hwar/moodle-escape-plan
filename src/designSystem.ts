@@ -94,3 +94,11 @@ export function useDsText(): (s: string) => string {
   const ds = useDesignSystem();
   return (s: string) => dsText(ds, s);
 }
+
+/** Trigger → menu gap for hand-placed menus (row "More" menus, context
+ *  menus): the SkillCat DS opens every menu 4 from its control; the other
+ *  looks keep their own gap. Read at open time, so a look switch applies on
+ *  the next open. */
+export function menuGap(fallback = 6): number {
+  return getDesignSystem() === "skillcat" ? 4 : fallback;
+}

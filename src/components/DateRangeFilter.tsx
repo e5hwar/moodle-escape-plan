@@ -689,6 +689,8 @@ function RangeCalendar({
             if (isStart) cls.push("is-start");
             if (isEnd) cls.push("is-end");
             if (isStart && !endISO) cls.push("is-solo");
+            // Date Picker "Today": the orange digit (SkillCat DS only styles it).
+            if (iso === todayISO) cls.push("is-today");
             return (
               <button
                 type="button"

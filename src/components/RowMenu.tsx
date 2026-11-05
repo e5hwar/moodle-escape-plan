@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { RowKebabIcon } from "./icons";
-import { useDsText } from "../designSystem";
+import { useDsText, menuGap } from "../designSystem";
 
 /* Row actions for a table whose actions all live in a menu — the Full
    Profile's card tables (Figma 1278:1571). */
@@ -46,8 +46,8 @@ export function RowMenu({
     const el = ref.current;
     if (!el) return;
     const h = el.offsetHeight;
-    let top = rect.bottom + 6;
-    if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 6);
+    let top = rect.bottom + menuGap();
+    if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - menuGap());
     setPos({ top });
   }, [rect]);
 
@@ -72,7 +72,7 @@ export function RowMenu({
       ref={ref}
       className={`u-menu${className ? ` ${className}` : ""}`}
       style={{
-        top: pos ? pos.top : rect.bottom + 6,
+        top: pos ? pos.top : rect.bottom + menuGap(),
         right: window.innerWidth - rect.right,
         visibility: pos ? "visible" : "hidden",
       }}

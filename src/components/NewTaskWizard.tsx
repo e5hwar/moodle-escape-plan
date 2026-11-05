@@ -4798,13 +4798,16 @@ function UploadLangColumn({
       ) : single ? (
         <SingleFileCard file={files[0]} onRemove={() => setFiles([])} />
       ) : (
-        <>
+        /* Upload / File · Panel with files (17596:4686): in the SkillCat DS one
+           dashed panel holds the file rows and the add area; the Play Area
+           lays the two out as before (`display: contents`). */
+        <div className="upload-files">
           <FileList
             files={files}
             onRemove={(idx) => setFiles(files.filter((_, i) => i !== idx))}
           />
           <SlimDrop onAdd={(picked) => setFiles([...files, ...picked])} />
-        </>
+        </div>
       )}
     </div>
   );

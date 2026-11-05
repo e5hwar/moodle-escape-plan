@@ -1,4 +1,4 @@
-import { useDsText } from "../designSystem";
+import { useDsText, menuGap } from "../designSystem";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   attemptCount,
@@ -1648,7 +1648,7 @@ export function QuestionBankPage({
             <div className="ind-menu-backdrop" onClick={() => setCatMenu(null)} />
             <div
               className={`u-menu ind-row-menu qb-cat-menu${catMenu.start ? " qb-cat-menu--start" : ""}`}
-              style={{ top: catMenu.y + 6, left: catMenu.x }}
+              style={{ top: catMenu.y + menuGap(), left: catMenu.x }}
               onClick={(e) => e.stopPropagation()}
             >
               <button
@@ -2415,8 +2415,8 @@ function QuestionActionsMenu({
     const el = ref.current;
     if (!el) return;
     const h = el.offsetHeight;
-    let top = rect.bottom + 6;
-    if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 6);
+    let top = rect.bottom + menuGap();
+    if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - menuGap());
     /* Right-anchored to the trigger — the kebab is the action bar's last cell,
        so the open menu's right edge lines up with the bar's. Using `right`
        rather than (rect.right - measuredWidth) keeps that exact: the first-pass
@@ -2494,7 +2494,7 @@ function QuestionActionsMenu({
       ref={ref}
       className="u-menu qb-row-menu"
       style={{
-        top: pos ? pos.top : rect.bottom + 6,
+        top: pos ? pos.top : rect.bottom + menuGap(),
         right: window.innerWidth - rect.right,
         visibility: pos ? "visible" : "hidden",
       }}

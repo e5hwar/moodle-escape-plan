@@ -1,4 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { getDesignSystem } from "../designSystem";
+
+/* Trigger → tooltip gap: 8 in the SkillCat DS (Tooltip 18839:2938), 6 elsewhere. */
+const tipGap = () => (getDesignSystem() === "skillcat" ? 8 : 6);
 
 // Faster than the browser's native `title` delay (~500ms). Any element with a
 // non-empty `data-tip` attribute gets this tooltip; `\n` renders as line breaks.
@@ -192,8 +196,8 @@ export function HoverTooltip() {
         // The head labels the tip's list — gone when only a copy line is left.
         head: text === el.getAttribute("data-tip") ? el.getAttribute("data-tip-head") : null,
         anchor: nearRight ? window.innerWidth - r.right : r.left,
-        below: r.bottom + 6,
-        above: r.top - 6,
+        below: r.bottom + tipGap(),
+        above: r.top - tipGap(),
         align: nearRight ? "right" : "left",
         prefer: el.getAttribute("data-tip-place") === "above" ? "above" : "below",
       });

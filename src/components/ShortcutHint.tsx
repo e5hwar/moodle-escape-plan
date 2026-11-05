@@ -1,6 +1,7 @@
 import { useDsText } from "../designSystem";
 import { createPortal } from "react-dom";
 import { useHoverCard } from "../hooks/useHoverCard";
+import { getDesignSystem } from "../designSystem";
 
 /* ── Keyboard-shortcut hover hint (Figma 437:638) ─────────────────────────────
    For controls whose shortcut isn't printed on them (unlike View Queue, which
@@ -26,6 +27,7 @@ export function ShortcutHint({
   // Flips above anything in the lower third of the window — these hints hang
   // off footer controls, where there's never room below.
   const { anchorRef, pos, open, close, hold } = useHoverCard({
+    gap: getDesignSystem() === "skillcat" ? 8 : 6,
     width: CARD_WIDTH,
     flipBelow: 120,
   });

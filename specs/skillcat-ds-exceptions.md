@@ -140,3 +140,32 @@ Every list page, row-menu screen, wizard step, modal, console, preview panel, At
 ## Not restyled yet (still the Play Area look under the SkillCat switch)
 
 Banners other than the Certifications setup banner and the Users name-change banner, `NoteCard` / `TableCard` / `ListCard` surfaces, skeleton ghosts, and page-specific `.xx-*` surfaces that have no DS counterpart. Their sizes don't clash with the Compact controls (the sweep found no overlaps), but their fills and type are still the Play Area's.
+
+## Component audit (2026-11-05)
+
+Every component on Figma "03 · Components" (17007:4) was compared with the code at Compact, including the Play Area context rules that outrank the DS ones, then checked live with a headless sweep (17 routes, every menu kind and submenu, the selects inside every row-menu modal and header page, whole-page alignment, hover states).
+
+- **Sidebar** is its own markup in this look (`DsSidebar`, `.dsb*`, 18945:4167): no hover peek; Expanded 240 / Collapsed 64 as drawn.
+- **Menus open 4 from their control everywhere**, down, up or to the side: Dropdown overlays and the hand-placed row menus read `menuGap()` (designSystem.ts), submenus sit 4 clear of their menu, `.dropdown.up` no longer carries both top and bottom.
+- Menu rows (More Filters, Edit Columns' fixed rows, the builder's menus, paragraph / month menus) are 36 / 8 / r8 / Regular 16; destructive #FF1F17; disabled #737373 without opacity; ticked rows SemiBold with the 15% hover; menu search 8 / 12 over a 1px line.
+- Inputs keep error / warning borders on hover and focus (+ grey ring); disabled #404040; read-only has no hover edge; Select chevron 16 grey and flips open.
+- Date Picker: Mono Regular days, 10% band, ends = band on the inner half + ring, Medium 12 weekdays, 28 nav, no footer rule, 0 8 12 shadow.
+- Buttons: Secondary 30% (40% hover), Pressed on every tone, focus rings; Destructive / Positive over 75% black; modal Primary / Positive now have hover. Ghost icon buttons hover #2E2E2E (pressed #222); kebab 28; pagination 28 with solid #404040 disabled.
+- Table: sort = stroked chevrons (grey unsorted, white sorted), last row keeps its divider, no row-end ramp, group rows a 5% band, No-results state Bold 20 / Regular 14, TableCard 5% card.
+- Modal: header centred, close 28, subtitle Regular 14, footer without a rule and right-aligned, widths 448 / 640 / 960.
+- Banners and every NoteCard: tone over opaque #0d0d0d in a 1px edge, 12 / 16, grey icon, count divider 1px white 16%, bare 16 close.
+- Upload zones: one dashed #7A7A7A outline, padding 40, icon 20, grey prompt, no hover, orange Drag over. Status Label tones and Chip line-heights per the DS.
+
+**Kept on earlier rulings** (the component differs): modal buttons stay 32 (Eric's Delete task screen; the Dialog draws Button Large 40); the boxed card tables (`.qsec`, `.qz`, Completion Criteria…) stay on the Play Area card base (Eshwar 2026-11-04); the list-banner count stays 32; the row hover bar keeps its own cells.
+
+**Follow-ups done the same day:**
+- Picked images (single-image fields and Create Spotlight's background image) are Upload / File · Preview=On: one dashed outline, 20 / 24 padding, 74×80 thumbnail, 16 to the name and size, the 28 remove at the row's end (122 tall).
+- Remaining icon buttons are Icon Buttons: panel / modal closes Ghost Circle 28, fullscreen-viewer closes Ghost Circle 32, ID zoom Ghost Square 32, prev / next Secondary Square 32, the Spotlight preview ✕ Secondary Circle 28 (it sits on an image), and the inline glyphs (hover-card copy, note-card icon, builder kebabs) a 28 Ghost box hung 6 past the glyph so nothing moves. (`ProctoringDetailModal.tsx`, which held the prev / next / zoom / close set, is not imported anywhere.)
+- Payment tags: Paid / Consumable = Accent, Non-Consumable = Purple (green would read as a status), Free = Neutral.
+- A multi-select option that can't be picked ("On another page", "Add to this Certification first") is a Menu / Item Disabled with its reason under the label — the row menus' look — not the plan-locked tone.
+
+**Compact pass from the density variables (2026-11-05).** Figma's "Unified · Density" collection has a Compact mode; these values now drive the look where they differed: search value mono 16 / 24 (input-size), EN / ES rows 38 (bilingual-row-height), modal description Fira Sans Regular 14 / 20 and no extra space above the actions (modal-description-font / modal-actions-top), toast padding 12 with no min height, banner count 32 (matches). Also per Figma: the select-menu Create row (line + 8 wrapper + 36 row), the menu empty hint, one dashed panel for uploaded files + add area, the date picker's Start – End inputs without labels, today's date in orange, the lock on read-only inputs, the wide form modal at 960, no hover on the dashed filter chips, one 0 / 6 shortcut box for grouped keys, and Product Config's field labels grey like every Field / Label.
+
+**Card tables now follow the DS** (Eshwar 2026-11-05, replaces the 2026-11-04 ruling): Table · Small inside a card — 5% card, 1px divider edge, radius 8, 8 / 16 inside, rows inset 12. The head row is a field-name heading, so it uses Field / Label (Bold 16 / 20 grey) over the solid #404040 line. Its words keep their capitals because they are written that way in the copy.
+
+**Still on rulings:** dialog buttons 32 (Button Medium; Figma's Dialog uses Large = 40 in Compact); list-page tables 40 (Figma: 48 on pages, Small 40 only inside cards and dialogs; Eshwar reconfirmed 40 on 2026-11-05).

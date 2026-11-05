@@ -350,7 +350,9 @@ function SelectMenu<T extends string>({
       })}
       {shown.length === 0 && (
         <div className="ms-menu-empty">
-          {query.trim() ? `No matches for “${query.trim()}”` : emptyText ?? "No matches"}
+          <span className="ms-menu-empty-title">{query.trim() ? `No matches for “${query.trim()}”` : emptyText ?? "No matches"}</span>
+          {/* Menu · Show empty (17779:4049) hint — SkillCat DS only (hidden in index.css). */}
+          {query.trim() && <span className="ms-menu-empty-hint">Try a different search.</span>}
         </div>
       )}
     </div>

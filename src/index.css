@@ -4876,6 +4876,12 @@ tbody td[data-copyable][data-copy][data-copied]::after {
 
 /* Uploaded-file row (Figma 776:1434): 47px tall — 8/12 padding around a 31px
    content row — on a grey wash, NOT the darker --bg-pill hole. */
+/* Wrapper around a file list + its add-more strip: no box of its own here
+   (the SkillCat DS draws it as one dashed panel). */
+.upload-files {
+  display: contents;
+}
+
 .file-row {
   display: flex;
   align-items: center;
@@ -17910,6 +17916,10 @@ body:has(.pm-overlay) .pl-copied-toast {
   flex: none;
   width: 16px;
   height: 16px;
+}
+/* The empty-state hint line belongs to the SkillCat DS Menu (skillcat-ds.css shows it). */
+.ms-menu-empty-hint {
+  display: none;
 }
 .ms-menu-empty {
   /* Sits on the rows' own 8px inset — 35px, like a row (934:1116). */

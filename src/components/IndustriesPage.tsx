@@ -1,4 +1,4 @@
-import { useDsText } from "../designSystem";
+import { useDsText, menuGap } from "../designSystem";
 import { useListState } from "../hooks/useListState";
 import {
   Fragment,
@@ -890,7 +890,7 @@ export function IndustriesPage({
           <div className="ind-menu-backdrop" onClick={() => setMenu(null)} />
           <div
             className="u-menu ind-row-menu"
-            style={{ top: menu.y + 6, left: menu.x }}
+            style={{ top: menu.y + menuGap(), left: menu.x }}
             onClick={(e) => e.stopPropagation()}
           >
             <button
@@ -1745,7 +1745,7 @@ function CertList({
         <div className="ind-menu-backdrop" onClick={() => setMenu(null)} />
         <div
           className="u-menu ind-row-menu"
-          style={{ top: menu.y + 6, left: menu.x }}
+          style={{ top: menu.y + menuGap(), left: menu.x }}
           onClick={(e) => e.stopPropagation()}
         >
           <button

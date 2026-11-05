@@ -1,4 +1,4 @@
-import { useDsText } from "../designSystem";
+import { useDsText, menuGap } from "../designSystem";
 /* Shared table chrome for the two Award tables — the Awards list on the Awards
    page and the Award Templates tab on Product Config. They were one page with
    two tabs until the Templates tab moved to Product Config; these parts are
@@ -88,8 +88,8 @@ export function ActionsMenu({
     const el = ref.current;
     if (!el) return;
     const h = el.offsetHeight;
-    let top = rect.bottom + 6;
-    if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 6);
+    let top = rect.bottom + menuGap();
+    if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - menuGap());
     setPos({ top, right: Math.max(8, window.innerWidth - rect.right) });
   }, [rect]);
 
@@ -122,7 +122,7 @@ export function ActionsMenu({
       ref={ref}
       className="u-menu"
       style={{
-        top: pos ? pos.top : rect.bottom + 6,
+        top: pos ? pos.top : rect.bottom + menuGap(),
         right: window.innerWidth - rect.right,
         visibility: pos ? "visible" : "hidden",
       }}

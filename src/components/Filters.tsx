@@ -1,4 +1,4 @@
-import { useDsText } from "../designSystem";
+import { useDsText, getDesignSystem } from "../designSystem";
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from "react";
 import { Dropdown } from "./Dropdown";
 import { useTipWhileClosed } from "./HoverTooltip";
@@ -660,7 +660,10 @@ const SUBMENU_WIDTH_DATE = 648;
    "None · Not used in any Quiz Task" wraps onto a second line (Figma 1201:2151
    is 384px). Mirrored by .cascading-sub--wide. */
 const SUBMENU_WIDTH_WIDE = 384;
-const SUBMENU_GAP = 6;
+/* Side margin between a menu and its submenu: 6, or 5 in the SkillCat DS —
+   the submenu hangs off the list inside the 1px border, so 5 reads as 4.
+   Mirrors `.cascading-sub` margin-left in each look's CSS. */
+const submenuGap = () => (getDesignSystem() === "skillcat" ? 5 : 6);
 const VIEWPORT_MARGIN = 8;
 
 /** One row of a "More Filters" menu — hovering it opens its checklist alongside. */
@@ -783,7 +786,7 @@ export function CascadingMultiSelect({
       : section?.hints
         ? SUBMENU_WIDTH_WIDE
         : SUBMENU_WIDTH;
-    const needed = width + SUBMENU_GAP + VIEWPORT_MARGIN;
+    const needed = width + submenuGap() + VIEWPORT_MARGIN;
     // Only flip when the left side actually has the room the right side lacks.
     const flipped = right + needed > window.innerWidth && left - needed >= 0;
     setFlip(flipped);
@@ -793,7 +796,7 @@ export function CascadingMultiSelect({
        scroll the page sideways. */
     const overhang = flipped
       ? 0
-      : right + SUBMENU_GAP + width + VIEWPORT_MARGIN - window.innerWidth;
+      : right + submenuGap() + width + VIEWPORT_MARGIN - window.innerWidth;
     setShift(overhang > 0 ? -overhang : 0);
   }, [hovered, sections]);
 
@@ -827,7 +830,7 @@ export function CascadingMultiSelect({
             className={`cascading-sub ${openSection.date ? "cascading-sub--date" : ""} ${
               openSection.hints ? "cascading-sub--wide" : ""
             } ${flip ? "is-left" : ""}`}
-            style={shift ? { top: hoveredTop, marginLeft: SUBMENU_GAP + shift } : { top: hoveredTop }}
+            style={shift ? { top: hoveredTop, marginLeft: submenuGap() + shift } : { top: hoveredTop }}
           >
             {openSection.date ? (
               /* The range panel owns its own Apply, so this submenu renders no

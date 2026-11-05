@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { menuGap } from "../designSystem";
 
 type TriggerArgs = { open: boolean; toggle: () => void };
 
@@ -38,7 +39,9 @@ type Props = {
   constrainHeight?: boolean;
 };
 
-const GAP = 8;
+/* Trigger → panel gap: 8 in the Play Area, 4 in the SkillCat DS (the same 4
+   its CSS gives in-place panels, so every menu sits 4 below its control). */
+const gap = () => menuGap(8);
 const EDGE = 4;
 /** Room below that's enough to open downward with a scrolling list rather
  *  than flip up: an in-place panel flipped up can land under the page header's
@@ -110,8 +113,8 @@ function shrinks(panel: HTMLElement): boolean {
  *  above only when below is cramped and above has more (an `up` panel the
  *  reverse). Capped to the room on the side it takes — its list scrolls. */
 function fit(t: DOMRect, b: DOMRect, natural: number, up: boolean, shrinks: boolean) {
-  const roomBelow = b.bottom - t.bottom - GAP - EDGE;
-  const roomAbove = t.top - b.top - GAP - EDGE;
+  const roomBelow = b.bottom - t.bottom - gap() - EDGE;
+  const roomAbove = t.top - b.top - gap() - EDGE;
   // A panel with nothing to scroll (a calendar) is never capped — it opens on
   // the side it fits, or the roomier one.
   if (!shrinks) {
@@ -192,7 +195,7 @@ export function Dropdown({
       panel.style.maxHeight = capped;
 
       const { goUp, h } = fit(t, b, natural, direction === "up", shrinks(panel));
-      let top = goUp ? t.top - GAP - h : t.bottom + GAP;
+      let top = goUp ? t.top - gap() - h : t.bottom + gap();
       top = Math.max(b.top + EDGE, Math.min(top, b.bottom - h - EDGE));
 
       let left = (align === "right" ? t.right - w : t.left) + offsetX;

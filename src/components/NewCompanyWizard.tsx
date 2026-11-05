@@ -1,4 +1,4 @@
-import { useDsText } from "../designSystem";
+import { useDsText, getDesignSystem } from "../designSystem";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   BILLING_CYCLES,
@@ -3299,8 +3299,8 @@ function MultiSelectMenu({
           and bottom, so five land exactly on the fifth row's edge and the
           clipped sixth reads as "there is more below". Shorter lists still
           collapse to their own height; the search header above stays put
-          either way. */}
-      <div className="dropdown-list" style={{ maxHeight: 5 * 35 + 16 }}>
+          either way. SkillCat DS rows are 36. */}
+      <div className="dropdown-list" style={{ maxHeight: 5 * (getDesignSystem() === "skillcat" ? 36 : 35) + 16 }}>
         {options.map((opt) => {
           const lock = locked?.[opt];
           if (lock) {
@@ -3336,7 +3336,9 @@ function MultiSelectMenu({
         })}
         {options.length === 0 && (
           <div className="ms-menu-empty">
-            {query.trim() ? `No matches for “${query.trim()}”` : "No matches"}
+            <span className="ms-menu-empty-title">{query.trim() ? `No matches for “${query.trim()}”` : "No matches"}</span>
+            {/* Menu · Show empty (17779:4049) hint — SkillCat DS only (hidden in index.css). */}
+            {query.trim() && <span className="ms-menu-empty-hint">Try a different search.</span>}
           </div>
         )}
       </div>

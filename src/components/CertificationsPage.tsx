@@ -1,6 +1,6 @@
 /* Every Certification's panel shows a thumbnail: its own, else this sample
    (Figma 1585:1620) as a placeholder until the seed carries real ones. */
-import { useDsText } from "../designSystem";
+import { useDsText, menuGap } from "../designSystem";
 import certThumbPlaceholder from "../assets/cert-thumb-sample.jpg";
 import { contentLinksFor, type Link } from "../data/contentLinks";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
@@ -1585,8 +1585,8 @@ function CertActionsMenu({
     const el = ref.current;
     if (!el) return;
     const h = el.offsetHeight;
-    let top = rect.bottom + 6;
-    if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 6);
+    let top = rect.bottom + menuGap();
+    if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - menuGap());
     setPos({ top, right: Math.max(8, window.innerWidth - rect.right) });
   }, [rect]);
 
@@ -1652,7 +1652,7 @@ function CertActionsMenu({
       ref={ref}
       className="u-menu"
       style={{
-        top: pos ? pos.top : rect.bottom + 6,
+        top: pos ? pos.top : rect.bottom + menuGap(),
         right: window.innerWidth - rect.right,
         visibility: pos ? "visible" : "hidden",
       }}

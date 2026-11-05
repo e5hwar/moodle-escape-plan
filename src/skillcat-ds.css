@@ -14,6 +14,8 @@
  * ============================================================= */
 
 html[data-ds="skillcat"] {
+  /* Play Area menus tint rows with this solid #2e2e2e; the DS tint is 10% grey. */
+  --panel-row-hover: var(--sc-surface-row-hover);
   /* Semantic colors (Foundations › Color, 18192:36) */
   --sc-bg-canvas: #0d0d0d;
   --sc-bg-surface: #1b1b1b;
@@ -57,8 +59,9 @@ html[data-ds="skillcat"] {
 
   /* The button / chip fills are a tint composited on #0d0d0d (Glass Flat). */
   --sc-fill-primary: linear-gradient(0deg, rgba(138, 49, 20, 0.75) 0%, rgba(240, 85, 35, 0.75) 70.9%), rgba(13, 13, 13, 0.75);
-  --sc-fill-secondary: linear-gradient(var(--sc-surface-control-strong), var(--sc-surface-control-strong)), #0d0d0d;
-  --sc-fill-secondary-hover: linear-gradient(var(--sc-surface-control-hover), var(--sc-surface-control-hover)), #0d0d0d;
+  /* Button / Secondary (17011:187): 30% grey on #0d0d0d, 40% on hover. */
+  --sc-fill-secondary: linear-gradient(var(--sc-surface-control-hover), var(--sc-surface-control-hover)), #0d0d0d;
+  --sc-fill-secondary-hover: linear-gradient(rgba(122, 122, 122, 0.4), rgba(122, 122, 122, 0.4)), #0d0d0d;
   --sc-fill-glass: linear-gradient(var(--sc-surface-control-strong), var(--sc-surface-control-strong)), #0d0d0d;
   --sc-shadow-menu: 0 8px 24px rgba(0, 0, 0, 0.4);
 
@@ -178,14 +181,15 @@ html[data-ds="skillcat"] .tasks.clh .toolbar .usearch-bar:focus-within {
   border-color: var(--sc-border-focus);
 }
 /* The landing pages' big search text (index.css: 20 on `.tasks.clh`, a
-   16–20 calc on `.tasks.lm`) leaked through at 20 — the DS value is mono 14. */
+   16–20 calc on `.tasks.lm`) leaked through at 20 — the DS value is the
+   Compact Field / Value, mono 16 / 24 (density/input-size). */
 html[data-ds="skillcat"] .tasks.clh .toolbar .usearch-input,
 html[data-ds="skillcat"] .tasks.clh .toolbar .usearch-input::placeholder,
 html[data-ds="skillcat"] .tasks.lm .toolbar .usearch-input,
 html[data-ds="skillcat"] .tasks.lm .toolbar .usearch-input::placeholder,
 html[data-ds="skillcat"] .tasks.lm .toolbar .search-input::placeholder {
-  font-size: 14px;
-  line-height: 18px;
+  font-size: 16px;
+  line-height: 24px;
 }
 html[data-ds="skillcat"] .tasks.lm .toolbar .usearch-kbd .kbd-letter {
   font-size: 12px;
@@ -265,54 +269,126 @@ html[data-ds="skillcat"] .app {
 }
 
 /* ===== Sidebar (18945:4167 — pinned Compact) =====
-   240 expanded / 64 collapsed on bg/surface, 24 top, 16 sides, 16 bottom.
-   Rows are Menu / Item Tone Subtle: 36 min, padding 8, radius 8, Regular 14
-   grey; current = 10% tint + SemiBold white. Section labels are plain 14 grey
-   rows, 28 tall, with an 8 gap before them. */
+   Its own markup (`DsSidebar`, `.dsb*`): 240 expanded / 64 collapsed on
+   bg/surface, 24 top, 16 bottom, 16 sides (12 collapsed), 4 between blocks.
+   No hover peek — the top-row toggle is the only way to open or close it.
+   Expanded rows are Menu / Item Tone Subtle (36 min, padding 8, radius 8,
+   Regular 14 grey; current = 10% tint + SemiBold white). Collapsed rows are
+   Ghost Icon Buttons 32 / 8 apart (current = Secondary); a 36 Section gap
+   stands where Expanded has a section label. */
 html[data-ds="skillcat"] .sidebar-host--wide {
   width: 240px;
 }
 html[data-ds="skillcat"] .sidebar-host--narrow {
   width: 64px;
 }
-html[data-ds="skillcat"] .sidebar {
-  background: var(--sc-bg-surface);
-  border-right: none;
-  padding: 24px 16px 16px;
+.dsb {
+  display: flex;
+  flex-direction: column;
   gap: 4px;
+  width: 100%;
+  height: 100%;
+  padding: 24px 16px 16px;
+  background: var(--sc-bg-surface);
+  font-family: var(--font-sans);
+  overflow: hidden;
 }
-html[data-ds="skillcat"] .sidebar--collapsed {
-  padding: 24px 12px 16px;
+.dsb--collapsed {
   align-items: center;
+  padding: 24px 12px 16px;
 }
-html[data-ds="skillcat"] .sidebar__header {
-  padding: 0 0 12px 8px;
-  border-bottom: none;
-  margin-bottom: 12px;
-}
-html[data-ds="skillcat"] .sidebar__top-collapsed {
-  justify-content: center;
-  padding: 0 0 12px;
-  border-bottom: none;
-  margin-bottom: 12px;
-}
-html[data-ds="skillcat"] .sidebar__brand img,
-html[data-ds="skillcat"] .sidebar__logo-btn img {
+.dsb img {
   width: 24px;
   height: 24px;
+  flex-shrink: 0;
 }
-html[data-ds="skillcat"] .sidebar__nav,
-html[data-ds="skillcat"] .sidebar__nav-collapsed {
+.dsb svg {
+  display: block;
+  flex-shrink: 0;
+}
+/* Top row — Expanded: logo, workspace name, collapse (28). */
+.dsb__workspace {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0 0 12px 8px;
+  flex-shrink: 0;
+}
+.dsb__workspace-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--sc-text-primary);
+}
+/* Top rows — Collapsed: logo row (2/6 around the 24 mark), toggle row 40. */
+.dsb__logo-row {
+  display: flex;
+  justify-content: center;
+  width: 40px;
+  padding: 2px 0 6px;
+  flex-shrink: 0;
+}
+.dsb__toggle-row {
+  display: flex;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding-bottom: 12px;
+  flex-shrink: 0;
+}
+/* Collapse / Expand: Ghost Square Small icon button, 28. */
+.dsb__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
   padding: 0;
-  gap: 0;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--sc-text-secondary);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
 }
-html[data-ds="skillcat"] .sidebar__group {
-  gap: 0;
+.dsb__toggle:hover {
+  background: var(--sc-surface-row-hover);
+  color: var(--sc-text-primary);
 }
-html[data-ds="skillcat"] .sidebar__group + .sidebar__group {
-  margin-top: 8px;
+/* Items: 12 spacer below the top row (+ the two 4 gaps); rows 4 apart and
+   4 + 8 Gap + 4 before a section label. */
+.dsb__items,
+.dsb__icons {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  scrollbar-width: none;
+  margin-top: 16px;
 }
-html[data-ds="skillcat"] .sidebar__section {
+.dsb__items {
+  width: 100%;
+  gap: 16px;
+}
+.dsb__items::-webkit-scrollbar,
+.dsb__icons::-webkit-scrollbar {
+  display: none;
+}
+.dsb__group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.dsb__section {
   display: flex;
   align-items: center;
   height: 28px;
@@ -322,91 +398,109 @@ html[data-ds="skillcat"] .sidebar__section {
   line-height: 20px;
   color: var(--sc-text-secondary);
 }
-html[data-ds="skillcat"] .sidebar__group-items {
-  gap: 4px;
-}
-html[data-ds="skillcat"] .sidebar__link {
+.dsb__row {
+  display: flex;
+  align-items: flex-start;
   gap: 8px;
+  width: 100%;
   min-height: 36px;
   padding: 8px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  font-family: inherit;
   font-size: 14px;
   font-weight: 400;
   line-height: 20px;
+  text-align: left;
   color: var(--sc-text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s ease, color 0.12s ease;
 }
-html[data-ds="skillcat"] .sidebar__link:hover {
+.dsb__row:hover {
   background: var(--sc-surface-row-hover);
   color: var(--sc-text-primary);
 }
-html[data-ds="skillcat"] .sidebar__link.is-active {
+.dsb__row.is-active {
   background: var(--sc-surface-row-selected);
   color: var(--sc-text-primary);
   font-weight: 600;
 }
-html[data-ds="skillcat"] .sidebar__link-icon {
+.dsb__row-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 16px;
   height: 20px;
+  flex-shrink: 0;
+}
+.dsb__row-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A count is plain grey text on the right, whatever the row state. */
+.dsb__row-count {
+  flex-shrink: 0;
+  font-weight: 400;
+  color: var(--sc-text-secondary);
+}
+.dsb__row-chevron {
+  color: var(--sc-text-secondary);
+}
+/* Collapsed icons: 12 spacer + 2 inset, icon buttons 8 apart, a 36 Section
+   gap between groups. */
+.dsb__icons {
+  align-items: center;
+  width: 100%;
+  gap: 52px;
+  padding-top: 2px;
+}
+.dsb__icon-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.dsb__icon-btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-}
-/* Counts are plain text on the right of the row, not a pill. */
-html[data-ds="skillcat"] .sidebar__link-badge {
-  width: auto;
-  height: auto;
-  padding: 0;
-  background: none;
-  border-radius: 0;
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 20px;
-  color: var(--sc-text-secondary);
-}
-html[data-ds="skillcat"] .sidebar__link.is-active .sidebar__link-badge {
-  background: none;
-  color: var(--sc-text-secondary);
-}
-/* Collapsed: Ghost icon buttons 32, 16 icon; a 36 section gap holds the icons
-   level with the expanded rows. */
-html[data-ds="skillcat"] .sidebar__group-collapsed {
-  gap: 4px;
-}
-html[data-ds="skillcat"] .sidebar__group-collapsed + .sidebar__group-collapsed {
-  margin-top: 36px;
-}
-html[data-ds="skillcat"] .sidebar__icon-btn {
   width: 32px;
   height: 32px;
+  flex-shrink: 0;
   padding: 0;
+  border: 0.5px solid transparent;
   border-radius: 8px;
+  background: none;
   color: var(--sc-text-secondary);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
 }
-html[data-ds="skillcat"] .sidebar__icon-btn:hover {
+.dsb__icon-btn:hover {
   background: var(--sc-surface-row-hover);
   color: var(--sc-text-primary);
 }
-html[data-ds="skillcat"] .sidebar__icon-btn.is-active {
-  background: var(--sc-fill-secondary);
-  border: 0.5px solid var(--sc-border-control);
+.dsb__icon-btn.is-active {
+  background: linear-gradient(var(--sc-surface-control), var(--sc-surface-control)), rgba(13, 13, 13, 0.75);
+  border-color: var(--sc-border-control);
   color: var(--sc-text-primary);
 }
-html[data-ds="skillcat"] .sidebar__footer {
-  padding-top: 0;
-  border-top: none;
-}
-html[data-ds="skillcat"] .sidebar__collapse-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  color: var(--sc-text-secondary);
-}
-html[data-ds="skillcat"] .sidebar__collapse-icon:hover {
-  background: var(--sc-surface-row-hover);
-  color: var(--sc-text-primary);
-}
-html[data-ds="skillcat"] .sidebar__collapse-icon svg {
-  width: 16px;
-  height: 16px;
+/* Unread count → the Icon Button badge: an 8 orange dot, 2 from the corner. */
+.dsb__dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sc-primary);
+  pointer-events: none;
 }
 
 /* ===== Page header =====
@@ -427,8 +521,8 @@ html[data-ds="skillcat"] .tasks-subtitle {
 
 /* ===== Buttons (17011:187) — Compact Medium 32 =====
    Label Bold 14 / 20; padding 16; radius 8. Primary is the orange Glass Flat
-   fill with a 0.5 orange-15% edge; Secondary a 20% grey tint on #0d0d0d with a
-   0.5 grey-10% edge (30% on hover). Focus is a grey ring. */
+   fill with a 0.5 orange-15% edge; Secondary a 30% grey tint on #0d0d0d with a
+   0.5 grey-10% edge (40% on hover). Focus is a grey ring. */
 html[data-ds="skillcat"] .cta-primary,
 html[data-ds="skillcat"] .new-task,
 html[data-ds="skillcat"] .btn-primary,
@@ -505,15 +599,15 @@ html[data-ds="skillcat"] .search-input {
   border-radius: 8px;
   color: var(--sc-text-primary);
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 400;
-  line-height: 18px;
+  line-height: 24px;
   caret-color: var(--sc-primary);
 }
 html[data-ds="skillcat"] .search-input::placeholder {
   color: var(--sc-text-placeholder);
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 400;
 }
 html[data-ds="skillcat"] .search-input:hover {
@@ -565,9 +659,9 @@ html[data-ds="skillcat"] .usearch-icon svg {
 html[data-ds="skillcat"] .usearch-input {
   color: var(--sc-text-primary);
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 400;
-  line-height: 18px;
+  line-height: 24px;
   caret-color: var(--sc-primary);
 }
 html[data-ds="skillcat"] .usearch-input::placeholder {
@@ -627,10 +721,7 @@ html[data-ds="skillcat"] .filter-pill-dashed {
   font-weight: 700;
   line-height: 15.6px;
 }
-html[data-ds="skillcat"] .filter-pill-dashed:hover {
-  border-color: var(--sc-border-muted);
-  color: var(--sc-text-primary);
-}
+/* No hover look: the Table select chip has no Hover state in the DS. */
 html[data-ds="skillcat"] .filter-pill-dashed svg {
   width: 16px;
   height: 16px;
@@ -876,7 +967,7 @@ html[data-ds="skillcat"] :is(.co-status-pill, .pr-name-flag, .pay-badge):not(#ds
   font-family: var(--font-sans);
   font-size: 14px !important;
   font-weight: 600 !important;
-  line-height: 18px !important;
+  line-height: 20px !important;
   letter-spacing: 0;
 }
 html[data-ds="skillcat"] :is(.co-status-pill, .pr-name-flag, .pay-badge):not(#ds-pill) svg {
@@ -887,7 +978,7 @@ html[data-ds="skillcat"] :is(.co-status-pill--sm, .pr-name-flag, .pay-badge):not
   height: 20px !important;
   padding: 0 6px !important;
   font-size: 12px !important;
-  line-height: 15.6px !important;
+  line-height: 16px !important;
 }
 html[data-ds="skillcat"] :is(.co-status-pill--sm, .pr-name-flag, .pay-badge):not(#ds-pill) svg {
   width: 12px;
@@ -906,6 +997,16 @@ html[data-ds="skillcat"] .dropdown {
   border: 1px solid var(--sc-border-default);
   border-radius: 8px;
   box-shadow: var(--sc-shadow-menu);
+}
+/* Every menu sits 4 from its control, opening down or up. (The JS-placed
+   overlay panels read the same 4 in Dropdown.tsx.) `.up` must also undo the
+   4 top above, which outranks index.css's `top: auto`. */
+html[data-ds="skillcat"] .dropdown.up {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+html[data-ds="skillcat"] :is(.qb-select-menu, .drp-my-menu, .res-menu, .res-picker, .qz-menu) {
+  top: calc(100% + 4px);
 }
 html[data-ds="skillcat"] .dropdown-list {
   padding: 8px;
@@ -960,11 +1061,12 @@ html[data-ds="skillcat"] .checkbox {
   background: transparent;
 }
 html[data-ds="skillcat"] .checkbox.checked,
+html[data-ds="skillcat"] .checkbox.partial,
 html[data-ds="skillcat"] .checkbox.is-checked,
 html[data-ds="skillcat"] .dropdown-item.is-checked .checkbox,
 html[data-ds="skillcat"] .dropdown-item[aria-checked="true"] .checkbox {
   border: 0.5px solid var(--sc-primary-border);
-  background: linear-gradient(var(--sc-primary-subtle), var(--sc-primary-subtle)), linear-gradient(var(--sc-primary-subtle), var(--sc-primary-subtle)), rgba(13, 13, 13, 0.75);
+  background: linear-gradient(rgba(240, 85, 35, 0.2), rgba(240, 85, 35, 0.2)), rgba(13, 13, 13, 0.75);
 }
 
 /* ===== Tabs (19233:193584) =====
@@ -1000,7 +1102,7 @@ html[data-ds="skillcat"] .tab[aria-selected="true"]::after {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: -1px;
+  bottom: 0;
   height: 2px;
   border-radius: 2px 2px 0 0;
   background: var(--sc-primary);
@@ -1257,21 +1359,6 @@ html[data-ds="skillcat"] .u-menu-item--danger {
 html[data-ds="skillcat"] .u-menu-item--danger:disabled {
   color: var(--sc-text-disabled);
 }
-/* Rail (DS Sidebar, collapsed): the expand control in a 40 top row, 24 down;
-   the Account icon button at the bottom, 16 from the edge. */
-html[data-ds="skillcat"] .sidebar--collapsed .sidebar__top-collapsed {
-  height: 40px;
-  padding: 0;
-  margin-bottom: 12px;
-}
-html[data-ds="skillcat"] .sidebar--collapsed .sidebar__footer {
-  justify-content: center;
-}
-html[data-ds="skillcat"] .sidebar__account {
-  width: 32px;
-  height: 32px;
-}
-
 /* ===== Eric's "Create task menu" (1:1476) =====
    The CTA's menu is a DS Menu: 36 rows, Regular 16, a 20 keycap on the right. */
 html[data-ds="skillcat"] .ct-menu {
@@ -1306,7 +1393,7 @@ html[data-ds="skillcat"] .prm .btn-publish.danger,
 html[data-ds="skillcat"] .prm .btn-danger,
 html[data-ds="skillcat"] .prm .cta-danger,
 html[data-ds="skillcat"] .prm .btn-publish.is-danger {
-  background: linear-gradient(rgba(255, 31, 23, 0.2), rgba(255, 31, 23, 0.2)), #0d0d0d;
+  background: linear-gradient(rgba(255, 31, 23, 0.2), rgba(255, 31, 23, 0.2)), rgba(13, 13, 13, 0.75);
   border: 0.5px solid rgba(255, 31, 23, 0.15);
   color: var(--sc-text-on-color);
 }
@@ -1314,7 +1401,7 @@ html[data-ds="skillcat"] .prm .btn-publish.danger:hover:not(:disabled),
 html[data-ds="skillcat"] .prm .btn-danger:hover:not(:disabled),
 html[data-ds="skillcat"] .prm .cta-danger:hover:not(:disabled),
 html[data-ds="skillcat"] .prm .btn-publish.is-danger:hover:not(:disabled) {
-  background: linear-gradient(rgba(255, 31, 23, 0.3), rgba(255, 31, 23, 0.3)), #0d0d0d;
+  background: linear-gradient(rgba(255, 31, 23, 0.3), rgba(255, 31, 23, 0.3)), rgba(13, 13, 13, 0.75);
 }
 
 /* ===== Eric's "Create task, step 1–5" (1:1746 …) — the wizard shell =====
@@ -1452,11 +1539,11 @@ html[data-ds="skillcat"] .wizard .form-help {
   line-height: 1.3;
   color: var(--sc-text-secondary);
 }
-/* Bilingual box: 42 rows on a 1px divider, mono Bold 12 tag, mono 14 value,
-   the 12 grey counter at the right. */
+/* Bilingual box: 38 rows (density/bilingual-row-height, Compact) on a 1px
+   divider, mono Bold 12 tag, mono 16 / 24 value, the 12 grey counter. */
 html[data-ds="skillcat"] .lang-field-row {
   gap: 8px;
-  min-height: 40px;
+  min-height: 38px;
   padding: 0 12px;
 }
 html[data-ds="skillcat"] .lang-field .lang-tag {
@@ -1467,7 +1554,7 @@ html[data-ds="skillcat"] .lang-field .lang-tag {
   color: var(--sc-text-secondary);
 }
 html[data-ds="skillcat"] .lang-field-input {
-  padding: 8px 0;
+  padding: 7px 0;
   font-size: 16px;
   line-height: 24px;
 }
@@ -1515,8 +1602,8 @@ html[data-ds="skillcat"] .time-field-caret svg {
   width: 16px;
   height: 16px;
 }
-/* Segmented control (Choice / Segmented Control, Comfortable as drawn): 44
-   tall, 5 inset, radius 10; options 36, radius 8, Bold 12; the chosen one on
+/* Segmented control (Choice / Segmented Control, Compact): 40 tall, 3
+   inset, radius 10; options 32, radius 8, Bold 14; the chosen one on
    a 30% grey tint over #0d0d0d in white, the rest grey. */
 html[data-ds="skillcat"] .seg-control {
   gap: 2px;
@@ -1539,8 +1626,9 @@ html[data-ds="skillcat"] .seg-btn.active.accent {
   box-shadow: none;
   color: var(--sc-text-on-color);
 }
-html[data-ds="skillcat"] .seg-btn:hover:not(.active) {
-  color: var(--sc-text-primary);
+html[data-ds="skillcat"] .seg-control:not(.is-disabled) .seg-btn:hover:not(.active):not(:disabled) {
+  color: var(--sc-text-secondary);
+  background: var(--sc-surface-control);
 }
 /* Choice / Description, Card style: 5% grey fill, 1px #404040, 12 inset,
    radius 8, 12 gap; radio 20 on a #7A7A7A ring; label Regular 16 / 20 white,
@@ -1631,15 +1719,23 @@ html[data-ds="skillcat"] .prm-cta {
   line-height: 20px;
 }
 html[data-ds="skillcat"] .prm-cta--danger {
-  background: linear-gradient(rgba(255, 31, 23, 0.2), rgba(255, 31, 23, 0.2)), #0d0d0d;
+  background: linear-gradient(rgba(255, 31, 23, 0.2), rgba(255, 31, 23, 0.2)), rgba(13, 13, 13, 0.75);
   border-color: rgba(255, 31, 23, 0.15);
 }
 html[data-ds="skillcat"] .prm-cta--danger:hover:not(:disabled) {
-  background: linear-gradient(rgba(255, 31, 23, 0.3), rgba(255, 31, 23, 0.3)), #0d0d0d;
+  background: linear-gradient(rgba(255, 31, 23, 0.3), rgba(255, 31, 23, 0.3)), rgba(13, 13, 13, 0.75);
 }
 html[data-ds="skillcat"] .prm-cta--go {
-  background: linear-gradient(rgba(41, 182, 115, 0.2), rgba(41, 182, 115, 0.2)), #0d0d0d;
+  background: linear-gradient(rgba(41, 182, 115, 0.2), rgba(41, 182, 115, 0.2)), rgba(13, 13, 13, 0.75);
   border-color: rgba(41, 182, 115, 0.15);
+}
+/* Hover: Primary 85%, Positive 30% (the confirm CTAs had none). */
+html[data-ds="skillcat"] .prm-cta:not(.prm-cta--danger):not(.prm-cta--go):hover:not(:disabled):not(.is-disabled) {
+  filter: none;
+  background: linear-gradient(0deg, rgba(138, 49, 20, 0.85) 0%, rgba(240, 85, 35, 0.85) 70.9%), rgba(13, 13, 13, 0.75);
+}
+html[data-ds="skillcat"] .prm-cta--go:hover:not(:disabled):not(.is-disabled) {
+  background: linear-gradient(rgba(41, 182, 115, 0.3), rgba(41, 182, 115, 0.3)), rgba(13, 13, 13, 0.75);
 }
 
 /* ===== Create task, steps 2–5 (1:1797 … 1:1970) ===== */
@@ -1766,48 +1862,142 @@ html[data-ds="skillcat"] .toggle.on {
    Types…) are NOT restyled in this look: they keep the Play Area's Card Table
    base (index.css, 710:1083), the same card Completion Criteria draws —
    Eshwar 2026-11-04: "Have it use that itself". */
-/* Dual-language upload: one bordered card holding an EN and an ES column,
-   each a dashed drop zone — icon 16, "Drag and drop, or click to upload" 14
-   white, the accepted-types line 12 grey. */
+/* Upload / File (17596:4686), Compact. One dashed #7A7A7A outline (index.css
+   draws it as an SVG rect, so no CSS border on top), padding 40, icon 20,
+   prompt Regular 14/20 grey, requirements 12/16 #7A7A7A, height hugs. No hover
+   state; Drag over = 10% orange fill, orange dash, white prompt; Error = red
+   dash. The dual-language card holds an EN and an ES column, each labelled
+   with a Field / Label (Bold 16 grey). */
 html[data-ds="skillcat"] .upload-lang-tag {
   align-self: flex-start;
   font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 700;
   line-height: 20px;
-  color: var(--sc-text-primary);
+  color: var(--sc-text-secondary);
 }
-html[data-ds="skillcat"] .drop-slim,
 html[data-ds="skillcat"] .drop-big {
-  flex-direction: column;
+  height: auto;
+  min-height: 0;
+  padding: 41px;
   gap: 8px;
-  min-height: 154px;
-  padding: 24px;
-  border: 1px dashed var(--sc-border-default);
-  border-radius: 8px;
-  color: var(--sc-text-primary);
-  font-size: 14px;
-  line-height: 20px;
+  border: 0;
+  color: var(--sc-text-secondary);
 }
-html[data-ds="skillcat"] .drop-slim:hover,
+html[data-ds="skillcat"] .upload-lang-col .drop-big {
+  min-height: 170px;
+}
 html[data-ds="skillcat"] .drop-big:hover {
-  border-color: var(--sc-border-muted);
+  background-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Crect width='100%25' height='100%25' rx='8' ry='8' fill='none' stroke='%237a7a7a' stroke-width='2' stroke-dasharray='4 4'/%3E%3C/svg%3E");
 }
-html[data-ds="skillcat"] .drop-slim svg,
+html[data-ds="skillcat"] .drop-big.has-error,
+html[data-ds="skillcat"] .drop-big.has-error:hover {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Crect width='100%25' height='100%25' rx='8' ry='8' fill='none' stroke='%23ff1f17' stroke-width='2' stroke-dasharray='4 4'/%3E%3C/svg%3E");
+}
+html[data-ds="skillcat"] :is(.drop-big.is-over, .drop-big.is-active),
+html[data-ds="skillcat"] :is(.drop-big.is-over, .drop-big.is-active):hover {
+  background-color: rgba(240, 85, 35, 0.1);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Crect width='100%25' height='100%25' rx='8' ry='8' fill='none' stroke='%23f05523' stroke-width='2' stroke-dasharray='4 4'/%3E%3C/svg%3E");
+}
+html[data-ds="skillcat"] :is(.drop-big.is-over, .drop-big.is-active) .drop-big-title {
+  color: var(--sc-text-primary);
+}
 html[data-ds="skillcat"] .drop-big-icon svg {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
 }
 html[data-ds="skillcat"] .drop-big-title {
   font-size: 14px;
   font-weight: 400;
   line-height: 20px;
-  color: var(--sc-text-primary);
+  color: var(--sc-text-secondary);
 }
 html[data-ds="skillcat"] .drop-big-hint {
   font-size: 12px;
   line-height: 16px;
+  color: var(--sc-text-tertiary);
+}
+/* The add-more strip under a file list is the Files panel's Add area: icon
+   20 over the prompt, 8 apart, inside the dashed outline. */
+html[data-ds="skillcat"] .drop-slim {
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 20px 24px;
+  border: 1px dashed var(--sc-border-muted);
+  border-radius: 8px;
+  background: transparent;
   color: var(--sc-text-secondary);
+  font-size: 14px;
+  line-height: 20px;
+}
+html[data-ds="skillcat"] .drop-slim:hover {
+  border-color: var(--sc-border-muted);
+  background: transparent;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .drop-slim svg {
+  width: 20px;
+  height: 20px;
+}
+/* File row: name 14/20, meta 12/16 (52 tall); remove = Ghost Small 28. */
+html[data-ds="skillcat"] .file-name {
+  line-height: 20px;
+}
+html[data-ds="skillcat"] .file-sub {
+  line-height: 16px;
+}
+html[data-ds="skillcat"] :is(.file-remove, .file-card-remove) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] :is(.file-remove, .file-card-remove):hover {
+  background: var(--sc-surface-row-hover);
+  color: var(--sc-text-primary);
+}
+/* ID upload zone: the same Upload zone (gap 8, icon 20, 20/16 lines, no hover). */
+html[data-ds="skillcat"] .mid-drop {
+  gap: 8px;
+}
+html[data-ds="skillcat"] .mid-drop:hover {
+  border-color: var(--sc-border-muted);
+  background: transparent;
+}
+html[data-ds="skillcat"] .mid-drop-title {
+  line-height: 20px;
+}
+html[data-ds="skillcat"] .mid-drop-hint {
+  line-height: 16px;
+}
+html[data-ds="skillcat"] .mid-drop-icon svg {
+  width: 20px;
+  height: 20px;
+}
+/* Progress / Segmented: segments 6 tall, 8 apart. */
+html[data-ds="skillcat"] .cs-progress {
+  gap: 8px;
+  margin: -3px 0;
+}
+html[data-ds="skillcat"] .cs-seg {
+  height: 6px;
+}
+/* Keycap = Button / Menu Shortcut: 0 6 for word keys, 20 square for glyphs,
+   white on Primary / Destructive buttons. */
+html[data-ds="skillcat"] .cta-kbd:not(:has(> svg)) {
+  padding: 0 6px;
+}
+html[data-ds="skillcat"] .cta-kbd:has(> svg),
+html[data-ds="skillcat"] :is(.new-task, .cta-primary, .btn-publish) .cta-kbd:has(> svg) {
+  padding: 0;
+}
+html[data-ds="skillcat"] :is(.prm-cta, .btn-apply, .btn-primary) .cta-kbd {
+  color: var(--sc-text-on-color);
 }
 
 /* ===== Eric's "Skills" (1:2021) and "Question bank" (1:2165) ===== */
@@ -2173,13 +2363,13 @@ html[data-ds="skillcat"] .rvc-score {
   height: 40px;
   border: 0.5px solid var(--sc-border-control);
   border-radius: 8px;
-  background: var(--sc-fill-secondary);
+  background: linear-gradient(var(--sc-surface-control-strong), var(--sc-surface-control-strong)), #0d0d0d;
   font-size: 14px;
   font-weight: 700;
   color: var(--sc-text-primary);
 }
 html[data-ds="skillcat"] .rvc-score:hover {
-  background: var(--sc-fill-secondary-hover);
+  background: linear-gradient(var(--sc-surface-control-hover), var(--sc-surface-control-hover)), #0d0d0d;
 }
 html[data-ds="skillcat"] .rvc-score.selected,
 html[data-ds="skillcat"] .rvc-score.active,
@@ -2222,18 +2412,18 @@ html[data-ds="skillcat"] .rvc-back-current {
   font-weight: 700;
 }
 html[data-ds="skillcat"] .btn-publish--danger {
-  background: linear-gradient(rgba(255, 31, 23, 0.2), rgba(255, 31, 23, 0.2)), #0d0d0d;
+  background: linear-gradient(rgba(255, 31, 23, 0.2), rgba(255, 31, 23, 0.2)), rgba(13, 13, 13, 0.75);
   border-color: rgba(255, 31, 23, 0.15);
 }
 html[data-ds="skillcat"] .btn-publish--danger:hover:not(:disabled) {
-  background: linear-gradient(rgba(255, 31, 23, 0.3), rgba(255, 31, 23, 0.3)), #0d0d0d;
+  background: linear-gradient(rgba(255, 31, 23, 0.3), rgba(255, 31, 23, 0.3)), rgba(13, 13, 13, 0.75);
 }
 html[data-ds="skillcat"] .btn-publish--go {
-  background: linear-gradient(rgba(41, 182, 115, 0.2), rgba(41, 182, 115, 0.2)), #0d0d0d;
+  background: linear-gradient(rgba(41, 182, 115, 0.2), rgba(41, 182, 115, 0.2)), rgba(13, 13, 13, 0.75);
   border-color: rgba(41, 182, 115, 0.15);
 }
 html[data-ds="skillcat"] .btn-publish--go:hover:not(:disabled) {
-  background: linear-gradient(rgba(41, 182, 115, 0.3), rgba(41, 182, 115, 0.3)), #0d0d0d;
+  background: linear-gradient(rgba(41, 182, 115, 0.3), rgba(41, 182, 115, 0.3)), rgba(13, 13, 13, 0.75);
 }
 
 /* ===== Eric's "Users" (1:3273) and "Companies, date range" (1:3401) ===== */
@@ -2428,18 +2618,18 @@ html[data-ds="skillcat"] .sp-decide-btn svg {
   height: 16px;
 }
 html[data-ds="skillcat"] .sp-decide-btn--approve {
-  background: linear-gradient(rgba(41, 182, 115, 0.2), rgba(41, 182, 115, 0.2)), #0d0d0d;
+  background: linear-gradient(rgba(41, 182, 115, 0.2), rgba(41, 182, 115, 0.2)), rgba(13, 13, 13, 0.75);
   border-color: rgba(41, 182, 115, 0.15);
 }
 html[data-ds="skillcat"] .sp-decide-btn--approve:hover {
-  background: linear-gradient(rgba(41, 182, 115, 0.3), rgba(41, 182, 115, 0.3)), #0d0d0d;
+  background: linear-gradient(rgba(41, 182, 115, 0.3), rgba(41, 182, 115, 0.3)), rgba(13, 13, 13, 0.75);
 }
 html[data-ds="skillcat"] .sp-decide-btn--reject {
-  background: linear-gradient(rgba(255, 31, 23, 0.2), rgba(255, 31, 23, 0.2)), #0d0d0d;
+  background: linear-gradient(rgba(255, 31, 23, 0.2), rgba(255, 31, 23, 0.2)), rgba(13, 13, 13, 0.75);
   border-color: rgba(255, 31, 23, 0.15);
 }
 html[data-ds="skillcat"] .sp-decide-btn--reject:hover {
-  background: linear-gradient(rgba(255, 31, 23, 0.3), rgba(255, 31, 23, 0.3)), #0d0d0d;
+  background: linear-gradient(rgba(255, 31, 23, 0.3), rgba(255, 31, 23, 0.3)), rgba(13, 13, 13, 0.75);
 }
 
 /* ===== Eric's "Create spotlight" (1:3683) ===== */
@@ -2474,7 +2664,7 @@ html[data-ds="skillcat"] .pc-page .form-sub-label {
   font-size: 16px;
   font-weight: 700;
   line-height: 20px;
-  color: var(--sc-text-primary);
+  color: var(--sc-text-secondary); /* Field / Label, as everywhere */
 }
 html[data-ds="skillcat"] .pc-page .form-help {
   font-size: 14px;
@@ -2743,9 +2933,9 @@ html[data-ds="skillcat"] .cw-price-field > .selectfield > .dropdown-wrap {
 html[data-ds="skillcat"] .pl-copied-toast {
   box-sizing: border-box;
   width: 360px;
-  min-height: 48px;
+  min-height: 0; /* density/toast-min-height, Compact */
   gap: 8px;
-  padding: 10px 16px;
+  padding: 12px 16px; /* density/toast-padding-y, Compact */
   border-color: rgba(41, 182, 115, 0.1);
   background: linear-gradient(rgba(41, 182, 115, 0.15), rgba(41, 182, 115, 0.15)), var(--sc-bg-canvas);
   font-weight: 700;
@@ -2828,4 +3018,1114 @@ html[data-ds="skillcat"] :is(.btn-publish, .btn-save-draft, .prm-cta, .prm-quiet
 }
 html[data-ds="skillcat"] :is(.btn-publish, .btn-save-draft, .prm-cta, .prm-quiet, .btn-apply, .new-task, .cta-primary, .cta-quiet, .btn-primary):is(:disabled, .is-disabled) .cta-kbd {
   color: #404040;
+}
+
+/* Edit Columns' always-on rows ("Fixed columns") are Menu / Items too: 36 min,
+   padding 8, radius 8, Regular 16 — grey like the Menu's Locked tone, since
+   they can't be switched off or moved. (index.css draws them 32 / Medium white.) */
+html[data-ds="skillcat"] .cols-menu .cols-fixed-row {
+  min-height: 36px;
+  height: auto;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--sc-text-secondary);
+}
+
+
+/* More Filters (cascading menu): its rows are Menu / Items with the submenu
+   chevron — 36 min, padding 8, radius 8, gap 8, Regular 16/20 white, hover
+   tint; a count is plain Regular 14 grey on the right (not a mono pill). */
+html[data-ds="skillcat"] .dropdown-submenu-row {
+  gap: 8px;
+  height: auto;
+  min-height: 36px;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .dropdown-submenu-row:hover,
+html[data-ds="skillcat"] .dropdown-submenu-row.active {
+  background: var(--sc-surface-row-hover);
+}
+html[data-ds="skillcat"] .dropdown-submenu-count {
+  padding: 0;
+  background: none;
+  border-radius: 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .dropdown-submenu-chevron {
+  margin-left: 0;
+  color: var(--sc-text-secondary);
+}
+/* The submenu is a Menu: same shell as every panel. It hangs off the root
+   list's padding box, so 5 of margin puts it 4 clear of the root's border. */
+html[data-ds="skillcat"] .cascading-sub {
+  background: var(--sc-surface-menu);
+  border: 1px solid var(--sc-border-default);
+  box-shadow: var(--sc-shadow-menu);
+}
+html[data-ds="skillcat"] .cascading-sub:not(.is-left) {
+  margin-left: 5px;
+}
+html[data-ds="skillcat"] .cascading-sub.is-left {
+  margin-right: 5px;
+}
+
+/* ===== Component audit 2026-11-05 — Input / Text (17012:71), Field, Search,
+   Input / Date, Date Picker (18848:43281). Each rule fixes a spot where a
+   Play Area or earlier DS rule outranked the component. ===== */
+/* Error / warning keep their border on hover and focus; a focused flagged
+   field adds the grey ring (1px #7A7A7A, 3 out). */
+html[data-ds="skillcat"] .form-input.has-error,
+html[data-ds="skillcat"] .form-input.has-error:hover:not(:disabled),
+html[data-ds="skillcat"] .form-input.has-error:focus {
+  border-color: var(--sc-error);
+}
+html[data-ds="skillcat"] .form-input.has-warning,
+html[data-ds="skillcat"] .form-input.has-warning:hover:not(:disabled),
+html[data-ds="skillcat"] .form-input.has-warning:focus {
+  border-color: var(--sc-warning);
+}
+html[data-ds="skillcat"] .form-input:is(.has-error, .has-warning):focus,
+html[data-ds="skillcat"] .lang-field:is(.has-error, .has-warning):focus-within,
+html[data-ds="skillcat"] .date-field-trigger.has-error.is-open {
+  outline: 1px solid var(--sc-border-muted);
+  outline-offset: 3px;
+}
+/* Disabled value and placeholder are #404040. */
+html[data-ds="skillcat"] .form-input:disabled,
+html[data-ds="skillcat"] .form-input:disabled::placeholder {
+  color: #404040;
+}
+/* Read-only: no border, even on hover; 16 on the right. */
+html[data-ds="skillcat"] .form-input[readonly],
+html[data-ds="skillcat"] .form-input[readonly]:hover:not(:disabled):not(:focus) {
+  border-color: transparent;
+  padding-right: 16px;
+}
+/* LimitedInput keeps room for its counter. */
+html[data-ds="skillcat"] .limit-input > .form-input {
+  padding-right: 56px;
+}
+/* Bilingual box: hover, kept error/warning, disabled without opacity. */
+html[data-ds="skillcat"] .lang-field:hover:not(:focus-within):not(.is-disabled) {
+  border-color: var(--sc-border-muted);
+}
+html[data-ds="skillcat"] .lang-field.has-error,
+html[data-ds="skillcat"] .lang-field.has-error:hover,
+html[data-ds="skillcat"] .lang-field.has-error:focus-within {
+  border-color: var(--sc-error);
+}
+html[data-ds="skillcat"] .lang-field.has-warning,
+html[data-ds="skillcat"] .lang-field.has-warning:hover,
+html[data-ds="skillcat"] .lang-field.has-warning:focus-within {
+  border-color: var(--sc-warning);
+}
+html[data-ds="skillcat"] .lang-field.is-disabled {
+  opacity: 1;
+  border-color: var(--sc-border-subtle);
+}
+html[data-ds="skillcat"] .lang-field.is-disabled .lang-field-input,
+html[data-ds="skillcat"] .lang-field.is-disabled .lang-field-input::placeholder {
+  color: #404040;
+}
+/* Field label inline message: Bold 14 after a 4px dot. */
+html[data-ds="skillcat"] :is(.form-label-error, .form-label-warning) {
+  font-weight: 700;
+}
+html[data-ds="skillcat"] :is(.form-label-error, .form-label-warning)::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: 0.2em;
+}
+/* Field / Message: 8 below the control everywhere, 14 / 1.3. */
+html[data-ds="skillcat"] .sp-section .form-help {
+  margin-top: 8px;
+}
+html[data-ds="skillcat"] .pc-page .form-help {
+  line-height: 1.3;
+}
+/* Search: the Question Bank landing bar is a plain 40 Search too. */
+html[data-ds="skillcat"] .tasks.lm .toolbar .usearch-bar {
+  height: 40px;
+  gap: 8px;
+  box-shadow: none;
+  font-size: 14px;
+}
+html[data-ds="skillcat"] .search-input {
+  padding-left: 35px;
+}
+/* Input / Date: grey calendar icon. */
+html[data-ds="skillcat"] .date-field-box svg {
+  color: var(--sc-text-secondary);
+}
+/* Date Picker: panel padding 12 / gap 12, months 8 inside, Mono Regular
+   days, Medium 12 weekdays, 28 nav buttons, 10% range band, ends = band on the
+   inner half + ring, no footer divider, 0 8 12 shadow. */
+html[data-ds="skillcat"] .dropdown--cal {
+  box-shadow: 0 8px 12px rgba(0, 0, 0, 0.4);
+}
+html[data-ds="skillcat"] .drp {
+  padding: 0;
+}
+html[data-ds="skillcat"] .drp-col {
+  gap: 12px;
+}
+html[data-ds="skillcat"] .drp-cal,
+html[data-ds="skillcat"] .drp-days {
+  gap: 8px;
+}
+html[data-ds="skillcat"] .drp-monthrow {
+  height: 28px;
+}
+html[data-ds="skillcat"] .drp-my {
+  gap: 12px;
+}
+html[data-ds="skillcat"] .drp-my-btn {
+  font-weight: 600;
+  line-height: 20px;
+}
+html[data-ds="skillcat"] .drp-my-btn svg {
+  width: 16px;
+  height: 16px;
+}
+html[data-ds="skillcat"] .drp-nav {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+html[data-ds="skillcat"] .drp-nav svg {
+  width: 16px;
+  height: 16px;
+}
+html[data-ds="skillcat"] .drp-weekdays span {
+  height: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+}
+html[data-ds="skillcat"] .drp-input {
+  padding: 7px 12px;
+  border-color: var(--sc-border-default);
+}
+html[data-ds="skillcat"] .drp-input::placeholder {
+  color: var(--sc-text-placeholder);
+}
+html[data-ds="skillcat"] .drp-input:hover:not(:focus) {
+  border-color: var(--sc-border-muted);
+}
+html[data-ds="skillcat"] .drp-footer {
+  border-top: none;
+  padding: 0 12px 12px;
+}
+html[data-ds="skillcat"] .drp-day {
+  position: relative;
+  font-family: var(--font-mono);
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--sc-text-primary);
+  border-radius: 50%;
+}
+html[data-ds="skillcat"] .drp-day:hover:not(:disabled):not(.in-range):not(.is-selected):not(.drp-day--empty) {
+  background: rgba(122, 122, 122, 0.05);
+  border-radius: 50%;
+}
+html[data-ds="skillcat"] .drp-day.in-range {
+  background: var(--sc-primary-subtle);
+}
+/* Range ends: the band on the inner half; the circle (ring + the band's
+   colour, opaque so it doesn't double the tint) on top. */
+html[data-ds="skillcat"] .drp-day.is-start:not(.is-end),
+html[data-ds="skillcat"] .drp-day.is-end:not(.is-start) {
+  border-radius: 0;
+  box-shadow: none;
+  background: linear-gradient(to right, transparent 50%, var(--sc-primary-subtle) 50%);
+}
+html[data-ds="skillcat"] .drp-day.is-end:not(.is-start) {
+  background: linear-gradient(to left, transparent 50%, var(--sc-primary-subtle) 50%);
+}
+html[data-ds="skillcat"] .drp-day.is-start:not(.is-end)::before,
+html[data-ds="skillcat"] .drp-day.is-end:not(.is-start)::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--sc-primary);
+  border-radius: 50%;
+  background: rgb(50, 35, 30); /* 10% #F05523 over #1D1D1D */
+  z-index: -1;
+}
+html[data-ds="skillcat"] .drp-day.is-start:not(.is-end),
+html[data-ds="skillcat"] .drp-day.is-end:not(.is-start) {
+  isolation: isolate;
+}
+html[data-ds="skillcat"] .drp-day:is(.is-start, .is-end, .is-selected, .is-solo) {
+  font-weight: 600;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .drp-day.is-today:not(.is-start):not(.is-end):not(.is-selected) {
+  color: var(--sc-primary);
+}
+html[data-ds="skillcat"] .drp-day:focus-visible {
+  outline: 1px solid var(--sc-border-muted);
+  outline-offset: 2px;
+  border-radius: 50%;
+}
+
+/* ===== Component audit 2026-11-05 — Table (18832:2227), Modal (18822:6716),
+   Tooltip (18839:2938), Toast (17096:794), Banner (19004:71870). ===== */
+/* Table: unsorted chevrons grey, sorted / hovered header white. */
+html[data-ds="skillcat"] .sort-icon:not(.sort-icon--active) {
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .sort-icon svg {
+  width: 16px;
+  height: 16px;
+}
+html[data-ds="skillcat"] .table thead th:hover .sort-icon {
+  color: var(--sc-text-primary);
+}
+/* No Play Area row-end ramp; the last row keeps its divider (pagination has
+   no line of its own). */
+html[data-ds="skillcat"] .col-actions::before {
+  display: none;
+}
+html[data-ds="skillcat"] .table tbody tr:last-child {
+  border-bottom: 1px solid var(--sc-border-divider);
+}
+/* Group rows are a 5% band, not an opaque #181818. */
+html[data-ds="skillcat"] .table tbody tr.skg-group td,
+html[data-ds="skillcat"] .table tbody tr.skg-group:hover td,
+html[data-ds="skillcat"] .table tbody tr.skg-group.menu-open td {
+  background-color: transparent;
+}
+html[data-ds="skillcat"] .table tbody tr.skg-group {
+  background: var(--sc-surface-row-hover-subtle);
+}
+html[data-ds="skillcat"] .table tbody tr.skg-group .col-actions {
+  --actions-bg: transparent;
+}
+/* Table / State No results: Bold 20/24 over Regular 14/20 grey, 8 apart, 48 tall padding. */
+html[data-ds="skillcat"] .table-empty {
+  gap: 8px;
+  padding-top: 48px;
+  padding-bottom: 48px;
+}
+html[data-ds="skillcat"] .table-empty-title {
+  font-weight: 700;
+  line-height: 24px;
+}
+html[data-ds="skillcat"] .table-empty-sub {
+  font-size: 14px;
+  line-height: 20px;
+}
+/* Pagination arrows: Ghost Square Small 28; disabled solid #404040. */
+html[data-ds="skillcat"] .page-btn {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+}
+html[data-ds="skillcat"] .page-btn:disabled {
+  opacity: 1;
+  color: var(--sc-border-default);
+}
+html[data-ds="skillcat"] .edit-columns-btn {
+  border-radius: 8px;
+}
+/* TableCard: Small table in a card — 5% fill, 8/16 padding, plain header. */
+html[data-ds="skillcat"] .tcard {
+  background: var(--sc-surface-row-hover-subtle);
+  padding: 8px 16px;
+}
+html[data-ds="skillcat"] .tcard .table thead th {
+  background: transparent;
+}
+/* Modal (Dialog): header centred, gap 8; close 28 Ghost Circle Small; subtitle
+   Regular 14/20 grey (the body description stays mono); footer without a
+   rule, actions right-aligned 8 apart, 40 under the body. */
+html[data-ds="skillcat"] .prm-head {
+  align-items: center;
+  gap: 8px;
+}
+html[data-ds="skillcat"] .prm-close {
+  width: 28px;
+  height: 28px;
+}
+html[data-ds="skillcat"] .prm-text {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  line-height: 20px;
+}
+html[data-ds="skillcat"] .prm-foot {
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 24px 24px;
+  border-top: 0;
+}
+/* Modal sizes: Small 448, Medium 640, Large 960. */
+html[data-ds="skillcat"] .prm.prm--sure,
+html[data-ds="skillcat"] .prm.mid-modal--upload {
+  max-width: 448px;
+}
+html[data-ds="skillcat"] .prm.mid-modal:not(.mid-modal--upload) {
+  max-width: 640px;
+}
+html[data-ds="skillcat"] .prm.ind-assign-modal,
+html[data-ds="skillcat"] .prm.tpm {
+  max-width: 960px;
+}
+/* Shortcut tooltip: the Tooltip shell (8/12, 0 8 12 shadow) with Mono 12 grey keys. */
+html[data-ds="skillcat"] .ksh-card {
+  padding: 7px 11px;
+  box-shadow: 0 8px 12px rgba(0, 0, 0, 0.4);
+}
+html[data-ds="skillcat"] .ksh-key {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sc-text-secondary);
+}
+/* Toast: the status icon is grey. */
+html[data-ds="skillcat"] .pl-copied-toast-icon {
+  color: var(--sc-text-secondary);
+}
+/* Banner (list banners): 12/16 padding, 12 gaps, 1px edge; count SemiBold
+   (size 32 kept, Eric's screen) with a 1px white-16% divider 12 after it;
+   the close is a bare 16 glyph 12 after the button. */
+html[data-ds="skillcat"] .tasks.clh .clh-banner > .lm-banner,
+html[data-ds="skillcat"] .tasks.clh.clh--banner .clh-banner > .lm-banner,
+html[data-ds="skillcat"] .lm-banner {
+  min-height: 0;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--sc-primary-border-subtle);
+}
+html[data-ds="skillcat"] .tasks.clh .lm-banner .lm-banner-count,
+html[data-ds="skillcat"] .lm-banner-count {
+  padding-right: 12px;
+  border-right: 1px solid rgba(255, 255, 255, 0.16);
+  font-weight: 600;
+  line-height: 1;
+}
+html[data-ds="skillcat"] .tasks.clh.clh--banner .lm-banner-count::after {
+  display: none;
+}
+html[data-ds="skillcat"] .lm-banner .cs-close {
+  width: 16px;
+  height: 16px;
+  margin-left: 0;
+  border-radius: 0;
+  background: none;
+}
+html[data-ds="skillcat"] .lm-banner .cs-close:hover {
+  background: none;
+}
+html[data-ds="skillcat"] .note-card .cta-quiet {
+  border-width: 1px;
+}
+/* Every other NoteCard is a Banner too: tone wash over opaque #0d0d0d inside
+   a 1px tone edge, 12/16 padding, grey icon, title→body 4, action 12 after
+   the text. `:where` keeps these below the record-card variants
+   (`.note-card.mc-certcard` …), which keep their own surfaces. */
+html[data-ds="skillcat"] :where(.note-card) {
+  padding: 12px 16px;
+  box-shadow: none;
+  border: 1px solid var(--note-edge);
+  background: linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)), #0d0d0d;
+}
+html[data-ds="skillcat"] :where(.note-card--accent) {
+  --note-edge: rgba(240, 85, 35, 0.15);
+  background: linear-gradient(rgba(240, 85, 35, 0.2), rgba(240, 85, 35, 0.2)), #0d0d0d;
+}
+html[data-ds="skillcat"] :where(.note-card--ok) {
+  background: linear-gradient(rgba(41, 182, 115, 0.15), rgba(41, 182, 115, 0.15)), #0d0d0d;
+}
+html[data-ds="skillcat"] :where(.note-card--warn) {
+  background: linear-gradient(rgba(255, 197, 36, 0.14), rgba(255, 197, 36, 0.14)), #0d0d0d;
+}
+html[data-ds="skillcat"] :where(.note-card--danger) {
+  --note-edge: rgba(255, 31, 23, 0.1);
+  background: linear-gradient(rgba(255, 31, 23, 0.2), rgba(255, 31, 23, 0.2)), #0d0d0d;
+}
+html[data-ds="skillcat"] :where(.note-card-icon) {
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] :where(.note-card-text) {
+  gap: 4px;
+}
+html[data-ds="skillcat"] :where(.note-card-action) {
+  margin-left: 0;
+}
+
+/* ===== Component audit 2026-11-05 — Menu / Item (17039:16628), Menu
+   (17779:4049), Input / Select, Checkbox family, Choice / Description,
+   Segmented Control. ===== */
+/* A ticked row reads SemiBold (CheckRow marks only its inner .checkbox). */
+html[data-ds="skillcat"] .dropdown-item:has(> .checkbox.checked) {
+  font-weight: 600;
+}
+/* A selected Check / Checkbox row on hover or focus takes the stronger 15%. */
+html[data-ds="skillcat"] .dropdown-list .dropdown-item:is(.is-checked, [aria-checked="true"], :has(> .checkbox.checked)):is(:hover, .is-active, :focus-visible) {
+  background: rgba(115, 115, 115, 0.15);
+}
+/* Keyboard focus on a row is the tint, not a browser ring. */
+html[data-ds="skillcat"] :is(.dropdown-item, .menu-item, .u-menu-item, .ct-menu-item, .dropdown-submenu-row):focus-visible {
+  outline: none;
+  background: var(--sc-surface-row-hover);
+}
+/* Destructive rows: #FF1F17 (the builder's menus used #ff6b6b / #ff1f31). */
+html[data-ds="skillcat"] .menu-item.danger,
+html[data-ds="skillcat"] .ctb-menu .menu-item.danger,
+html[data-ds="skillcat"] .ctb-menu .menu-item.danger .menu-item-icon,
+html[data-ds="skillcat"] .u-menu-item--danger:not(:disabled) {
+  color: var(--sc-error);
+}
+/* Disabled rows: #737373 label + icon, no opacity, no hover; reason 14 / 1.3 #7A7A7A. */
+html[data-ds="skillcat"] .menu-item:disabled,
+html[data-ds="skillcat"] .ctb-menu .menu-item:has(.menu-item-sub),
+html[data-ds="skillcat"] .ctb-menu .menu-item:has(.menu-item-sub) .menu-item-icon {
+  color: var(--sc-text-disabled);
+  opacity: 1;
+}
+html[data-ds="skillcat"] .menu-item:disabled:hover {
+  background: none;
+}
+html[data-ds="skillcat"] .menu-item-sub {
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--sc-text-tertiary);
+}
+html[data-ds="skillcat"] .menu-item-icon {
+  width: 16px;
+  height: 20px;
+  justify-content: center;
+  flex-shrink: 0;
+}
+html[data-ds="skillcat"] .u-menu-item:disabled .u-menu-item-sub {
+  line-height: 1.3;
+}
+html[data-ds="skillcat"] .u-menu-item--danger:disabled .u-menu-item-icon {
+  color: inherit;
+}
+/* Paragraph-style and month / year menus: 16 / 20 rows like every Menu. */
+html[data-ds="skillcat"] :is(.rte-para-menu, .drp-my-menu) .dropdown-list .dropdown-item {
+  font-size: 16px;
+  line-height: 20px;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] :is(.rte-para-menu, .drp-my-menu) .dropdown-list .dropdown-item:disabled {
+  color: var(--sc-text-disabled);
+}
+/* Checkbox → label is the row's 8. */
+html[data-ds="skillcat"] .cols-row .checkbox {
+  margin-right: 0;
+}
+/* Menu search: 8 / 12 with a 1px line under it. */
+html[data-ds="skillcat"] .dropdown-search:not(#ds-srch) {
+  padding: 8px 12px;
+  gap: 8px;
+  box-shadow: none;
+  border-bottom: 1px solid var(--sc-border-default);
+}
+html[data-ds="skillcat"] .dropdown-search input {
+  line-height: 20px;
+}
+/* Certification builder menus: the Menu surface, 1px edge + shadow on the submenu. */
+html[data-ds="skillcat"] .dropdown.ctb-menu,
+html[data-ds="skillcat"] .dropdown.ctb-menu:has(.menu-item-sub) {
+  background: var(--sc-surface-menu);
+}
+html[data-ds="skillcat"] .ctb-menu .cascading-sub--menu {
+  border: 1px solid var(--sc-border-default);
+  box-shadow: var(--sc-shadow-menu);
+}
+/* Menu empty state: 12 inset, 16 / 20 white. */
+html[data-ds="skillcat"] .ms-menu-empty {
+  padding: 4px;
+  line-height: 20px;
+  color: var(--sc-text-primary);
+}
+/* Sub-level section labels are Menu / Section labels too. */
+html[data-ds="skillcat"] .dropdown-subsection-label {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 4px 8px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--sc-text-secondary);
+}
+/* Input / Select chevron: 16 grey, flips while open. Disabled: #363535 edge,
+   #404040 value, chevron at 40%. Focused error: the grey ring. */
+html[data-ds="skillcat"] .field-chevron {
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .select-field .field-chevron {
+  width: 16px;
+  height: 16px;
+}
+html[data-ds="skillcat"] :is(.select-field, .multiselect-field).is-open .field-chevron svg {
+  transform: rotate(180deg);
+}
+html[data-ds="skillcat"] .select-field:disabled,
+html[data-ds="skillcat"] .multiselect-field.is-disabled {
+  opacity: 1;
+  border-color: var(--sc-border-subtle);
+}
+html[data-ds="skillcat"] .select-field:disabled .select-field-value,
+html[data-ds="skillcat"] .multiselect-field.is-disabled {
+  color: #404040;
+}
+html[data-ds="skillcat"] :is(.select-field:disabled, .multiselect-field.is-disabled) .field-chevron {
+  opacity: 0.4;
+}
+html[data-ds="skillcat"] :is(.select-field, .multiselect-field).has-error:is(.is-open, :focus-visible) {
+  outline: 1px solid var(--sc-border-muted);
+  outline-offset: 3px;
+}
+/* Checkbox: 12 check; hover / pressed / focus; disabled without opacity. */
+html[data-ds="skillcat"] .checkbox > svg {
+  width: 12px;
+  height: 12px;
+}
+html[data-ds="skillcat"] button.checkbox:not(.checked):not(.partial):hover:not(:disabled) {
+  border-color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] button.checkbox:not(.checked):not(.partial):active:not(:disabled) {
+  border-color: var(--sc-text-secondary);
+  background: var(--sc-surface-control-strong);
+}
+html[data-ds="skillcat"] button.checkbox:is(.checked, .partial):hover:not(:disabled) {
+  background: linear-gradient(rgba(240, 85, 35, 0.3), rgba(240, 85, 35, 0.3)), rgba(13, 13, 13, 0.75);
+}
+html[data-ds="skillcat"] button.checkbox:is(.checked, .partial):active:not(:disabled) {
+  background: linear-gradient(rgba(240, 85, 35, 0.45), rgba(240, 85, 35, 0.45)), rgba(13, 13, 13, 0.75);
+}
+html[data-ds="skillcat"] button.checkbox:focus-visible {
+  outline: 1px solid var(--sc-border-muted);
+  outline-offset: 2px;
+}
+html[data-ds="skillcat"] .stm-table .checkbox:disabled {
+  opacity: 1;
+  background: var(--sc-surface-control);
+  border: 1px solid rgba(122, 122, 122, 0.05);
+  color: var(--sc-text-disabled);
+}
+html[data-ds="skillcat"] .stm-table .checkbox.checked:disabled {
+  border-width: 0.5px;
+}
+/* Switch: hover / pressed / focus / disabled. */
+html[data-ds="skillcat"] .toggle:hover:not(:disabled):not(.on) {
+  background: linear-gradient(rgba(122, 122, 122, 0.3), rgba(122, 122, 122, 0.3)), #404040;
+}
+html[data-ds="skillcat"] .toggle:active:not(:disabled):not(.on) {
+  background: linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)), #404040;
+}
+html[data-ds="skillcat"] .toggle.on:hover:not(:disabled) {
+  background: var(--sc-primary-hover);
+}
+html[data-ds="skillcat"] .toggle.on:active:not(:disabled) {
+  background: var(--sc-primary-pressed);
+}
+html[data-ds="skillcat"] .toggle:focus-visible {
+  outline: 1px solid var(--sc-border-muted);
+  outline-offset: 2px;
+}
+html[data-ds="skillcat"] .toggle:disabled,
+html[data-ds="skillcat"] .toggle.on:disabled {
+  background: var(--sc-surface-control);
+}
+html[data-ds="skillcat"] .toggle:disabled .toggle-knob {
+  background: var(--sc-text-disabled);
+}
+/* Choice / Description: radio hover; disabled radio + #404040 title. */
+html[data-ds="skillcat"] .radio-card:hover:not(:disabled):not(.selected) .radio-dot {
+  border-color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .radio-card.selected:hover:not(:disabled) .radio-dot {
+  border-color: var(--sc-primary-hover);
+}
+html[data-ds="skillcat"] .radio-card.selected:hover:not(:disabled) .radio-dot::after {
+  background: var(--sc-primary-hover);
+}
+html[data-ds="skillcat"] .radio-card:disabled:not(.selected) .radio-dot {
+  background: var(--sc-surface-control);
+  border-color: rgba(122, 122, 122, 0.05);
+}
+html[data-ds="skillcat"] .radio-card:disabled:not(.selected) .radio-card-title {
+  color: #404040;
+}
+/* Segmented control: pressed, selected hover / pressed, focus, disabled. */
+html[data-ds="skillcat"] .seg-btn:active:not(.active):not(:disabled) {
+  background: var(--sc-surface-row-selected);
+}
+html[data-ds="skillcat"] .seg-control:not(.is-disabled) .seg-btn.active:hover:not(:disabled) {
+  background: linear-gradient(rgba(122, 122, 122, 0.4), rgba(122, 122, 122, 0.4)), rgba(13, 13, 13, 0.75);
+}
+html[data-ds="skillcat"] .seg-btn.active:active:not(:disabled) {
+  background: linear-gradient(var(--sc-surface-control-strong), var(--sc-surface-control-strong)), rgba(13, 13, 13, 0.75);
+}
+html[data-ds="skillcat"] .seg-btn:focus-visible {
+  outline: 1px solid var(--sc-border-muted);
+  outline-offset: 2px;
+}
+html[data-ds="skillcat"] .seg-control.is-disabled {
+  opacity: 1;
+}
+html[data-ds="skillcat"] :is(.seg-control.is-disabled .seg-btn, .seg-btn:disabled) {
+  color: #404040;
+  background: none;
+}
+html[data-ds="skillcat"] :is(.seg-control.is-disabled .seg-btn, .seg-btn:disabled).active {
+  background: var(--sc-surface-control);
+  box-shadow: inset 0 0 0 1px var(--sc-border-muted);
+}
+
+/* ===== Component audit 2026-11-05 — Button (17011:187), Icon Button
+   (17011:242), Chip (17013:210), Status Label (17013:311), Tabs. ===== */
+/* Buttons: Pressed states, white Secondary label on hover, focus ring. */
+html[data-ds="skillcat"] :is(.cta-primary, .new-task, .btn-primary, .btn-publish:not(.btn-publish--danger):not(.btn-publish--go), .btn-apply, .prm-cta:not(.prm-cta--danger)):active:not(:disabled):not(.is-disabled) {
+  background: linear-gradient(0deg, rgba(138, 49, 20, 0.65) 0%, rgba(240, 85, 35, 0.65) 70.9%), rgba(13, 13, 13, 0.75);
+}
+html[data-ds="skillcat"] :is(.cta-quiet:not(.cta-quiet--icon), .btn-save-draft, .prm-cancel):active:not(:disabled):not(.is-disabled) {
+  background: linear-gradient(var(--sc-surface-control-strong), var(--sc-surface-control-strong)), #0d0d0d;
+}
+html[data-ds="skillcat"] :is(.cta-quiet, .btn-save-draft, .prm-cancel):hover:not(:disabled):not(.is-disabled) {
+  color: var(--sc-text-on-color);
+}
+html[data-ds="skillcat"] :is(.cta-quiet, .btn-save-draft):hover:not(:disabled):not(.is-disabled) .cta-kbd {
+  color: var(--sc-text-on-color);
+}
+html[data-ds="skillcat"] :is(.cta-primary, .new-task, .btn-primary, .btn-publish, .btn-apply, .cta-quiet, .btn-save-draft, .prm-cta, .prm-cancel, .sp-decide-btn, .lm-quick-pill, .filter-pill-dashed, .filter-applied-main):focus-visible {
+  outline: 1px solid var(--sc-border-muted);
+  outline-offset: 3px;
+}
+/* Ghost icon buttons: hover #2E2E2E, pressed #222, white icon; 28 Small
+   in table rows; focus ring. */
+html[data-ds="skillcat"] :is(.lone-dots, .prm-close, .cs-close:not(.lm-banner .cs-close), .edit-columns-btn, .sp-kebab, .qbl-index-add-btn, .page-btn, .dsb__toggle, .dsb__icon-btn:not(.is-active), .file-remove, .file-card-remove):hover:not(:disabled) {
+  background-color: var(--sc-bg-hover);
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] :is(.lone-dots, .prm-close, .cs-close:not(.lm-banner .cs-close), .edit-columns-btn, .sp-kebab, .qbl-index-add-btn, .page-btn, .dsb__toggle, .dsb__icon-btn:not(.is-active), .file-remove, .file-card-remove):active:not(:disabled) {
+  background-color: var(--sc-bg-raised);
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] :is(.lone-dots, .prm-close, .cs-close, .edit-columns-btn, .sp-kebab, .qbl-index-add-btn, .page-btn, .dsb__toggle, .dsb__icon-btn, .wizard-cancel, .cta-quiet--icon):focus-visible {
+  outline: 1px solid var(--sc-border-muted);
+  outline-offset: 3px;
+}
+html[data-ds="skillcat"] .table .col-actions > .lone-dots:not(.row-action-bar) {
+  width: 28px;
+  margin: 0 6px;
+}
+html[data-ds="skillcat"] .sp-kebab {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+html[data-ds="skillcat"] .qbl-index-add-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .qbl-index-add-btn svg {
+  width: 16px;
+  height: 16px;
+}
+/* Secondary Square icon button (Users › More actions): 15% over 75% black,
+   16 grey icon, 30% + white on hover. */
+html[data-ds="skillcat"] .cta-quiet.cta-quiet--icon {
+  background: linear-gradient(var(--sc-surface-control), var(--sc-surface-control)), rgba(13, 13, 13, 0.75);
+  color: var(--sc-text-secondary);
+}
+html[data-ds="skillcat"] .cta-quiet--icon > svg {
+  width: 16px;
+  height: 16px;
+}
+html[data-ds="skillcat"] .cta-quiet.cta-quiet--icon:hover:not(:disabled) {
+  background: linear-gradient(var(--sc-surface-control-hover), var(--sc-surface-control-hover)), rgba(13, 13, 13, 0.75);
+  color: var(--sc-text-on-color);
+}
+html[data-ds="skillcat"] .cta-quiet.cta-quiet--icon:active:not(:disabled) {
+  background: linear-gradient(var(--sc-surface-control-strong), var(--sc-surface-control-strong)), rgba(13, 13, 13, 0.75);
+}
+/* Chips: Compact lh 20; applied label Bold; Default chip pressed. */
+html[data-ds="skillcat"] :is(.filter-pill-dashed, .filter-applied-main, .lm-quick-pill) {
+  line-height: 20px;
+}
+html[data-ds="skillcat"] .filter-applied-main .label {
+  font-weight: 700;
+}
+html[data-ds="skillcat"] .lm-quick-pill {
+  gap: 8px;
+}
+html[data-ds="skillcat"] .lm-quick-pill:active {
+  background: var(--sc-surface-control-strong);
+}
+/* Status Label tones (10% tint, tone text). The id lift beats the table's
+   !important recolours. */
+html[data-ds="skillcat"] .co-status-pill--green:not(#ds-pill) { color: #29b673 !important; background: rgba(41, 182, 115, 0.1) !important; }
+html[data-ds="skillcat"] .co-status-pill--red:not(#ds-pill) { color: var(--sc-error) !important; background: rgba(255, 31, 23, 0.1) !important; }
+html[data-ds="skillcat"] :is(.co-status-pill--grey, .co-status-pill--secondary, .pr-name-flag--grey):not(#ds-pill) { color: #a8a8a8 !important; background: rgba(115, 115, 115, 0.1) !important; }
+html[data-ds="skillcat"] .co-status-pill--purple:not(#ds-pill) { color: #9d88ff !important; background: rgba(105, 68, 255, 0.1) !important; }
+html[data-ds="skillcat"] .co-status-pill--accent:not(#ds-pill) { color: #f05523 !important; background: rgba(240, 85, 35, 0.1) !important; }
+/* Tabs: focus ring inside the tab. */
+html[data-ds="skillcat"] .tab:focus-visible {
+  outline: none;
+}
+html[data-ds="skillcat"] .tab:focus-visible::before {
+  content: "";
+  position: absolute;
+  inset: 4px 2px 8px 2px;
+  border: 1px solid var(--sc-border-muted);
+  border-radius: 6px;
+  pointer-events: none;
+}
+/* Destructive / Positive Pressed: back to the 20% tint. */
+html[data-ds="skillcat"] :is(.prm-cta--danger, .btn-publish--danger, .prm .btn-publish.is-danger, .sp-decide-btn--reject):active:not(:disabled):not(.is-disabled) {
+  background: linear-gradient(rgba(255, 31, 23, 0.2), rgba(255, 31, 23, 0.2)), rgba(13, 13, 13, 0.75);
+}
+html[data-ds="skillcat"] :is(.prm-cta--go, .btn-publish--go, .sp-decide-btn--approve):active:not(:disabled):not(.is-disabled) {
+  background: linear-gradient(rgba(41, 182, 115, 0.2), rgba(41, 182, 115, 0.2)), rgba(13, 13, 13, 0.75);
+}
+/* Time field: the unit's select wrapper spans the shell's outer edge (so its
+   menu opens 4 below the visible field, like every select), and the value and
+   unit fit the 38 inside the 1px edge instead of overrunning it by 2. */
+html[data-ds="skillcat"] .time-field .selectfield {
+  align-self: stretch;
+  display: flex;
+  margin: -1px 0;
+}
+html[data-ds="skillcat"] .time-field .selectfield > .time-field-unit {
+  height: 40px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+html[data-ds="skillcat"] .time-field-value {
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+/* Upload / File · Preview=On (17596:4686): a picked image inside the dashed
+   panel — padding 20 / 24 (+1 for the SVG dash, as on .drop-big), no fill,
+   74×80 cover thumbnail, 16 to the name over its size (left-aligned), the
+   28 remove button at the row's end. Used by the single-image field
+   (ImageUploadField) and Create Spotlight's background image. */
+html[data-ds="skillcat"] :is(.file-card--image, .spc-file-row) {
+  flex: none;
+  height: auto;
+  min-height: 0;
+  align-items: center;
+  gap: 16px;
+  padding: 21px 25px;
+  border: 0;
+  border-radius: 8px;
+  background-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Crect width='100%25' height='100%25' rx='8' ry='8' fill='none' stroke='%237a7a7a' stroke-width='2' stroke-dasharray='4 4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+}
+/* The image card's DOM is ✕ then body: lay it out right-to-left so the ✕
+   ends the row. */
+html[data-ds="skillcat"] .file-card--image {
+  flex-direction: row-reverse;
+}
+html[data-ds="skillcat"] .file-card--image .file-card-body {
+  flex: 1;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 16px;
+}
+html[data-ds="skillcat"] .file-card--image .file-card-meta,
+html[data-ds="skillcat"] .spc-file-row .file-meta {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+html[data-ds="skillcat"] :is(.file-card-thumb, .spc-file-thumb) {
+  width: 74px;
+  height: 80px;
+  border-radius: 0;
+}
+
+/* Remaining icon buttons → Icon Button (17011:242), Compact: Default 32 /
+   Small 28, 16 icon, radius 8 (square) or full (circle).
+   Ghost: no fill, grey icon; hover #2E2E2E + white, pressed #222.
+   Secondary: 15% grey over 75% black; hover 30%, pressed 20%.
+   Disabled: solid #404040 icon, no opacity. */
+html[data-ds="skillcat"] :is(.pr-modal-close, .detail-close, .ncr-fs-close, .idfs-close, .idzoom-btn, .pr-nav-btn, .spc-hero-close, .udh-icon-btn, .note-card-icon-btn, .ctb-row-kebab) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  color: var(--sc-text-secondary);
+  transition: background 0.12s ease, color 0.12s ease;
+}
+html[data-ds="skillcat"] :is(.pr-modal-close, .detail-close, .ncr-fs-close, .idfs-close, .idzoom-btn, .pr-nav-btn, .spc-hero-close, .udh-icon-btn, .note-card-icon-btn, .ctb-row-kebab) svg {
+  width: 16px;
+  height: 16px;
+}
+/* Ghost Circle Small 28: modal and panel closes. */
+html[data-ds="skillcat"] :is(.pr-modal-close, .detail-close) {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: none;
+}
+/* Ghost Circle Default 32: the fullscreen viewers' closes. */
+html[data-ds="skillcat"] :is(.ncr-fs-close, .idfs-close) {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: none;
+}
+/* Ghost Square Default 32: the ID zoom tools. */
+html[data-ds="skillcat"] .idzoom-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: none;
+}
+/* Ghost Square Small 28, laid over inline glyphs: the 28 box hangs 6 past a
+   16 glyph on every side, so the text around it doesn't move. */
+html[data-ds="skillcat"] :is(.udh-icon-btn, .note-card-icon-btn, .ctb-row-kebab:not(.ctb-lesson-head .ctb-row-kebab)) {
+  width: 28px;
+  height: 28px;
+  margin: -6px;
+  border-radius: 8px;
+  background: none;
+}
+html[data-ds="skillcat"] .ctb-lesson-head .ctb-row-kebab {
+  width: 32px;
+  height: 32px;
+}
+html[data-ds="skillcat"] .ctb-task .ctb-row-kebab svg {
+  width: 16px;
+  height: 16px;
+}
+html[data-ds="skillcat"] :is(.pr-modal-close, .detail-close, .ncr-fs-close, .idfs-close, .idzoom-btn, .udh-icon-btn, .note-card-icon-btn, .ctb-row-kebab):hover:not(:disabled),
+html[data-ds="skillcat"] .note-card--link:hover .note-card-icon-btn {
+  background: var(--sc-bg-hover);
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] :is(.pr-modal-close, .detail-close, .ncr-fs-close, .idfs-close, .idzoom-btn, .udh-icon-btn, .note-card-icon-btn, .ctb-row-kebab):active:not(:disabled) {
+  background: var(--sc-bg-raised);
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .udh-icon-btn.is-copied {
+  color: var(--sc-primary);
+}
+/* Secondary Square Default 32: the review modal's prev / next. */
+html[data-ds="skillcat"] .pr-nav-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 0.5px solid var(--sc-border-control);
+  background: linear-gradient(var(--sc-surface-control), var(--sc-surface-control)), rgba(13, 13, 13, 0.75);
+}
+/* Secondary Circle Small 28: the Spotlight preview's ✕, over the image. */
+html[data-ds="skillcat"] .spc-hero-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 0.5px solid var(--sc-border-control);
+  background: linear-gradient(var(--sc-surface-control), var(--sc-surface-control)), rgba(13, 13, 13, 0.75);
+}
+html[data-ds="skillcat"] :is(.pr-nav-btn, .spc-hero-close):hover:not(:disabled) {
+  background: linear-gradient(var(--sc-surface-control-hover), var(--sc-surface-control-hover)), rgba(13, 13, 13, 0.75);
+  color: var(--sc-text-on-color);
+}
+html[data-ds="skillcat"] :is(.pr-nav-btn, .spc-hero-close):active:not(:disabled) {
+  background: linear-gradient(var(--sc-surface-control-strong), var(--sc-surface-control-strong)), rgba(13, 13, 13, 0.75);
+}
+html[data-ds="skillcat"] :is(.pr-nav-btn, .idzoom-btn):disabled {
+  opacity: 1;
+  color: var(--sc-border-default);
+}
+html[data-ds="skillcat"] :is(.pr-modal-close, .detail-close, .ncr-fs-close, .idfs-close, .idzoom-btn, .pr-nav-btn, .spc-hero-close, .udh-icon-btn, .note-card-icon-btn, .ctb-row-kebab):focus-visible {
+  outline: 1px solid var(--sc-border-muted);
+  outline-offset: 3px;
+}
+html[data-ds="skillcat"] .idfs-close {
+  top: 26px;
+  right: 26px;
+}
+/* Payment tags are Status Labels in DS tones: Paid / Consumable = Accent,
+   Non-Consumable = Purple (green would read as a status like Active),
+   Free = Neutral. */
+html[data-ds="skillcat"] :is(.pay-badge--paid, .pay-badge--consumable):not(#ds-pill) { color: #f05523 !important; background: rgba(240, 85, 35, 0.1) !important; }
+html[data-ds="skillcat"] .pay-badge--nonconsumable:not(#ds-pill) { color: #9d88ff !important; background: rgba(105, 68, 255, 0.1) !important; }
+html[data-ds="skillcat"] .pay-badge--free:not(#ds-pill) { color: #a8a8a8 !important; background: rgba(115, 115, 115, 0.1) !important; }
+/* Multi-select unavailable option = Menu / Item Disabled with a reason
+   (the row menus' look): #737373 label, the reason under it in 14 / 1.3
+   #7A7A7A, lined up with the label past the 16 check slot + 8. */
+html[data-ds="skillcat"] .ms-menu .dropdown-list .dropdown-item.ms-menu-item--locked {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  row-gap: 0;
+  color: var(--sc-text-disabled);
+}
+html[data-ds="skillcat"] .ms-menu-item--locked .dropdown-item-detail {
+  flex-basis: 100%;
+  padding-left: 24px;
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--sc-text-tertiary);
+}
+
+/* ===== 2026-11-05 Compact pass from the density collection (Unified ·
+   Density, Compact mode) and the remaining Figma gaps. ===== */
+/* Modal, Compact: description Fira Sans Regular 14 / 20
+   (density/modal-description-font / -style / lh); actions 0 above
+   (density/modal-actions-top), so body → buttons is the panel's 24 gap. */
+html[data-ds="skillcat"] .prm-content {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  line-height: 20px;
+}
+html[data-ds="skillcat"] .prm-foot {
+  padding: 0 24px 24px;
+}
+/* Wide form modals take the Dialog Large size. (Full-screen pickers stay
+   full-screen: the DS has no picker size.) */
+html[data-ds="skillcat"] .prm.prm--wide {
+  max-width: 960px;
+}
+/* Menu · Show empty: title 16 / 20 white over a 14 / 20 grey hint, 4 apart,
+   12 inset. */
+html[data-ds="skillcat"] .ms-menu-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+html[data-ds="skillcat"] .ms-menu-empty-hint {
+  display: block;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--sc-text-secondary);
+}
+/* Menu · Show create: a 1px line, then an 8 wrapper holding a 36 row
+   (radius 8, plus icon, 8 gap). */
+html[data-ds="skillcat"] .ss-menu-foot {
+  position: relative;
+  width: calc(100% - 16px);
+  margin: 9px 8px 8px;
+  min-height: 36px;
+  padding: 8px;
+  border-top: 0;
+  border-radius: 8px;
+  line-height: 20px;
+  color: var(--sc-text-primary);
+}
+html[data-ds="skillcat"] .ss-menu-foot::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  right: -8px;
+  top: -9px;
+  height: 1px;
+  background: var(--sc-border-default);
+}
+html[data-ds="skillcat"] .ss-menu-foot:hover {
+  background: var(--sc-surface-row-hover);
+}
+/* Upload / File · Panel with files: one dashed panel (20 / 24 + the dash)
+   holds the file rows and the Add area, 12 apart; the Add area is the icon 20
+   over the prompt, no outline of its own. */
+html[data-ds="skillcat"] .upload-files {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 21px 25px;
+  border-radius: 8px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Crect width='100%25' height='100%25' rx='8' ry='8' fill='none' stroke='%237a7a7a' stroke-width='2' stroke-dasharray='4 4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+}
+html[data-ds="skillcat"] .upload-files .drop-slim,
+html[data-ds="skillcat"] .upload-files .drop-slim:hover {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+/* Read-only input: the 16 lock at the right, 16 in (Input / Text Read-only). */
+html[data-ds="skillcat"] .form-input[readonly] {
+  padding-right: 40px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%23a8a8a8' stroke-width='1.33' stroke-linecap='square'%3E%3Cpath d='M3.33 7.33h9.34V14H3.33z'/%3E%3Cpath d='M5.33 7.33V5a2.67 2.67 0 0 1 5.34 0v2.33'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+}
+html[data-ds="skillcat"] textarea.form-input[readonly] {
+  background-position: right 16px top 12px;
+}
+/* Date Picker: Start – End side by side with no labels (the labels stay for
+   screen readers), a "–" in the 24 between them. */
+html[data-ds="skillcat"] .drp-field {
+  position: relative;
+}
+html[data-ds="skillcat"] .drp-field-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+html[data-ds="skillcat"] .drp-col--end .drp-field::before {
+  content: "–";
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  width: 24px;
+  transform: translateY(-50%);
+  text-align: center;
+  font-size: 14px;
+  color: var(--sc-text-secondary);
+}
+/* Wizard footer keycap group = one Button Shortcut box (padding 0 6). */
+html[data-ds="skillcat"] .wizard-footer .cta-kbd-group {
+  padding: 0 6px;
+}
+/* ===== Card tables (boxed tables on forms) = DS Table · Small inside a card
+   (19236:4923): 5% grey card, 1px divider edge, radius 8, 8 / 16 inside;
+   rows inset 12 on #404040-50% lines. The head row names the set like a
+   field label (Field / Label: Bold 16 / 20 grey, Eshwar 2026-11-05) over a
+   solid #404040 line, 40 tall. ===== */
+html[data-ds="skillcat"] :is(.qz, .qsec, .qed-tbl, .cc-panel, .lc-panel, .ind-assign) {
+  padding: 8px 16px;
+  background: var(--sc-surface-row-hover-subtle);
+  border: 1px solid var(--sc-border-divider);
+  border-radius: 8px;
+}
+html[data-ds="skillcat"] :is(.qz-hd, .qz-row, .qz-empty, .qsec-hd, .qsec-row, .qsec-foot, .qed-tbl-hd, .qed-tbl-row, .qed-tbl-foot, .cc-row, .lc-row, .lc-row-imp, .ind-assign-hd, .ind-assign-row) {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+html[data-ds="skillcat"] :is(.qz-hd, .qsec-hd, .qed-tbl-hd, .cc-row-head, .lc-row-head, .ind-assign-hd) {
+  min-height: 40px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--sc-border-default);
+}
+html[data-ds="skillcat"] :is(.qz-hd, .qsec-hd, .qed-tbl-hd, .cc-row-head, .lc-row-head, .ind-assign-hd),
+html[data-ds="skillcat"] :is(.qz-hd, .qsec-hd, .qed-tbl-hd, .cc-row-head, .lc-row-head, .ind-assign-hd) :is(span, .ct-col, .cc-head-text) {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 20px;
+  color: var(--sc-text-secondary);
 }

@@ -1,3 +1,4 @@
+import { useDesignSystem } from "../designSystem";
 export const PlusCircleIcon = () => (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="9.5" />
@@ -137,6 +138,17 @@ export const CheckboxDashIcon = () => (
 );
 
 export const SortIcon = ({ active, dir }: { active?: boolean; dir?: "asc" | "desc" }) => {
+  /* SkillCat DS Table header: 16 stroked chevrons (1.33) — up + down while
+     unsorted (grey), one chevron once sorted (white). */
+  if (useDesignSystem() === "skillcat") {
+    return (
+      <span className={`sort-icon${active ? " sort-icon--active" : ""}`}>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.33" strokeLinecap="round" strokeLinejoin="round">
+          <path d={!active ? "M5 6.5 8 3.5 11 6.5M5 9.5 8 12.5 11 9.5" : dir === "asc" ? "M4.5 10 8 6.5 11.5 10" : "M4.5 6 8 9.5 11.5 6"} />
+        </svg>
+      </span>
+    );
+  }
   if (!active) {
     // Sortable but not currently sorted — tdesign/material "unfold-more" double chevron.
     return (

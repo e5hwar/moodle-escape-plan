@@ -1,4 +1,4 @@
-import { useDsText } from "../designSystem";
+import { useDsText, menuGap } from "../designSystem";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useListState, useResetPageOnChange } from "../hooks/useListState";
 import { CopiedToast } from "./CopiedToast";
@@ -824,8 +824,8 @@ function FormActionsMenu({
     const el = ref.current;
     if (!el) return;
     const h = el.offsetHeight;
-    let top = rect.bottom + 6;
-    if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 6);
+    let top = rect.bottom + menuGap();
+    if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - menuGap());
     /* Right-anchored to the trigger — the kebab is the action bar's last cell,
        so the open menu's right edge lines up with the bar's. Using `right`
        rather than (rect.right - measuredWidth) keeps that exact: the first-pass
@@ -877,7 +877,7 @@ function FormActionsMenu({
       ref={ref}
       className="u-menu fb-row-menu"
       style={{
-        top: pos ? pos.top : rect.bottom + 6,
+        top: pos ? pos.top : rect.bottom + menuGap(),
         right: window.innerWidth - rect.right,
         visibility: pos ? "visible" : "hidden",
       }}
