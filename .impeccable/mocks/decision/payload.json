@@ -1,0 +1,111 @@
+{
+  "title": "Choose the Lab design system's world",
+  "question": "The roll assigned Signal Panel. Keep it, take an alternate, or re-roll.",
+  "options": [
+    {
+      "id": "assigned",
+      "kind": "assigned",
+      "label": "Signal Panel",
+      "kicker": "THE ROLL",
+      "lineage": "ANSI Z535 safety signage and ASME A13.1 pipe marking",
+      "thesis": "Colour is a signal word: solid state panels and a signal band on every message, on a black sign ground.",
+      "palette": ["#0a0a0a", "#f5f5f5", "#f05523", "#ffd100", "#d7282f", "#00a651", "#0072ce"],
+      "materials": ["enamelled sign steel", "solid signal panels", "white hairline rules"],
+      "viewport": "The rail at the left with an orange band on the current item. Tasks title Bold 24, summary grey, Create Task a solid orange panel with black type. Search and chips in hairline shells; the applied Created By chip inverts to white with black text. The table head is a solid #1c1c1c band; rows 40 on hairlines; Hidden is a black-on-yellow tag; dates in mono. A Task Created toast at the bottom right wears a green signal band. Every modal, confirm, banner and toast carries that band in its state colour.",
+      "risk": "Solid colour in a dense list can shout; the system only works if colour stays on tags, bands and the primary, and nowhere else.",
+      "raised": [
+        { "from": "challenger-crouwel", "raise": "Every size sits on one 4px cell: rows 40, head 32, chips 28, insets 12, nothing off-grid." },
+        { "from": "challenger-orienteering", "raise": "Orange is reserved for the primary action and the current item, and appears nowhere else." },
+        { "from": "challenger-saville", "raise": "A state is coloured once, in its tag; the row's own text stays white or grey." }
+      ],
+      "html": ".impeccable/mocks/decision/assigned.html"
+    },
+    {
+      "id": "model-pick",
+      "kind": "pick",
+      "label": "Reference Card",
+      "kicker": "IMPECCABLE’S PICK",
+      "lineage": "the laminated pressure-temperature card and the manufacturer spec-sheet table",
+      "thesis": "The admin as the trade's pocket reference table: a ruled reading grid, tabular mono values, 32px rows.",
+      "palette": ["#0e1013", "#22262b", "#e6e8eb", "#8f959d", "#f05523"],
+      "materials": ["laminated card", "ruled grid", "tabular numerals"],
+      "viewport": "A cool graphite ground. Title Bold 20 with the summary in mono beside it. Search 36 tall; chips 26. The table is the page: 32px rows on hairlines, vertical column rules, a heavier rule every fifth row, dates and counts in tabular mono, names Medium, status tags as hairline outlines with coloured text and no fill. Orange only on the primary button and the sort arrow.",
+      "risk": "The most familiar destination: a denser, cooler data tool that many teams already ship. Its character is in rhythm, not colour.",
+      "html": ".impeccable/mocks/decision/model-pick.html"
+    },
+    {
+      "id": "challenger-acetate",
+      "kind": "challenger",
+      "catalogId": "rw-manual-acetate-tab-board",
+      "label": "Section Board",
+      "verdict": "competitive",
+      "lineage": "boxed-software reference manual: acetate leaves over coloured divider boards",
+      "thesis": "The page ground is the current section's divider board, so the colour under your work says where you are.",
+      "palette": ["#1a110c", "#0c1a18", "#15101f", "#efe9e4", "#f05523"],
+      "materials": ["smoked acetate leaf", "divider board hue", "two-frame hinge"],
+      "viewport": "The rail is a stepped tab rail: Content, Customers and System each own a hue, and the current group's tab extends into the page as the ground, here a deep oxide board. The table, search and panels are leaves: a slightly lighter layer with one hard 1px shadow along the lower edge. Rows 40, type one size (14) inside leaves, mono for values. Nothing fades: menus and modals hinge open in two 90ms frames.",
+      "case": "Fuses cleanly: the three sidebar groups are the manual's divisions and each tints the ground; loses on identification, since software manuals are nobody's trade.",
+      "risk": "Three dark tints must read as different places without reading as a broken theme; the stepped motion can feel abrupt next to the other two systems.",
+      "html": ".impeccable/mocks/decision/challenger-acetate.html"
+    },
+    {
+      "id": "challenger-crouwel",
+      "kind": "challenger",
+      "catalogId": "crouwel-grid-specimen",
+      "label": "Grid Specimen",
+      "verdict": "declined",
+      "lineage": "Wim Crouwel gridded type specimen",
+      "thesis": "Letterforms built cell by cell on a visible construction grid.",
+      "palette": ["#1d35c8", "#ffffff", "#9fb0ff"],
+      "materials": ["construction-grid hairlines", "one saturated ground"],
+      "viewport": "A visible grid under every screen with grid-built display type.",
+      "case": "Type is pinned to Fira Sans, so the letterforms cannot carry it; a visible construction grid under a working list is ornament.",
+      "kept": "One cell grid; every size a multiple of it.",
+      "risk": "Reads as a poster, not a tool."
+    },
+    {
+      "id": "challenger-orienteering",
+      "kind": "challenger",
+      "catalogId": "notation-diagram-systems-orienteering-map",
+      "label": "Orienteering Map",
+      "verdict": "declined",
+      "lineage": "ISOM orienteering map and legend",
+      "thesis": "Terrain in fixed inks beneath, the course in reserved purple above.",
+      "palette": ["#ffffff", "#8a6d3b", "#c9d64a", "#6a8fd8", "#7a2ea8"],
+      "materials": ["ISOM inks", "contour texture"],
+      "viewport": "A coded multi-ink ground with one reserved colour for the active item.",
+      "case": "Five terrain inks fight the pinned orange and the state colours; the reserved course colour is a good rule inside a bad palette for this product.",
+      "kept": "One reserved colour for the active leg, used nowhere else.",
+      "risk": "A dark admin in five inks reads as a map, not a list."
+    },
+    {
+      "id": "challenger-saville",
+      "kind": "challenger",
+      "catalogId": "brand-identity-canon-saville-catalog-sleeve",
+      "label": "Catalog Sleeve",
+      "verdict": "declined",
+      "lineage": "Factory Records catalog identity",
+      "thesis": "Matte black, a white line plot, and colour blocks standing in for words.",
+      "palette": ["#0a0a0a", "#ffffff", "#e3b505", "#2b8a3e", "#c0392b"],
+      "materials": ["matte black board", "coded colour strip"],
+      "viewport": "Vast black with a coded strip per row that decodes on hover.",
+      "case": "Names replaced by code strips is the opposite of scanability; staff would decode every row.",
+      "kept": "Colour appears once, where it decodes to meaning.",
+      "risk": "Beautiful and unreadable at 50 rows a page."
+    }
+  ],
+  "reroll": { "registers": ["safer", "bolder"] },
+  "buildPath": { "value": "code", "toggle": false },
+  "canon": true,
+  "canonCard": {
+    "kind": "canon",
+    "label": "The dark SaaS admin",
+    "thesis": "The dark product admin everyone ships, executed cleanly.",
+    "palette": ["#09090b", "#18181b", "#27272a", "#a1a1aa", "#fafafa", "#f05523"],
+    "materials": ["zinc greys", "1px hairlines", "soft row wash"],
+    "viewport": "Near-black ground, zinc hairlines, 36px rows, one orange accent, tinted status pills.",
+    "risk": "Indistinguishable from the SkillCat Design System and a hundred dashboards.",
+    "html": ".impeccable/mocks/decision/canon.html"
+  },
+  "steer": true
+}

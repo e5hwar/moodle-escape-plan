@@ -199,6 +199,10 @@ export function HoverTooltip() {
       });
     }
     function onOver(e: MouseEvent) {
+      // The anchor was removed while hovered (a modal closed on Esc with the
+      // pointer on its ⓘ): a detached node never fires mouseout, so its tip
+      // would stay up. Drop it on the next pointer move.
+      if (current.current && !current.current.isConnected) hide();
       const el = resolve(e.target);
       if (!el || el === current.current) return;
       current.current = el;

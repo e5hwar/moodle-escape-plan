@@ -11403,6 +11403,16 @@ a.spc-hero-pill--link:hover {
 .prm-check-row:hover {
   background: rgba(122, 122, 122, 0.12);
 }
+/* A card table as a modal field (Add New Version's platform rows): the
+   card's own 12px bottom margin would stack on the stack's gap. */
+.prm-field > .qsec {
+  margin-bottom: 0;
+}
+/* A column head's ⓘ (UPDATE REQUIRED?): the 14px glyph 4px after the label,
+   in the head's grey, white on hover and keyboard focus. */
+.qsec-hd .form-help-info:hover {
+  color: #fff;
+}
 
 /* Figma 8:13495 / 8:13497 — a 16px rounded SQUARE at 0.8px, and when ticked the
    accent at 20% over a 75%-opaque page fill with a 0.75-alpha accent ring. NOT
@@ -16269,6 +16279,12 @@ body:has(.pm-overlay) .pl-copied-toast {
 .toggle:disabled {
   cursor: not-allowed;
 }
+/* A disabled switch is solid grey: the knob drops to #7a7a7a on the off
+   track (the same look a disabled card-table row gives its switch), never
+   opacity. */
+.toggle:disabled .toggle-knob {
+  background: #7a7a7a;
+}
 
 /* =============================================================
  * Content Overrides — task completion grid
@@ -19255,6 +19271,13 @@ body:has(.pm-overlay) .pl-copied-toast {
 }
 .qsec-hd .pc-col-toggle {
   white-space: nowrap;
+}
+/* An availability tick in Force App Update's platform columns — the 13px
+   bold check in white; a platform the version isn't on shows the muted dash. */
+.pc-check {
+  display: inline-flex;
+  align-items: center;
+  color: #fff;
 }
 /* A tab row's edit pencil alone (the tabs are a fixed set — no remove). */
 .pc-col-edit {

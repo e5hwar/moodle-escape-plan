@@ -1,0 +1,3505 @@
+/* =============================================================
+ * Lab design system — "Reference Card"
+ *
+ * The third, experimental look for the prototype, switched on by Demo
+ * Controls › Design System. Loaded after index.css and skillcat-ds.css
+ * (see src/main.tsx) and keyed off `html[data-ds="lab"]`, so nothing here
+ * runs under the other two looks. Nothing in the React tree changes: the same
+ * screen, the same typed-in data, the same copy. Every rule re-skins a class
+ * index.css already draws. The system and every judgment call are recorded
+ * in specs/lab-ds.md.
+ * ============================================================= */
+
+/* ===== Tokens =====
+   A reference card read under shop light: a cool graphite ground, hairline
+   rules that build the page, ink in two greys, and one accent kept for the
+   primary action, the sort arrow and the focused control. Every state colour
+   is ink and outline, never a fill. */
+html[data-ds="lab"] {
+  --lab-bg: #0e1013;
+  --lab-surface: #121519;
+  --lab-panel: #15191e;
+  --lab-panel-edge: #2a2f36;
+  --lab-rule-soft: #1a1e23;
+  --lab-rule: #22262b;
+  --lab-guide: #343a42;
+  --lab-guide-strong: #4a515a;
+  --lab-ink: #e6e8eb;
+  --lab-ink-2: #c3c8ce;
+  --lab-ink-3: #8f959d;
+  --lab-ink-4: #7d848c;
+  --lab-ink-5: #5c636b;
+  --lab-ink-6: #3f454d;
+  --lab-accent: #f05523;
+  --lab-accent-hover: #f5683b;
+  --lab-accent-press: #f05523;
+  --lab-on-accent: #0e1013;
+  --lab-green: #2fbf71;
+  --lab-go: #1f9d5b;
+  --lab-go-hover: #25ad66;
+  --lab-on-go: #0e1013;
+  --lab-red: #ff5a63;
+  --lab-red-press: #d7282f;
+  --lab-red-hover: #e8343c;
+  --lab-amber: #ffc524;
+  --lab-blue: #5b95ff;
+  --lab-purple: #9d88ff;
+  --lab-hover: rgba(255, 255, 255, 0.045);
+  --lab-wash-soft: rgba(255, 255, 255, 0.06);
+  --lab-selected: rgba(255, 255, 255, 0.07);
+  --lab-press: rgba(255, 255, 255, 0.1);
+  --lab-hover-solid: linear-gradient(var(--lab-hover), var(--lab-hover)), var(--lab-bg);
+  --lab-selected-solid: linear-gradient(var(--lab-selected), var(--lab-selected)), var(--lab-bg);
+  --lab-r: 3px;
+  --lab-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --lab-shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.4);
+  --lab-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  --lab-fast: 120ms;
+  --lab-med: 160ms;
+
+  /* Re-point the app's own tokens so anything drawn from them follows. */
+  --bg: var(--lab-bg);
+  --bg-sidebar: #0b0d10;
+  --bg-panel: var(--lab-panel);
+  --bg-row-hover: var(--lab-hover-solid);
+  --bg-row-selected: var(--lab-selected-solid);
+  --bg-pill: var(--lab-surface);
+  --bg-pill-strong: var(--lab-panel);
+  --border: var(--lab-rule);
+  --border-strong: var(--lab-guide);
+  --text: var(--lab-ink);
+  --text-muted: var(--lab-ink-3);
+  --text-faint: var(--lab-ink-4);
+  --accent: var(--lab-accent);
+  --accent-strong: var(--lab-accent-hover);
+  --field-error: var(--lab-red);
+  --field-focus: var(--lab-accent);
+  --field-warning: var(--lab-amber);
+  --row-hover-wash: var(--lab-hover);
+  --row-hover-solid: var(--lab-hover-solid);
+  --panel-bg: var(--lab-panel);
+  --panel-border: var(--lab-panel-edge);
+  --panel-row-hover: var(--lab-wash-soft);
+  --search-wash: transparent;
+  --search-bg: var(--lab-surface);
+  --search-border: var(--lab-rule);
+  --search-wash-hover: transparent;
+  --search-bg-hover: var(--lab-surface);
+  --search-h: 36px;
+  --search-h-lg: 36px;
+  --tip-bg: var(--lab-panel);
+  --tip-border: var(--lab-panel-edge);
+  --tip-text: var(--lab-ink);
+  --tip-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+  --chart-bar-fill: rgba(240, 85, 35, 0.18);
+  --chart-bar-line: rgba(240, 85, 35, 0.5);
+  --chart-bar-fill-muted: rgba(255, 255, 255, 0.03);
+  --chart-bar-line-muted: var(--lab-guide);
+  color-scheme: dark;
+}
+
+/* ===== Canvas and browser surfaces =====
+   index.css paints the canvas as a literal #0d0d0d in a few places (body,
+   the app shell, the rail host, sticky table heads, page roots); each is
+   re-pointed here so no 1px of the old ground shows through a seam. */
+html[data-ds="lab"] body,
+html[data-ds="lab"] .app,
+html[data-ds="lab"] .sidebar-host,
+html[data-ds="lab"] .table-xscroll > .table-head,
+html[data-ds="lab"] .tasks.clh .clh-canvas > .table-head,
+html[data-ds="lab"] .tasks.clh .clh-head,
+html[data-ds="lab"] .tasks.clh .clh-head::before,
+html[data-ds="lab"] .cert-split,
+html[data-ds="lab"] .ctb,
+html[data-ds="lab"] .ctb-side,
+html[data-ds="lab"] .fb-list-head,
+html[data-ds="lab"] .mc-root,
+html[data-ds="lab"] .pp,
+html[data-ds="lab"] .prc-rail,
+html[data-ds="lab"] .prof,
+html[data-ds="lab"] .qz-qwiz,
+html[data-ds="lab"] .rvc-root,
+html[data-ds="lab"] .sp-save-footer,
+html[data-ds="lab"] .demo-blank {
+  background: var(--lab-bg);
+}
+html[data-ds="lab"] body {
+  color: var(--lab-ink);
+  font-size: 14px;
+}
+html[data-ds="lab"] ::selection {
+  background: color-mix(in srgb, var(--lab-accent) 32%, transparent);
+  color: #fff;
+}
+html[data-ds="lab"] input,
+html[data-ds="lab"] textarea,
+html[data-ds="lab"] [contenteditable] {
+  caret-color: var(--lab-accent);
+}
+html[data-ds="lab"] :is(button, a, [role="button"], [tabindex="0"]):focus-visible {
+  outline: 1px solid var(--lab-accent);
+  outline-offset: 2px;
+}
+html[data-ds="lab"] * {
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+html[data-ds="lab"] *::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+}
+html[data-ds="lab"] *::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.22);
+}
+
+/* ===== Sidebar =====
+   The rail is the second neutral: a shade cooler and darker than the canvas
+   on a hairline, so the page reads as a card set beside it. Rows are 32,
+   Medium 14 in the second ink; the current row is first ink on a 7% wash.
+   Counts are mono numbers in a small ruled box, not a pill. */
+html[data-ds="lab"] .sidebar {
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--lab-rule-soft);
+}
+html[data-ds="lab"] .sidebar--overlay {
+  background: #0f1216;
+  box-shadow: 8px 0 28px rgba(0, 0, 0, 0.5);
+}
+html[data-ds="lab"] .sidebar__header,
+html[data-ds="lab"] .sidebar__top-collapsed {
+  border-bottom: 1px solid var(--lab-rule-soft);
+}
+html[data-ds="lab"] .sidebar__footer {
+  border-top: 1px solid var(--lab-rule-soft);
+}
+html[data-ds="lab"] .sidebar__section {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 16px;
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .sidebar__link {
+  gap: 12px;
+  padding: 7px 12px;
+  border-radius: var(--lab-r);
+  color: var(--lab-ink-3);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 18px;
+  transition: none;
+}
+html[data-ds="lab"] .sidebar__link:hover {
+  background: var(--lab-hover);
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .sidebar__link.is-active {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--lab-guide);
+  color: var(--lab-ink);
+  font-weight: 600;
+}
+html[data-ds="lab"] .sidebar__link-badge {
+  width: auto;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 5px;
+  border: 1px solid var(--lab-guide);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--lab-ink-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+html[data-ds="lab"] .sidebar__link.is-active .sidebar__link-badge {
+  background: transparent;
+  border-color: var(--lab-guide-strong);
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .sidebar__icon-btn {
+  border-radius: var(--lab-r);
+  color: var(--lab-ink-3);
+  transition: none;
+}
+html[data-ds="lab"] .sidebar__icon-btn:hover {
+  background: var(--lab-hover);
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .sidebar__icon-btn.is-active {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--lab-guide);
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .sidebar__collapse-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--lab-r);
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .sidebar__collapse-icon:hover {
+  color: var(--lab-ink);
+}
+
+/* ===== Page head =====
+   Title Bold 20 / 24; the summary is a mono 12.5 line in the second ink, 4
+   under it. The header buttons sit level with the title block. The landing
+   pages' collapsing head (`.tasks.clh`) is switched off in this look, as in
+   the SkillCat look: a reference card does not grow and shrink, so the head
+   is one pinned band at one size. */
+html[data-ds="lab"] .tasks-title {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 24px;
+  letter-spacing: -0.01em;
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .tasks-subtitle {
+  margin-top: 4px;
+  gap: 6px;
+  color: var(--lab-ink-3);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+html[data-ds="lab"] .tasks-subtitle-dot {
+  background: var(--lab-ink-5);
+}
+html[data-ds="lab"] .tasks-header {
+  margin-bottom: 20px;
+}
+html[data-ds="lab"] .tasks-header-actions {
+  gap: 8px;
+  min-height: 30px;
+}
+html[data-ds="lab"] .toolbar {
+  margin-bottom: 10px;
+}
+html[data-ds="lab"] .filters {
+  padding-bottom: 20px;
+}
+/* The list head as one band: the element holding `.tasks-title`,
+   `.tasks-subtitle`, `.tasks-header` (the buttons), `.toolbar` and `.filters`
+   as siblings becomes a three-column grid, so the title block sits left and
+   the buttons right, level with the bottom of the summary; the search and
+   chip rows span the width below. Same markup, same approach as the SkillCat
+   look; sizes are the Lab's. */
+html[data-ds="lab"] :has(> .tasks-title):has(> .toolbar + .filters) {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  column-gap: 16px;
+  align-items: center;
+}
+html[data-ds="lab"] :has(> .tasks-title):has(> .toolbar + .filters) > * {
+  grid-column: 1 / -1;
+}
+html[data-ds="lab"] :has(> .tasks-title):has(> .toolbar + .filters) > .tasks-title {
+  grid-column: 1 / 3;
+  grid-row: 1;
+  margin: 0;
+  white-space: nowrap;
+}
+html[data-ds="lab"] :has(> .tasks-title):has(> .toolbar + .filters) > :is(.tasks-subtitle, .clh-sub) {
+  grid-column: 1 / 3;
+  grid-row: 2;
+  display: block;
+  width: auto;
+  margin: 0;
+  padding-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+html[data-ds="lab"] :has(> .tasks-title):has(> .toolbar + .filters) > .tasks-header {
+  grid-column: 3;
+  grid-row: 1 / 3;
+  align-self: end;
+  width: max-content;
+  margin: 0;
+  padding: 0;
+}
+html[data-ds="lab"] :has(> .tasks-title):has(> .toolbar + .filters) > .toolbar {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  margin: 0;
+  padding: 20px 0 10px;
+}
+html[data-ds="lab"] :has(> .tasks-title):has(> .toolbar + .filters) > .toolbar + .filters {
+  grid-column: 1 / -1;
+  grid-row: 4;
+  min-height: 26px;
+  padding-bottom: 20px;
+}
+/* Switch the collapse off: no rises, no scaling title, no two-half search. */
+html[data-ds="lab"] .tasks.clh {
+  --clh-title-drop: 0px;
+  --clh-title-grow: 0px;
+  --clh-sub-h: 0px;
+  --clh-bar-grow: 0px;
+  --clh-gap-grow: 0px;
+  --clh-banner-h: 0px;
+  --clh-note-h: 0px;
+}
+html[data-ds="lab"] .tasks.clh .clh-canvas {
+  min-height: 100%;
+}
+html[data-ds="lab"] .tasks.clh .clh-head > *,
+html[data-ds="lab"] .tasks.clh .clh-head > *::before,
+html[data-ds="lab"] .tasks.clh .clh-head > *::after,
+html[data-ds="lab"] .tasks.clh .toolbar .usearch-bar::before,
+html[data-ds="lab"] .tasks.clh .toolbar .usearch-bar::after,
+html[data-ds="lab"] .tasks.clh .toolbar .usearch-panel,
+html[data-ds="lab"] .tasks.clh .toolbar .usearch-icon,
+html[data-ds="lab"] .tasks.clh .toolbar .usearch-bar > .usearch-scope,
+html[data-ds="lab"] .tasks.clh .toolbar .usearch-input,
+html[data-ds="lab"] .tasks.clh .toolbar .usearch-clear,
+html[data-ds="lab"] .tasks.clh .toolbar .usearch-kbd,
+html[data-ds="lab"] .tasks.clh .toolbar .usearch-kbd .kbd-cmd,
+html[data-ds="lab"] .tasks.clh .toolbar .usearch-kbd .kbd-cmd svg,
+html[data-ds="lab"] .tasks.clh .clh-canvas > .table-head::after {
+  animation: none !important;
+  transform: none !important;
+}
+html[data-ds="lab"] .tasks.clh .clh-head::after,
+html[data-ds="lab"] .tasks.clh .clh-head > .toolbar::before,
+html[data-ds="lab"] .tasks.clh .toolbar .usearch-bar::before,
+html[data-ds="lab"] .tasks.clh .toolbar .usearch-bar::after {
+  display: none;
+}
+html[data-ds="lab"] .tasks.clh .clh-head::before {
+  height: 100%;
+}
+html[data-ds="lab"] .tasks.clh .clh-head > .clh-actions {
+  margin: 0;
+}
+html[data-ds="lab"] .tasks.clh .clh-head > .tasks-title {
+  font-size: 20px;
+  line-height: 24px;
+}
+html[data-ds="lab"] .tasks.clh .clh-head > .clh-sub {
+  margin: 0;
+  padding-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 16px;
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .tasks.clh .toolbar .usearch-input,
+html[data-ds="lab"] .tasks.clh .toolbar .usearch-input::placeholder,
+html[data-ds="lab"] .tasks.lm .toolbar .usearch-input,
+html[data-ds="lab"] .tasks.lm .toolbar .usearch-input::placeholder,
+html[data-ds="lab"] .tasks.lm .toolbar .search-input::placeholder {
+  font-size: 13px;
+  line-height: 18px;
+}
+html[data-ds="lab"] .tasks.lm .toolbar .usearch-kbd .kbd-letter {
+  font-size: 11px;
+}
+html[data-ds="lab"] .tasks.clh .toolbar .usearch-icon svg,
+html[data-ds="lab"] .tasks.lm .toolbar .usearch-icon svg,
+html[data-ds="lab"] .tasks.lm .toolbar .search-wrap > .search-icon svg {
+  width: 14px;
+  height: 14px;
+}
+html[data-ds="lab"] .tasks.clh .clh-head:not([data-clh="collapsed"]) .usearch-bar > .usearch-scope {
+  padding: 4px 4px 4px 6px;
+  font-size: 13px;
+}
+
+/* ===== Buttons =====
+   30 tall, radius 3, SemiBold 13. Primary is the one solid orange on the
+   page; secondary is a ruled transparent box; both press to 98%. The
+   destructive and go variants are solid red / green, used only on confirms. */
+html[data-ds="lab"] .cta-primary,
+html[data-ds="lab"] .new-task,
+html[data-ds="lab"] .btn-primary,
+html[data-ds="lab"] .btn-publish,
+html[data-ds="lab"] .btn-apply,
+html[data-ds="lab"] .prm-cta,
+html[data-ds="lab"] .tasks-header .new-task,
+html[data-ds="lab"] .tasks-header .cta-primary {
+  height: 30px;
+  padding: 0 12px;
+  gap: 8px;
+  border: 1px solid var(--lab-accent);
+  border-radius: var(--lab-r);
+  background: var(--lab-accent);
+  color: var(--lab-on-accent);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  box-shadow: none;
+  transition: background var(--lab-fast) ease, border-color var(--lab-fast) ease, transform var(--lab-fast) ease;
+}
+html[data-ds="lab"] .cta-primary:hover:not(:disabled):not(.is-disabled),
+html[data-ds="lab"] .new-task:hover:not(:disabled):not(.is-disabled),
+html[data-ds="lab"] .btn-primary:hover:not(:disabled):not(.is-disabled),
+html[data-ds="lab"] .btn-publish:hover:not(:disabled):not(.is-disabled),
+html[data-ds="lab"] .btn-apply:hover:not(:disabled):not(.is-disabled),
+html[data-ds="lab"] .prm-cta:hover:not(:disabled):not(.is-disabled) {
+  background: var(--lab-accent-hover);
+  border-color: var(--lab-accent-hover);
+  filter: none;
+}
+html[data-ds="lab"] .cta-primary:active:not(:disabled),
+html[data-ds="lab"] .new-task:active:not(:disabled),
+html[data-ds="lab"] .btn-primary:active:not(:disabled),
+html[data-ds="lab"] .btn-publish:active:not(:disabled),
+html[data-ds="lab"] .btn-apply:active:not(:disabled),
+html[data-ds="lab"] .prm-cta:active:not(:disabled) {
+  background: var(--lab-accent-press);
+  border-color: var(--lab-accent-press);
+  transform: scale(0.98);
+}
+/* Destructive keeps white on its red (5.5:1); go is dark ink on green (5.5:1). */
+html[data-ds="lab"] .btn-publish--danger,
+html[data-ds="lab"] .prm-cta--danger,
+html[data-ds="lab"] .prm .btn-danger,
+html[data-ds="lab"] .prm .cta-danger {
+  background: var(--lab-red-press);
+  border-color: var(--lab-red-press);
+  color: #fff;
+}
+html[data-ds="lab"] .btn-publish--danger:hover:not(:disabled),
+html[data-ds="lab"] .prm-cta--danger:hover:not(:disabled) {
+  background: var(--lab-red-hover);
+  border-color: var(--lab-red-hover);
+}
+html[data-ds="lab"] .btn-publish--go,
+html[data-ds="lab"] .prm-cta--go {
+  background: var(--lab-go);
+  border-color: var(--lab-go);
+  color: var(--lab-on-go);
+}
+html[data-ds="lab"] .btn-publish--go:hover:not(:disabled),
+html[data-ds="lab"] .prm-cta--go:hover:not(:disabled) {
+  background: var(--lab-go-hover);
+  border-color: var(--lab-go-hover);
+}
+html[data-ds="lab"] .cta-quiet,
+html[data-ds="lab"] .btn-save-draft,
+html[data-ds="lab"] .prm-quiet {
+  height: 30px;
+  padding: 0 12px;
+  gap: 8px;
+  border: 1px solid var(--lab-guide);
+  border-radius: var(--lab-r);
+  background: transparent;
+  color: var(--lab-ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  transition: background var(--lab-fast) ease, border-color var(--lab-fast) ease, transform var(--lab-fast) ease;
+}
+html[data-ds="lab"] .cta-quiet:hover:not(:disabled):not(.is-disabled),
+html[data-ds="lab"] .btn-save-draft:hover:not(:disabled):not(.is-disabled),
+html[data-ds="lab"] .prm-quiet:hover:not(:disabled):not(.is-disabled) {
+  background: var(--lab-hover);
+  border-color: var(--lab-guide-strong);
+}
+html[data-ds="lab"] .cta-quiet:active:not(:disabled),
+html[data-ds="lab"] .btn-save-draft:active:not(:disabled),
+html[data-ds="lab"] .prm-quiet:active:not(:disabled) {
+  background: var(--lab-press);
+  transform: scale(0.98);
+}
+html[data-ds="lab"] .cta-quiet.cta-quiet--icon {
+  width: 30px;
+  padding: 0;
+}
+html[data-ds="lab"] .cta-quiet--icon > svg {
+  width: 16px;
+  height: 16px;
+}
+/* Keycaps: 18 tall mono 11 on a 6% wash, radius 2. */
+html[data-ds="lab"] .cta-kbd,
+html[data-ds="lab"] .search-kbd .kbd-letter,
+html[data-ds="lab"] .search-kbd .kbd-cmd,
+html[data-ds="lab"] .usearch-kbd .kbd-letter,
+html[data-ds="lab"] .usearch-kbd .kbd-cmd {
+  min-width: 18px;
+  width: auto;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 2px;
+  background: var(--lab-wash-soft);
+  color: var(--lab-ink-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+}
+html[data-ds="lab"] .cta-kbd--hint:not(:has(> svg)) {
+  font-size: 10px;
+}
+html[data-ds="lab"] :is(.cta-primary, .new-task, .btn-primary, .btn-publish, .btn-apply, .prm-cta) .cta-kbd {
+  background: rgba(255, 255, 255, 0.22);
+  color: var(--lab-on-accent);
+}
+html[data-ds="lab"] :is(.btn-publish--danger, .prm-cta--danger) .cta-kbd {
+  background: rgba(0, 0, 0, 0.18);
+  color: #fff;
+}
+html[data-ds="lab"] .search-kbd .kbd-cmd svg,
+html[data-ds="lab"] .usearch-kbd .kbd-cmd svg {
+  width: 12px;
+  height: 12px;
+}
+html[data-ds="lab"] .cta-kbd-group {
+  height: 18px;
+  gap: 0;
+  padding: 0 4px;
+  border-radius: 2px;
+  background: var(--lab-wash-soft);
+}
+html[data-ds="lab"] .cta-kbd-group .cta-kbd {
+  min-width: 0;
+  padding: 0 2px;
+  background: none;
+}
+
+/* ===== Search =====
+   One 36 control everywhere: a surface one step up from the canvas on a
+   hairline, radius 3, mono 13 with the placeholder in the fourth ink; hover
+   lifts the rule to the guide grey, focus or open draws the orange rule. */
+html[data-ds="lab"] .usearch-bar,
+html[data-ds="lab"] .toolbar .usearch-bar,
+html[data-ds="lab"] .tasks.clh .toolbar .usearch-bar {
+  height: 36px;
+  gap: 8px;
+  padding: 0 11px;
+  background: var(--lab-surface);
+  border: 1px solid var(--lab-rule);
+  border-radius: var(--lab-r);
+  transition: border-color var(--lab-fast) ease;
+}
+html[data-ds="lab"] .usearch-bar:hover,
+html[data-ds="lab"] .toolbar .usearch-bar:hover,
+html[data-ds="lab"] .tasks.clh .toolbar .usearch-bar:hover {
+  background: var(--lab-surface);
+  border-color: var(--lab-guide);
+}
+html[data-ds="lab"] .usearch-bar.open,
+html[data-ds="lab"] .usearch-bar:focus-within,
+html[data-ds="lab"] .usearch.is-open .usearch-bar,
+html[data-ds="lab"] .toolbar .usearch-bar.open,
+html[data-ds="lab"] .toolbar .usearch-bar:focus-within,
+html[data-ds="lab"] .tasks.clh .toolbar .usearch-bar.open,
+html[data-ds="lab"] .tasks.clh .toolbar .usearch-bar:focus-within {
+  background: var(--lab-surface);
+  border-color: var(--lab-accent);
+}
+html[data-ds="lab"] .usearch-icon {
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .usearch-icon svg {
+  width: 14px;
+  height: 14px;
+}
+html[data-ds="lab"] .usearch-input {
+  color: var(--lab-ink);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
+}
+html[data-ds="lab"] .usearch-input::placeholder {
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .usearch-kbd {
+  gap: 4px;
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .search-input {
+  height: 36px;
+  padding: 0 56px 0 34px;
+  background: var(--lab-surface);
+  border: 1px solid var(--lab-rule);
+  border-radius: var(--lab-r);
+  color: var(--lab-ink);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 400;
+  transition: border-color var(--lab-fast) ease;
+}
+html[data-ds="lab"] .search-input::placeholder {
+  color: var(--lab-ink-4);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 400;
+}
+html[data-ds="lab"] .search-input:hover {
+  background: var(--lab-surface);
+  border-color: var(--lab-guide);
+}
+html[data-ds="lab"] .search-input:focus,
+html[data-ds="lab"] .search-input:focus-visible {
+  background: var(--lab-surface);
+  border-color: var(--lab-accent);
+  box-shadow: none;
+}
+html[data-ds="lab"] .search-icon {
+  left: 12px;
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .search-icon svg {
+  width: 14px;
+  height: 14px;
+}
+html[data-ds="lab"] .search-kbd {
+  right: 10px;
+  gap: 4px;
+}
+/* The suggestions panel is a floating panel. */
+html[data-ds="lab"] .usearch-panel {
+  top: calc(100% + 4px);
+  background: var(--lab-panel);
+  border: 1px solid var(--lab-panel-edge);
+  border-radius: var(--lab-r);
+  box-shadow: var(--lab-shadow);
+}
+html[data-ds="lab"] .usearch-head {
+  padding: 10px 12px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 16px;
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .usearch-head-q {
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .usearch-chip {
+  padding: 3px 7px;
+  border: 1px solid var(--lab-guide);
+  border-radius: var(--lab-r);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--lab-ink-2);
+}
+
+/* ===== Chips =====
+   26 tall, radius 3, Medium 12.5. An empty filter is a dashed guide box in
+   the second ink; an applied one is a solid rule with its value in first ink
+   (orange is not spent on filters). */
+html[data-ds="lab"] .filter-pill-dashed,
+html[data-ds="lab"] .filter-pill-dashed:hover,
+html[data-ds="lab"] .filter-pill-dashed.open {
+  height: 26px;
+  gap: 6px;
+  padding: 0 10px;
+  background-image: none;
+  border: 1px dashed var(--lab-guide);
+  border-radius: var(--lab-r);
+  color: var(--lab-ink-3);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 16px;
+  transition: border-color var(--lab-fast) ease, color var(--lab-fast) ease, background var(--lab-fast) ease;
+}
+html[data-ds="lab"] .filter-pill-dashed:hover,
+html[data-ds="lab"] .filter-pill-dashed.open {
+  background-color: var(--lab-hover);
+  border-color: var(--lab-guide-strong);
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .filter-pill-dashed .icon {
+  color: inherit;
+}
+html[data-ds="lab"] .filter-pill-dashed .icon svg,
+html[data-ds="lab"] .filter-applied-clear svg {
+  width: 12px;
+  height: 12px;
+}
+html[data-ds="lab"] .filter-applied {
+  height: 26px;
+  gap: 6px;
+  border: 1px solid var(--lab-guide);
+  border-radius: var(--lab-r);
+  transition: border-color var(--lab-fast) ease;
+}
+html[data-ds="lab"] .filter-applied:hover,
+html[data-ds="lab"] .filter-applied.open {
+  border-color: var(--lab-guide-strong);
+}
+html[data-ds="lab"] .filter-applied-main {
+  gap: 6px;
+  padding-right: 10px;
+  font-size: 12.5px;
+  line-height: 16px;
+}
+html[data-ds="lab"] .filter-applied-main .label {
+  font-weight: 500;
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .filter-applied-main .sep {
+  height: 14px;
+  background: var(--lab-guide);
+}
+html[data-ds="lab"] .filter-applied-main .value {
+  font-weight: 600;
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .filter-applied-clear {
+  align-self: stretch;
+  padding-left: 10px;
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .filter-applied-clear:hover {
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .filter-clear-link {
+  padding: 0;
+  color: var(--lab-ink-3);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 26px;
+  transition: color var(--lab-fast) ease;
+}
+html[data-ds="lab"] .filter-clear-link:hover {
+  color: var(--lab-ink);
+}
+
+/* ===== Table =====
+   The signature: a ruled reading grid. Head 28 with tracked SemiBold 11.5
+   labels in the second ink on a guide rule; rows 32 on hairlines with a
+   vertical rule between columns and a guide rule under every fifth row;
+   names Medium 13.5 in first ink, other cells 13 in second ink, dates and
+   numbers in tabular mono 12.5. Hover is an instant 4.5% wash. */
+html[data-ds="lab"] .table {
+  font-size: 13px;
+}
+html[data-ds="lab"] .table thead th,
+html[data-ds="lab"] .table thead th[class] {
+  height: 28px;
+  padding: 0 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  line-height: 16px;
+  color: var(--lab-ink-3);
+  border-bottom: 1px solid var(--lab-guide);
+  transition: color var(--lab-fast) ease;
+}
+html[data-ds="lab"] .table thead th:not(.no-sort):not(.row-actions):not(.col-actions):hover {
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .th-content {
+  gap: 4px;
+}
+html[data-ds="lab"] .th-content svg {
+  width: 12px;
+  height: 12px;
+}
+html[data-ds="lab"] .table thead th .caret {
+  color: var(--lab-ink-5);
+  font-size: 12px;
+  margin-left: 2px;
+}
+html[data-ds="lab"] .table thead th + th:not(.col-actions),
+html[data-ds="lab"] .table tbody td + td:not(.col-actions) {
+  border-left: 1px solid var(--lab-rule);
+}
+html[data-ds="lab"] .table tbody tr {
+  border-bottom: 1px solid var(--lab-rule);
+  transition: none;
+}
+html[data-ds="lab"] .table tbody tr:nth-child(5n) {
+  border-bottom-color: var(--lab-guide);
+}
+html[data-ds="lab"] .table tbody tr:last-child {
+  border-bottom: 1px solid var(--lab-rule);
+}
+html[data-ds="lab"] .table tbody tr:hover,
+html[data-ds="lab"] .table tbody tr.menu-open {
+  background-color: var(--lab-hover);
+}
+html[data-ds="lab"] .table tbody tr.selected {
+  background-color: var(--lab-selected);
+}
+html[data-ds="lab"] .table tbody td {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--lab-ink-2);
+}
+html[data-ds="lab"] .table tbody td:not(.col-name):not(.col-rh-task):not(.qb-col-question):not(.col-actions):not(.col-checkbox) {
+  color: var(--lab-ink-2);
+}
+html[data-ds="lab"] .table tbody td:is(.col-name, .col-rh-task) {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .table tbody td.qb-col-question {
+  color: var(--lab-ink);
+}
+/* Measured values read in tabular mono: dates, ids, counts, scores, prices,
+   phones, emails, versions. */
+html[data-ds="lab"] .table tbody td:is(.col-date, .col-edited, .col-u-date, .col-rh-date, .col-created, .col-canceled, .col-trial-end, .col-signup, .col-id, .col-rh-taskid, .col-num, .col-attempts, .col-attempt, .col-rh-attempt, .col-qp-attempt, .col-qp-score, .col-grade, .col-price, .col-seats, .col-version, .col-duration, .col-phone, .col-u-phone, .col-rh-phone, .col-email, .col-u-email, .col-rh-email, .col-u-zip, .col-cycle, .col-cp-progress, .col-cp-completion, .pr-col-email, .pr-col-phone, .pr-col-date) {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+/* Hidden / archived rows: every cell drops to the fourth ink; the kebab
+   stays live because Unhide and Restore live in it. */
+html[data-ds="lab"] .table tbody tr:is(.task-dim, .skg-archived, .is-hidden, .is-archived, .is-disabled) td:not(.col-actions):not(.col-checkbox):not(#ds-dim) {
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .table tbody tr.task-dim td.col-name,
+html[data-ds="lab"] .table tbody td.col-name.has-flag,
+html[data-ds="lab"] .table tbody tr.skg-row td.col-name,
+html[data-ds="lab"] .table tbody tr.skg-group td.col-name {
+  height: 31px;
+}
+html[data-ds="lab"] .table.mgf-table tbody td {
+  height: auto;
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+/* The sticky action column: opaque in the canvas, no gradient shadow strip
+   (the column rule does that job). */
+html[data-ds="lab"] .col-actions {
+  --actions-bg: var(--lab-bg);
+}
+html[data-ds="lab"] .col-actions::before {
+  display: none;
+}
+html[data-ds="lab"] .table tbody tr:hover .col-actions,
+html[data-ds="lab"] .table tbody tr.menu-open .col-actions {
+  --actions-bg: var(--lab-hover-solid);
+}
+html[data-ds="lab"] .table tbody tr.selected .col-actions {
+  --actions-bg: var(--lab-selected-solid);
+}
+html[data-ds="lab"] .stm-table--preview .col-actions {
+  --actions-bg: var(--prm-surface);
+}
+html[data-ds="lab"] .stm-table--preview tbody tr:hover .col-actions {
+  --actions-bg: linear-gradient(var(--lab-hover), var(--lab-hover)), var(--prm-surface);
+}
+html[data-ds="lab"] .stm-table--preview tbody tr.selected .col-actions,
+html[data-ds="lab"] .stm-table--preview tbody tr.selected:hover .col-actions {
+  --actions-bg: linear-gradient(var(--lab-selected), var(--lab-selected)), var(--prm-surface);
+}
+html[data-ds="lab"] .lone-dots,
+html[data-ds="lab"] .row-action-btn:where(:not(.row-action-bar > .row-action-btn)) {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: var(--lab-r);
+  color: var(--lab-ink-5);
+  transition: background var(--lab-fast) ease, color var(--lab-fast) ease;
+}
+html[data-ds="lab"] .lone-dots:hover,
+html[data-ds="lab"] .row-action-btn:where(:not(.row-action-bar > .row-action-btn)):hover {
+  background: var(--lab-selected);
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .lone-dots svg,
+html[data-ds="lab"] .row-action-btn svg {
+  width: 14px;
+  height: 14px;
+}
+html[data-ds="lab"] .row-action-bar {
+  background: var(--lab-panel);
+  border-radius: var(--lab-r);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+html[data-ds="lab"] .row-action-bar > .row-action-btn {
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--lab-guide);
+  color: var(--lab-ink);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+html[data-ds="lab"] .row-action-bar > .row-action-btn + .row-action-btn {
+  margin-left: -1px;
+}
+html[data-ds="lab"] .row-action-bar > .row-action-btn:hover {
+  background: var(--lab-selected);
+}
+html[data-ds="lab"] .table tbody tr.menu-open .row-action-bar > .row-action-btn:last-child {
+  border-color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .edit-columns-btn {
+  color: var(--lab-ink-3);
+  transition: color var(--lab-fast) ease;
+}
+html[data-ds="lab"] .edit-columns-btn:hover {
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .edit-columns-btn svg {
+  width: 14px;
+  height: 14px;
+}
+html[data-ds="lab"] .pagination {
+  height: 40px;
+  padding: 0 12px;
+  gap: 12px;
+  border-top: none;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .pagination-controls {
+  gap: 4px;
+}
+html[data-ds="lab"] .page-btn {
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  border-radius: var(--lab-r);
+  color: var(--lab-ink);
+  transition: none;
+}
+html[data-ds="lab"] .page-btn:hover:not(:disabled) {
+  background: var(--lab-selected);
+}
+html[data-ds="lab"] .page-btn:disabled {
+  color: var(--lab-ink-6);
+}
+html[data-ds="lab"] .page-btn svg {
+  width: 14px;
+  height: 14px;
+}
+html[data-ds="lab"] .table-empty-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .table-empty-sub {
+  font-size: 13px;
+  color: var(--lab-ink-3);
+}
+
+/* ===== Status labels =====
+   Ink and outline, never a fill: the tone colour on the text and on a 45%
+   hairline of itself, radius 3. Regular 22 tall SemiBold 11.5; small 18 tall
+   SemiBold 10.5. index.css sizes and colours these from context with
+   !important (td.col-status, td.col-name .pr-name-flag), so `:not(#ds-pill)`
+   lifts these rules past both. */
+html[data-ds="lab"] :is(.co-status-pill, .pr-name-flag, .pay-badge):not(#ds-pill) {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px;
+  box-sizing: border-box;
+  height: 22px !important;
+  padding: 0 6px !important;
+  border: 1px solid color-mix(in srgb, currentColor 45%, transparent) !important;
+  border-radius: var(--lab-r) !important;
+  background: transparent !important;
+  font-family: var(--font-sans);
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  line-height: 1 !important;
+  letter-spacing: 0.01em;
+}
+html[data-ds="lab"] :is(.co-status-pill, .pr-name-flag, .pay-badge):not(#ds-pill) svg {
+  width: 12px;
+  height: 12px;
+}
+html[data-ds="lab"] :is(.co-status-pill--sm, .pr-name-flag, .pay-badge):not(#ds-pill) {
+  height: 18px !important;
+  padding: 0 5px !important;
+  font-size: 10.5px !important;
+}
+html[data-ds="lab"] :is(.co-status-pill--sm, .pr-name-flag, .pay-badge):not(#ds-pill) svg {
+  width: 10px;
+  height: 10px;
+}
+html[data-ds="lab"] .co-status-pill--green:not(#ds-pill), html[data-ds="lab"] .pr-name-flag--green:not(#ds-pill) { color: var(--lab-green) !important; }
+html[data-ds="lab"] .co-status-pill--red:not(#ds-pill), html[data-ds="lab"] .pr-name-flag--red:not(#ds-pill) { color: var(--lab-red) !important; }
+html[data-ds="lab"] .co-status-pill--yellow:not(#ds-pill), html[data-ds="lab"] .pr-name-flag:not([class*="pr-name-flag--"]):not(#ds-pill) { color: var(--lab-amber) !important; }
+html[data-ds="lab"] .co-status-pill--grey:not(#ds-pill), html[data-ds="lab"] .pr-name-flag--grey:not(#ds-pill), html[data-ds="lab"] .pay-badge--free:not(#ds-pill) { color: var(--lab-ink-3) !important; }
+html[data-ds="lab"] .co-status-pill--purple:not(#ds-pill) { color: var(--lab-purple) !important; }
+html[data-ds="lab"] .co-status-pill--secondary:not(#ds-pill) { color: var(--lab-ink-3) !important; }
+html[data-ds="lab"] .co-status-pill--accent:not(#ds-pill), html[data-ds="lab"] .pr-name-flag--accent:not(#ds-pill) { color: var(--lab-accent) !important; }
+html[data-ds="lab"] .co-status-pill--blue:not(#ds-pill) { color: var(--lab-blue) !important; }
+html[data-ds="lab"] :is(.pay-badge--consumable, .pay-badge--paid):not(#ds-pill) { color: var(--lab-accent) !important; }
+html[data-ds="lab"] .pay-badge--nonconsumable:not(#ds-pill) { color: var(--lab-green) !important; }
+
+/* ===== Menus =====
+   Every floating panel: the panel surface on a 1px edge, radius 3, a soft
+   offset shadow, 6 inset. Rows 30, Regular 13 in first ink, 6% wash on
+   hover; section labels tracked 11 in the fourth ink; checks 14 on radius 2
+   that fill with first ink when on (selection is ink in this look). */
+html[data-ds="lab"] .dropdown,
+html[data-ds="lab"] .u-menu,
+html[data-ds="lab"] .ct-menu,
+html[data-ds="lab"] .dropdown.ct-menu,
+html[data-ds="lab"] .dropdown.ctb-menu,
+html[data-ds="lab"] .dropdown.ctb-menu:has(.menu-item-sub),
+html[data-ds="lab"] .ss-menu,
+html[data-ds="lab"] .ms-menu,
+html[data-ds="lab"] .rte-para-menu,
+html[data-ds="lab"] .drp-my-menu {
+  background: var(--lab-panel);
+  border: 1px solid var(--lab-panel-edge);
+  border-radius: var(--lab-r);
+  box-shadow: var(--lab-shadow);
+  font-size: 13px;
+}
+html[data-ds="lab"] .dropdown {
+  top: calc(100% + 4px);
+}
+html[data-ds="lab"] .dropdown.up {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+html[data-ds="lab"] .dropdown-list {
+  padding: 6px;
+}
+html[data-ds="lab"] .u-menu,
+html[data-ds="lab"] .ct-menu,
+html[data-ds="lab"] .dropdown.ct-menu {
+  min-width: 120px;
+  padding: 6px;
+}
+html[data-ds="lab"] .dropdown-item,
+html[data-ds="lab"] .dropdown-list .dropdown-item,
+html[data-ds="lab"] .cols-menu .cols-fixed-row,
+html[data-ds="lab"] .menu-item,
+html[data-ds="lab"] .ct-menu-item,
+html[data-ds="lab"] .u-menu-item {
+  gap: 8px;
+  min-height: 30px;
+  padding: 5px 8px;
+  border-radius: 2px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--lab-ink);
+  transition: none;
+}
+html[data-ds="lab"] .u-menu-item {
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+  text-align: left;
+}
+html[data-ds="lab"] .dropdown-list .cols-row {
+  min-height: 30px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+html[data-ds="lab"] .dropdown-list .cols-row-label {
+  line-height: 18px;
+}
+html[data-ds="lab"] .dropdown-item:hover,
+html[data-ds="lab"] .menu-item:hover,
+html[data-ds="lab"] .ct-menu-item:hover,
+html[data-ds="lab"] .u-menu-item:hover:not(:disabled) {
+  background: var(--panel-row-hover);
+}
+html[data-ds="lab"] .dropdown-item.is-checked,
+html[data-ds="lab"] .dropdown-item.is-current,
+html[data-ds="lab"] .dropdown-item[aria-checked="true"] {
+  font-weight: 500;
+}
+html[data-ds="lab"] .ct-menu-label {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .ct-menu-item .cta-kbd {
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .u-menu-item:disabled {
+  color: var(--lab-ink-6);
+  background: none;
+}
+html[data-ds="lab"] .u-menu-item-icon,
+html[data-ds="lab"] .menu-item-icon {
+  width: 14px;
+  height: 18px;
+  color: inherit;
+}
+html[data-ds="lab"] .u-menu-item-icon svg,
+html[data-ds="lab"] .menu-item-icon svg {
+  width: 14px;
+  height: 14px;
+}
+html[data-ds="lab"] .u-menu-item-sub {
+  max-width: 240px;
+  font-size: 11.5px;
+  line-height: 1.3;
+  color: var(--lab-ink-4);
+  white-space: normal;
+}
+html[data-ds="lab"] .u-menu-item--danger,
+html[data-ds="lab"] .menu-item.danger {
+  color: var(--lab-red);
+}
+html[data-ds="lab"] .menu-item.danger:hover {
+  background: color-mix(in srgb, var(--lab-red) 8%, transparent);
+}
+html[data-ds="lab"] .u-menu-item--danger:disabled {
+  color: var(--lab-ink-6);
+}
+html[data-ds="lab"] .dropdown-section-label,
+html[data-ds="lab"] .dropdown-subsection-label {
+  min-height: 24px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 16px;
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .dropdown-allnone {
+  gap: 10px;
+}
+html[data-ds="lab"] .dropdown-allnone button {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--lab-ink-3);
+  transition: color var(--lab-fast) ease;
+}
+html[data-ds="lab"] .dropdown-allnone button:hover {
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .dropdown-search {
+  padding: 6px 10px;
+  box-shadow: inset 0 -1px 0 var(--lab-rule);
+}
+html[data-ds="lab"] .dropdown-search input {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+html[data-ds="lab"] .dropdown-search input::placeholder,
+html[data-ds="lab"] .dropdown-search-icon {
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .dropdown-footer {
+  padding: 6px 8px;
+  gap: 8px;
+  box-shadow: inset 0 1px 0 var(--lab-rule);
+}
+html[data-ds="lab"] .checkbox,
+html[data-ds="lab"] .dropdown-list .checkbox,
+html[data-ds="lab"] .prm-check {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--lab-guide-strong);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--lab-bg);
+  transition: background var(--lab-fast) ease, border-color var(--lab-fast) ease;
+}
+html[data-ds="lab"] .checkbox.checked,
+html[data-ds="lab"] .checkbox.is-checked,
+html[data-ds="lab"] .dropdown-list .checkbox.checked,
+html[data-ds="lab"] .dropdown-item.is-checked .checkbox,
+html[data-ds="lab"] .dropdown-item[aria-checked="true"] .checkbox,
+html[data-ds="lab"] .prm-check.is-on {
+  background: var(--lab-ink);
+  border-color: var(--lab-ink);
+  color: var(--lab-bg);
+}
+
+/* Cascading More Filters menu: the section rows are menu rows (30, 13), the
+   flyout is a Lab panel 4px to the side, the count a ruled mono box. */
+html[data-ds="lab"] .dropdown-submenu-row {
+  gap: 8px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 2px;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--lab-ink);
+  transition: none;
+}
+html[data-ds="lab"] .dropdown-submenu-row:hover,
+html[data-ds="lab"] .dropdown-submenu-row.active {
+  background: var(--panel-row-hover);
+}
+html[data-ds="lab"] .dropdown-submenu-chevron {
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .dropdown-submenu-chevron svg {
+  width: 14px;
+  height: 14px;
+}
+html[data-ds="lab"] .dropdown-submenu-count {
+  padding: 0 5px;
+  border: 1px solid var(--lab-guide);
+  border-radius: 2px;
+  background: transparent;
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .cascading-sub {
+  margin-left: 4px;
+  background: var(--lab-panel);
+  border: 1px solid var(--lab-panel-edge);
+  border-radius: var(--lab-r);
+  box-shadow: var(--lab-shadow);
+}
+html[data-ds="lab"] .cascading-sub.is-left {
+  margin-left: 0;
+  margin-right: 4px;
+}
+html[data-ds="lab"] .dropdown-submenu-header {
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--lab-rule);
+}
+html[data-ds="lab"] .dropdown-submenu-back,
+html[data-ds="lab"] .dropdown-submenu-title {
+  font-size: 13px;
+  line-height: 18px;
+}
+
+/* ===== Tabs ===== */
+html[data-ds="lab"] .tabbar {
+  gap: 4px;
+  border-bottom: 1px solid var(--lab-rule);
+}
+html[data-ds="lab"] .tabbar .tab {
+  position: relative;
+  height: 30px;
+  padding: 0 10px;
+  border-bottom: none;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--lab-ink-3);
+  transition: color var(--lab-fast) ease;
+}
+html[data-ds="lab"] .tabbar .tab:hover {
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .tabbar .tab.is-active,
+html[data-ds="lab"] .tabbar .tab.active,
+html[data-ds="lab"] .tabbar .tab[aria-selected="true"] {
+  color: var(--lab-ink);
+  border-bottom: none;
+}
+html[data-ds="lab"] .tabbar .tab.is-active::after,
+html[data-ds="lab"] .tabbar .tab.active::after,
+html[data-ds="lab"] .tabbar .tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--lab-ink);
+}
+html[data-ds="lab"] .tab-switch {
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid var(--lab-rule);
+  border-radius: var(--lab-r);
+  background: var(--lab-surface);
+}
+html[data-ds="lab"] .tab-switch-tab {
+  padding: 4px 14px;
+  border-radius: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .tab-switch-tab.active {
+  background: var(--lab-ink);
+  color: var(--lab-bg);
+}
+
+/* ===== Fields =====
+   Label SemiBold 13 in first ink, 6 above; control 36 tall on the surface
+   step with a hairline, radius 3, mono 13 value, fourth-ink placeholder;
+   hover lifts the rule, focus draws it orange; help 12.5 in the second ink,
+   6 below. 24 between fields. */
+html[data-ds="lab"] .form-group {
+  margin-bottom: 24px;
+}
+html[data-ds="lab"] .wizard-fields {
+  gap: 24px;
+}
+html[data-ds="lab"] .wizard-fields > :is(.form-group, .form-sub-group) {
+  margin-bottom: 0;
+}
+html[data-ds="lab"] .form-label,
+html[data-ds="lab"] .form-sub-label,
+html[data-ds="lab"] .prm-label,
+html[data-ds="lab"] .toggle-label {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .form-label,
+html[data-ds="lab"] .form-sub-label {
+  margin-bottom: 6px;
+}
+html[data-ds="lab"] .form-label-row {
+  margin-bottom: 6px;
+}
+html[data-ds="lab"] .form-label-row .form-label,
+html[data-ds="lab"] .toggle-field .form-label {
+  margin-bottom: 0;
+}
+html[data-ds="lab"] .form-label .req,
+html[data-ds="lab"] .form-sub-label .req,
+html[data-ds="lab"] .prm-req {
+  color: var(--lab-red);
+}
+html[data-ds="lab"] .form-input,
+html[data-ds="lab"] .form-select,
+html[data-ds="lab"] .wizard .form-input,
+html[data-ds="lab"] .wizard .form-select {
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 8px 10px;
+  background: var(--lab-surface);
+  border: 1px solid var(--lab-rule);
+  border-radius: var(--lab-r);
+  color: var(--lab-ink);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
+  transition: border-color var(--lab-fast) ease, background var(--lab-fast) ease;
+}
+html[data-ds="lab"] .form-select,
+html[data-ds="lab"] .wizard .form-select {
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%238f959d' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.5l3 3 3-3'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+html[data-ds="lab"] .form-input::placeholder,
+html[data-ds="lab"] .form-select.is-placeholder {
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .form-input:hover:not(:disabled):not(:focus),
+html[data-ds="lab"] .form-select:hover:not(:disabled):not(:focus) {
+  border-color: var(--lab-guide);
+}
+html[data-ds="lab"] .form-input:focus,
+html[data-ds="lab"] .form-select:focus {
+  border-color: var(--lab-accent);
+}
+html[data-ds="lab"] .form-input:disabled,
+html[data-ds="lab"] .form-select:disabled {
+  background: transparent;
+  color: var(--lab-ink-5);
+  border-color: var(--lab-rule-soft);
+}
+html[data-ds="lab"] .form-input[readonly] {
+  background: transparent;
+  border-style: dashed;
+}
+html[data-ds="lab"] textarea.form-input,
+html[data-ds="lab"] .wizard textarea.form-input {
+  min-height: 108px;
+  padding: 8px 10px;
+}
+html[data-ds="lab"] .form-help,
+html[data-ds="lab"] .prm-help,
+html[data-ds="lab"] .toggle-sub {
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 16px;
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .prm-help,
+html[data-ds="lab"] .toggle-sub {
+  margin-top: 0;
+}
+html[data-ds="lab"] .form-label-error,
+html[data-ds="lab"] .form-label-warning {
+  font-size: 12.5px;
+  line-height: 16px;
+}
+/* Bilingual box: EN / ES rows of 36 split by a hairline, mono 10.5 tags. */
+html[data-ds="lab"] .lang-field {
+  background: var(--lab-surface);
+  border: 1px solid var(--lab-rule);
+  border-radius: var(--lab-r);
+  transition: border-color var(--lab-fast) ease;
+}
+html[data-ds="lab"] .lang-field:hover:not(:focus-within) {
+  border-color: var(--lab-guide);
+}
+html[data-ds="lab"] .lang-field:focus-within {
+  border-color: var(--lab-accent);
+}
+html[data-ds="lab"] .lang-field-row {
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 10px;
+}
+html[data-ds="lab"] .lang-field .lang-tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 14px;
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .lang-field-input {
+  padding: 8px 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .lang-field-input::placeholder {
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .lang-field-divider,
+html[data-ds="lab"] .rte-field-divider {
+  background: var(--lab-rule);
+}
+html[data-ds="lab"] .lang-field-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--lab-ink-4);
+}
+/* Time to complete: one 36 shell, the unit after a hairline. */
+html[data-ds="lab"] .time-field {
+  box-sizing: border-box;
+  height: 36px;
+  background: var(--lab-surface);
+  border: 1px solid var(--lab-rule);
+  border-radius: var(--lab-r);
+  transition: border-color var(--lab-fast) ease;
+}
+html[data-ds="lab"] .time-field:hover:not(:focus-within):not(.is-open) {
+  border-color: var(--lab-guide);
+}
+html[data-ds="lab"] .time-field:focus-within,
+html[data-ds="lab"] .time-field.is-open {
+  border-color: var(--lab-accent);
+}
+html[data-ds="lab"] .time-field-value {
+  padding: 0 10px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .time-field-value::placeholder {
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .time-field-unit {
+  width: 132px;
+  gap: 8px;
+  padding: 0 10px;
+  border-left: 1px solid var(--lab-rule);
+  border-radius: 0 var(--lab-r) var(--lab-r) 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .time-field-caret,
+html[data-ds="lab"] .time-field-caret svg {
+  width: 12px;
+  height: 12px;
+  color: var(--lab-ink-3);
+}
+/* Segmented control: a ruled box of 28 options; the chosen one is ink. */
+html[data-ds="lab"] .seg-control {
+  gap: 2px;
+  padding: 2px;
+  background: var(--lab-surface);
+  border: 1px solid var(--lab-rule);
+  border-radius: var(--lab-r);
+}
+html[data-ds="lab"] .seg-btn {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 2px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 16px;
+  color: var(--lab-ink-3);
+  transition: background var(--lab-fast) ease, color var(--lab-fast) ease;
+}
+html[data-ds="lab"] .seg-btn:hover:not(.active) {
+  background: var(--lab-hover);
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .seg-btn.active,
+html[data-ds="lab"] .seg-btn.active.accent {
+  background: var(--lab-ink);
+  box-shadow: none;
+  color: var(--lab-bg);
+}
+/* Choice cards: a ruled surface, 10 / 12 inset; selected lifts the rule to
+   first ink and fills the 14px radio with ink. */
+html[data-ds="lab"] .radio-card-group {
+  gap: 8px;
+}
+html[data-ds="lab"] .radio-card {
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--lab-surface);
+  border: 1px solid var(--lab-rule);
+  border-radius: var(--lab-r);
+  transition: border-color var(--lab-fast) ease, background var(--lab-fast) ease;
+}
+html[data-ds="lab"] .radio-card:hover:not(.selected) {
+  border-color: var(--lab-guide);
+}
+html[data-ds="lab"] .radio-card.selected {
+  background: var(--lab-surface);
+  border-color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .radio-dot {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--lab-guide-strong);
+}
+html[data-ds="lab"] .radio-card.selected .radio-dot,
+html[data-ds="lab"] .radio-dot.is-on {
+  border-color: var(--lab-ink);
+}
+html[data-ds="lab"] .radio-card.selected .radio-dot::after,
+html[data-ds="lab"] .radio-dot.is-on::after {
+  width: 6px;
+  height: 6px;
+  background: var(--lab-ink);
+}
+html[data-ds="lab"] .radio-card-title {
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .radio-card-desc {
+  font-size: 12.5px;
+  line-height: 16px;
+  color: var(--lab-ink-3);
+}
+/* Stepper, toggle. */
+html[data-ds="lab"] .stepper {
+  box-sizing: border-box;
+  height: 36px;
+  background: var(--lab-surface);
+  border: 1px solid var(--lab-rule);
+  border-radius: var(--lab-r);
+}
+html[data-ds="lab"] .stepper:focus-within {
+  border-color: var(--lab-accent);
+}
+html[data-ds="lab"] .stepper-btn {
+  padding: 0 10px;
+  color: var(--lab-ink-3);
+  transition: none;
+}
+html[data-ds="lab"] .stepper-btn:hover:not(:disabled) {
+  background: var(--lab-hover);
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .stepper-btn:disabled {
+  color: var(--lab-ink-6);
+}
+html[data-ds="lab"] .stepper-value {
+  width: 56px;
+  padding: 0 8px;
+  border-left: 1px solid var(--lab-rule);
+  border-right: 1px solid var(--lab-rule);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+html[data-ds="lab"] .toggle {
+  width: 34px;
+  height: 20px;
+  background: var(--lab-guide);
+  transition: background var(--lab-med) var(--lab-ease);
+}
+html[data-ds="lab"] .toggle.on {
+  background: var(--lab-ink);
+}
+html[data-ds="lab"] .toggle.on .toggle-knob {
+  background: var(--lab-bg);
+}
+html[data-ds="lab"] .toggle:disabled,
+html[data-ds="lab"] .toggle-row.disabled .toggle,
+html[data-ds="lab"] .qsec-row.is-disabled .toggle {
+  background: var(--lab-rule);
+}
+html[data-ds="lab"] .toggle-knob {
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  transition: transform var(--lab-med) var(--lab-ease);
+}
+html[data-ds="lab"] .toggle.on .toggle-knob {
+  left: 2px;
+  transform: translateX(14px);
+}
+html[data-ds="lab"] .toggle-state,
+html[data-ds="lab"] .toggle-inline-label {
+  font-size: 13px;
+  line-height: 18px;
+}
+html[data-ds="lab"] .toggle-row {
+  border-bottom-color: var(--lab-rule);
+}
+/* Composite shells: address, deep link, date, rich text, prices, multiselect. */
+html[data-ds="lab"] .address-field,
+html[data-ds="lab"] .deeplink-input,
+html[data-ds="lab"] .rte-field,
+html[data-ds="lab"] .price-input,
+html[data-ds="lab"] .cw-price-field,
+html[data-ds="lab"] .multiselect-field,
+html[data-ds="lab"] .date-field-trigger {
+  background: var(--lab-surface);
+  border-color: var(--lab-rule);
+  border-radius: var(--lab-r);
+  transition: border-color var(--lab-fast) ease;
+}
+html[data-ds="lab"] .address-field:focus-within,
+html[data-ds="lab"] .address-field.is-open,
+html[data-ds="lab"] .deeplink-input:focus-within,
+html[data-ds="lab"] .rte-field:focus-within,
+html[data-ds="lab"] .price-input:focus-within,
+html[data-ds="lab"] .cw-price-field:focus-within,
+html[data-ds="lab"] .multiselect-field:focus-within,
+html[data-ds="lab"] .multiselect-field.is-open,
+html[data-ds="lab"] .date-field-trigger.is-open {
+  border-color: var(--lab-accent);
+}
+html[data-ds="lab"] .address-field > .address-row,
+html[data-ds="lab"] .address-field > .selectfield,
+html[data-ds="lab"] .address-field > .address-input,
+html[data-ds="lab"] .address-field > .address-split {
+  border-top-color: var(--lab-rule);
+}
+html[data-ds="lab"] .address-field > * {
+  height: 36px;
+  box-sizing: border-box;
+}
+html[data-ds="lab"] .address-row,
+html[data-ds="lab"] .address-input,
+html[data-ds="lab"] .address-cell,
+html[data-ds="lab"] .address-select,
+html[data-ds="lab"] .deeplink-base,
+html[data-ds="lab"] .deeplink-slug,
+html[data-ds="lab"] .date-field-box,
+html[data-ds="lab"] .rte-area,
+html[data-ds="lab"] .price-input-prefix,
+html[data-ds="lab"] .price-input input,
+html[data-ds="lab"] .cw-price-cur,
+html[data-ds="lab"] .cw-price-cell {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .address-row {
+  gap: 8px;
+  padding: 0 10px;
+}
+html[data-ds="lab"] .address-input,
+html[data-ds="lab"] .address-cell input {
+  padding: 0 10px;
+}
+html[data-ds="lab"] .address-input::placeholder,
+html[data-ds="lab"] .address-cell input::placeholder,
+html[data-ds="lab"] .address-select.is-placeholder,
+html[data-ds="lab"] .deeplink-slug::placeholder,
+html[data-ds="lab"] .date-field-placeholder,
+html[data-ds="lab"] .rte-area::placeholder {
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .deeplink-input,
+html[data-ds="lab"] .date-field-trigger,
+html[data-ds="lab"] .price-input,
+html[data-ds="lab"] .cw-price-field {
+  box-sizing: border-box;
+  height: 36px;
+}
+html[data-ds="lab"] .deeplink-base {
+  border-right-color: var(--lab-rule);
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .deeplink-base,
+html[data-ds="lab"] .deeplink-cell,
+html[data-ds="lab"] .date-field-box,
+html[data-ds="lab"] .cw-price-cur,
+html[data-ds="lab"] .cw-price-cell {
+  padding: 0 10px;
+}
+html[data-ds="lab"] .cw-price-cur {
+  border-right-color: var(--lab-rule);
+}
+html[data-ds="lab"] .rte-area {
+  padding: 8px 10px;
+  min-height: 18px;
+}
+html[data-ds="lab"] .rte-lang-row .rte-area {
+  padding: 8px 0;
+}
+
+/* Single-select trigger (`.select-field`, the same control as `.form-select`
+   as a button) and the sort arrow. `.selectfield` is only its wrapper. */
+html[data-ds="lab"] .select-field {
+  gap: 10px;
+  min-height: 36px;
+  padding: 8px 10px;
+  background: var(--lab-surface);
+  border: 1px solid var(--lab-rule);
+  border-radius: var(--lab-r);
+  color: var(--lab-ink);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 18px;
+  transition: border-color var(--lab-fast) ease;
+}
+html[data-ds="lab"] .select-field:hover:not(:disabled):not(.is-open) {
+  border-color: var(--lab-guide);
+}
+html[data-ds="lab"] .select-field.is-open,
+html[data-ds="lab"] .select-field:focus-visible {
+  border-color: var(--lab-accent);
+  outline: none;
+}
+html[data-ds="lab"] .select-field.is-placeholder {
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .select-field .field-chevron {
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .sort-icon {
+  color: var(--lab-ink-5);
+  transition: color var(--lab-fast) ease;
+}
+html[data-ds="lab"] .sort-icon--active {
+  color: var(--lab-accent);
+}
+
+/* ===== Modal =====
+   The dialog is the panel surface on its edge, radius 4, a deep offset
+   shadow, 20 inset. Title SemiBold 18; body 13.5; a hairline above the
+   footer; Cancel is a quiet text button. */
+html[data-ds="lab"] .pr-confirm-overlay {
+  background: rgba(6, 8, 10, 0.7);
+}
+html[data-ds="lab"] .prm {
+  --prm-surface: var(--lab-panel);
+  background: var(--lab-panel);
+  border: 1px solid var(--lab-panel-edge);
+  border-radius: var(--lab-r);
+  box-shadow: var(--lab-shadow-modal);
+}
+html[data-ds="lab"] .prm-body {
+  gap: 16px;
+  padding: 20px;
+}
+html[data-ds="lab"] .prm-headgroup {
+  gap: 4px;
+}
+html[data-ds="lab"] .prm-title {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 22px;
+  letter-spacing: -0.01em;
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .prm-close {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--lab-r);
+  color: var(--lab-ink-3);
+  transition: background var(--lab-fast) ease, color var(--lab-fast) ease;
+}
+html[data-ds="lab"] .prm-close:hover {
+  background: var(--lab-hover);
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .prm-text {
+  font-size: 13.5px;
+  line-height: 18px;
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .prm-text--primary {
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .prm-content {
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .prm-content ol,
+html[data-ds="lab"] .prm-content ul {
+  margin-top: 8px;
+  gap: 6px;
+}
+html[data-ds="lab"] .prm-foot {
+  padding: 10px 20px;
+  border-top: 1px solid var(--lab-rule);
+  border-radius: 0 0 var(--lab-r) var(--lab-r);
+}
+html[data-ds="lab"] .prm-foot-end {
+  gap: 8px;
+}
+html[data-ds="lab"] .prm-cancel {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: var(--lab-r);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--lab-ink-3);
+  transition: color var(--lab-fast) ease, background var(--lab-fast) ease;
+}
+html[data-ds="lab"] .prm-cancel:hover {
+  background: var(--lab-hover);
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .prm-field {
+  gap: 6px;
+}
+html[data-ds="lab"] .prm-check-row {
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 2px;
+  transition: none;
+}
+html[data-ds="lab"] .prm-check-row:hover {
+  background: var(--lab-hover);
+}
+html[data-ds="lab"] .prm-check-label {
+  font-size: 13.5px;
+  line-height: 18px;
+}
+/* A switch that can't be flipped yet (Add New Version's Update Required
+   before the version is available there): the knob drops to the fifth ink (a
+   glyph grey) on the rule-grey track. */
+html[data-ds="lab"] .toggle:disabled .toggle-knob {
+  background: var(--lab-ink-5);
+}
+html[data-ds="lab"] .prm-stack {
+  gap: 24px;
+}
+
+/* ===== Wizard =====
+   Rail on a hairline, 28 / 24 inset: eyebrow tracked 11 in the second ink,
+   name Bold 20, steps as 13.5 Medium rows with mono numbers. Form column 28
+   / 32 in: heading Bold 20 with a 13.5 line 4 under, 20 to the first field.
+   Footer 56 on a hairline with the quiet close and the 30 buttons. */
+html[data-ds="lab"] .wizard-nav {
+  padding: 28px 24px 24px;
+  border-right: 1px solid var(--lab-rule);
+}
+html[data-ds="lab"] .wizard-brand {
+  gap: 6px;
+  margin-bottom: 20px;
+}
+html[data-ds="lab"] .wizard-brand-eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 16px;
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .wizard-brand-name {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 24px;
+  letter-spacing: -0.01em;
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .wizard-type-badge {
+  margin-bottom: 20px;
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--lab-blue) 45%, transparent);
+  border-radius: var(--lab-r);
+  background: transparent;
+  color: var(--lab-blue);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 16px;
+}
+html[data-ds="lab"] .wizard-steps {
+  gap: 2px;
+}
+html[data-ds="lab"] .wizard-step {
+  gap: 10px;
+  padding: 6px 8px;
+  margin: 0 -8px;
+  border-radius: var(--lab-r);
+  transition: none;
+}
+html[data-ds="lab"] .wizard-step:hover {
+  background: var(--lab-hover);
+}
+html[data-ds="lab"] .wizard-step-rail,
+html[data-ds="lab"] .wizard-step-glyph {
+  width: 16px;
+  min-width: 16px;
+}
+html[data-ds="lab"] .wizard-step-num {
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .wizard-step-title {
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .wizard-step.done .wizard-step-rail,
+html[data-ds="lab"] .wizard-step.done .wizard-step-title {
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .wizard-step.active .wizard-step-num,
+html[data-ds="lab"] .wizard-step.active .wizard-step-title {
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .wizard-step.active .wizard-step-title {
+  font-weight: 600;
+}
+html[data-ds="lab"] .wizard-step.error .wizard-step-rail,
+html[data-ds="lab"] .wizard-step.error .wizard-step-title {
+  color: var(--lab-red);
+}
+html[data-ds="lab"] .wizard-progress {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .wizard-content:not(.wizard-content--flush) {
+  padding: 28px 32px;
+}
+html[data-ds="lab"] .wizard-content .tasks-title {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 24px;
+}
+html[data-ds="lab"] .wizard-desc {
+  margin: 4px 0 20px;
+  font-size: 13.5px;
+  line-height: 18px;
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .wizard .form-group {
+  margin-bottom: 24px;
+}
+html[data-ds="lab"] .wizard .wizard-fields {
+  gap: 24px;
+}
+html[data-ds="lab"] .wizard .wizard-fields > :is(.form-group, .form-sub-group) {
+  margin-bottom: 0;
+}
+html[data-ds="lab"] .wizard .prm-label {
+  margin-bottom: 6px;
+}
+html[data-ds="lab"] .wizard-gate-line {
+  background: var(--lab-ink);
+}
+html[data-ds="lab"] .wizard-gate-cap {
+  font-size: 11.5px;
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .wizard-footer {
+  min-height: 56px;
+  padding: 12px 24px;
+  background: var(--lab-bg);
+  border-top: 1px solid var(--lab-rule);
+}
+html[data-ds="lab"] .wizard-cancel {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: var(--lab-r);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--lab-ink-3);
+  transition: color var(--lab-fast) ease, background var(--lab-fast) ease;
+}
+html[data-ds="lab"] .wizard-cancel:hover {
+  background: var(--lab-hover);
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .wizard-actions,
+html[data-ds="lab"] .wizard-footer-left {
+  gap: 8px;
+}
+html[data-ds="lab"] .btn-publish .wizard-gate-fill {
+  background: var(--lab-accent-hover);
+}
+html[data-ds="lab"] .wizard-footer .btn-publish .wizard-gate-btn-inner {
+  color: var(--lab-on-accent);
+}
+html[data-ds="lab"] .btn-save-draft .wizard-gate-fill {
+  background: var(--lab-press);
+}
+
+/* ===== Toast, tooltip ===== */
+html[data-ds="lab"] .pl-copied-toast {
+  box-sizing: border-box;
+  width: 320px;
+  min-height: 40px;
+  gap: 12px;
+  padding: 9px 12px;
+  background: var(--lab-panel);
+  border: 1px solid var(--lab-panel-edge);
+  border-radius: var(--lab-r);
+  box-shadow: var(--lab-shadow);
+  color: var(--lab-ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+}
+html[data-ds="lab"] .pl-copied-toast-icon {
+  color: var(--lab-green);
+}
+html[data-ds="lab"] .hover-tip {
+  max-width: 280px;
+  padding: 5px 9px;
+  border-radius: var(--lab-r);
+  font-size: 12.5px;
+  line-height: 16px;
+}
+html[data-ds="lab"] .hover-tip-head {
+  font-weight: 600;
+}
+
+/* ===== Screen sweep (2026-11-05) =====
+   The pieces the shared rules don't reach: page banners and note cards, the
+   review-run strip, the Question Bank landing, Spotlight's own table, the
+   card tables on forms, Industries rows, the row preview panel, the date
+   range picker, confirm cards, inline links, the custom scrollbar. */
+
+/* --- List banners (Certifications setup, Users name changes) ---
+   With the collapse off the banner takes row 3 of the head grid, under the
+   title and summary, and the collapsed one-line note is hidden (same as the
+   SkillCat look). The banner itself is a Lab note card: surface on a hairline,
+   the count in amber mono, a ruled Secondary button, a quiet close. */
+html[data-ds="lab"] :has(> .tasks-title):has(> .toolbar + .filters) > .clh-banner {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  margin: 0;
+  padding-top: 20px;
+  pointer-events: auto;
+  visibility: visible;
+}
+/* `:has()` takes its most specific argument, so these repeat the
+   `> .toolbar + .filters` clause to outrank the plain head rules above. */
+html[data-ds="lab"] :has(> .tasks-title):has(> .clh-banner):has(> .toolbar + .filters) > .toolbar {
+  grid-row: 4;
+}
+html[data-ds="lab"] :has(> .tasks-title):has(> .clh-banner):has(> .toolbar + .filters) > .toolbar + .filters {
+  grid-row: 5;
+}
+html[data-ds="lab"] .tasks.clh .clh-head > .tasks-note {
+  display: none;
+}
+html[data-ds="lab"] .tasks.clh .clh-head[data-clh="collapsed"] > .clh-banner {
+  visibility: visible;
+}
+html[data-ds="lab"] .note-card {
+  --note-edge: var(--lab-rule);
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--lab-r);
+  box-shadow: inset 0 0 0 1px var(--note-edge);
+  background: var(--lab-surface);
+}
+html[data-ds="lab"] .note-card--accent,
+html[data-ds="lab"] .note-card--warn {
+  --note-edge: color-mix(in srgb, var(--lab-amber) 35%, var(--lab-rule));
+}
+html[data-ds="lab"] .note-card--danger {
+  --note-edge: color-mix(in srgb, var(--lab-red) 35%, var(--lab-rule));
+}
+html[data-ds="lab"] .note-card--ok {
+  --note-edge: color-mix(in srgb, var(--lab-green) 35%, var(--lab-rule));
+}
+html[data-ds="lab"] .note-card-icon {
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .note-card--warn .note-card-icon,
+html[data-ds="lab"] .note-card--accent .note-card-icon {
+  color: var(--lab-amber);
+}
+html[data-ds="lab"] .note-card--danger .note-card-icon {
+  color: var(--lab-red);
+}
+html[data-ds="lab"] .note-card--ok .note-card-icon {
+  color: var(--lab-green);
+}
+html[data-ds="lab"] .note-card-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .note-card-body {
+  font-size: 12.5px;
+  line-height: 16px;
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .note-card .cta-quiet,
+html[data-ds="lab"] .lm-banner .cta-quiet,
+html[data-ds="lab"] .note-card-action .cta-quiet {
+  background: transparent;
+  border: 1px solid var(--lab-guide);
+}
+html[data-ds="lab"] .note-card .cta-quiet:hover:not(:disabled),
+html[data-ds="lab"] .lm-banner .cta-quiet:hover:not(:disabled),
+html[data-ds="lab"] .lm-banner:hover .cta-quiet,
+html[data-ds="lab"] .note-card-action .cta-quiet:hover:not(:disabled) {
+  background: var(--lab-hover);
+  border-color: var(--lab-guide-strong);
+}
+html[data-ds="lab"] .tasks.clh .clh-banner > .lm-banner,
+html[data-ds="lab"] .lm-banner {
+  box-sizing: border-box;
+  height: auto;
+  min-height: 56px;
+  gap: 16px;
+  padding: 10px 14px;
+  background: var(--lab-surface);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lab-amber) 35%, var(--lab-rule));
+  border: 0;
+  border-radius: var(--lab-r);
+  transition: box-shadow var(--lab-fast) ease;
+}
+html[data-ds="lab"] .lm-banner:hover {
+  background: var(--lab-surface);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lab-amber) 60%, var(--lab-rule));
+}
+html[data-ds="lab"] .lm-banner-count {
+  padding-right: 14px;
+  border-right: 1px solid var(--lab-rule);
+  font-family: var(--font-mono);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 28px;
+  font-variant-numeric: tabular-nums;
+  color: var(--lab-amber);
+}
+html[data-ds="lab"] .lm-banner .note-card-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 18px;
+}
+html[data-ds="lab"] .lm-banner .note-card-body {
+  font-size: 12.5px;
+  line-height: 16px;
+}
+html[data-ds="lab"] .cs-close {
+  width: 26px;
+  height: 26px;
+  margin-left: -8px;
+  border-radius: var(--lab-r);
+  color: var(--lab-ink-3);
+  transition: background var(--lab-fast) ease, color var(--lab-fast) ease;
+}
+html[data-ds="lab"] .cs-close:hover {
+  background: var(--lab-hover);
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .cs-close svg {
+  width: 14px;
+  height: 14px;
+}
+/* The one-line note where it is not inside a collapsing head. */
+html[data-ds="lab"] .tasks-note {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--lab-amber);
+}
+
+/* The landing-morph banner draws its box on a `::before` and fades its count,
+   text and button out with scroll-driven animations; with the collapse off
+   those stay at their end state. Pin every part visible and draw the box on
+   the element itself. The `!important`s are belt and braces against the
+   scroll-driven `animation` declarations in index.css's `@supports
+   (animation-timeline)` block, which otherwise re-apply on every scroll. */
+html[data-ds="lab"] .tasks.clh.clh--banner .clh-banner > .lm-banner::before,
+html[data-ds="lab"] .tasks.clh.clh--banner .lm-banner-count,
+html[data-ds="lab"] .tasks.clh.clh--banner .lm-banner-count::after,
+html[data-ds="lab"] .tasks.clh.clh--banner .lm-banner .note-card-text,
+html[data-ds="lab"] .tasks.clh.clh--banner .lm-banner .nc-shared,
+html[data-ds="lab"] .tasks.clh.clh--banner .lm-banner .note-card-body,
+html[data-ds="lab"] .tasks.clh.clh--banner .lm-banner > .cta-quiet,
+html[data-ds="lab"] .tasks.clh .clh-head > .clh-banner {
+  animation: none !important;
+  transform: none !important;
+  opacity: 1 !important;
+}
+html[data-ds="lab"] .tasks.clh.clh--banner .clh-banner > .lm-banner::before,
+html[data-ds="lab"] .tasks.clh.clh--banner .lm-banner-count::after {
+  display: none;
+}
+html[data-ds="lab"] .tasks.clh.clh--banner .clh-banner > .lm-banner {
+  padding: 10px 14px;
+  background: var(--lab-surface);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lab-amber) 35%, var(--lab-rule));
+}
+html[data-ds="lab"] .tasks.clh.clh--banner .lm-banner-count {
+  padding-right: 14px;
+  border-right: 1px solid var(--lab-rule);
+}
+html[data-ds="lab"] .tasks.clh .clh-head > .clh-banner {
+  margin-bottom: 0;
+}
+
+/* Product Config card-table rows: 13 text, strong names Medium 13.5, muted
+   values in the third ink. */
+html[data-ds="lab"] :is(.qz, .qsec, .qed-tbl, .cc-panel, .lc-panel, .ind-assign) {
+  font-size: 13px;
+  line-height: 18px;
+}
+html[data-ds="lab"] .pc-strong {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .pc-muted {
+  font-size: 13px;
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .pc-check {
+  color: var(--lab-ink);
+}
+
+/* --- Add rows and add links in card tables and wizards ("+ Add Questions",
+   "+ Add Resource", "+ Add Course"...): first ink with a 14 plus, never
+   orange, which stays on the page's one primary action. */
+html[data-ds="lab"] .qz-addrow,
+html[data-ds="lab"] .qz-addrow-btn,
+html[data-ds="lab"] .qed-tbl-add,
+html[data-ds="lab"] .ctb-add-sub,
+html[data-ds="lab"] .res-add,
+html[data-ds="lab"] .qz-pool-add,
+html[data-ds="lab"] .price-idm-add,
+html[data-ds="lab"] .lc-add,
+html[data-ds="lab"] .cc-add-req,
+html[data-ds="lab"] .cc-add-set,
+html[data-ds="lab"] .ctb-add-primary {
+  color: var(--lab-ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  transition: color var(--lab-fast) ease, background var(--lab-fast) ease, border-color var(--lab-fast) ease;
+}
+html[data-ds="lab"] :is(.qz-addrow, .qz-addrow-btn, .qed-tbl-add, .ctb-add-sub, .res-add, .qz-pool-add, .price-idm-add, .lc-add, .cc-add-req) svg {
+  width: 14px;
+  height: 14px;
+}
+html[data-ds="lab"] :is(.qz-addrow-btn, .qed-tbl-add, .ctb-add-sub, .res-add, .qz-pool-add, .price-idm-add, .lc-add, .cc-add-req):hover:not(:disabled) {
+  color: var(--lab-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--lab-guide-strong);
+  text-underline-offset: 3px;
+}
+html[data-ds="lab"] .cc-add-set,
+html[data-ds="lab"] .ctb-add-primary {
+  min-height: 36px;
+  padding: 0 12px;
+  gap: 8px;
+  border-color: var(--lab-guide);
+  border-radius: var(--lab-r);
+}
+html[data-ds="lab"] .cc-add-set:hover:not(:disabled),
+html[data-ds="lab"] .ctb-add-primary:hover:not(:disabled) {
+  background: var(--lab-hover);
+  border-color: var(--lab-guide-strong);
+}
+html[data-ds="lab"] .ctb-add-primary svg,
+html[data-ds="lab"] .cc-add-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* --- Review consoles (Hands-On, Exam Reviews): the rail column on the
+   surface step, 13 / 14 type, score keys as 32 ruled cells, the active
+   thumbnail ringed in ink, the attempts panel as a Lab panel. */
+html[data-ds="lab"] .rvc-root {
+  --rvc-divider: var(--lab-rule);
+  --rvc-ctl: var(--lab-guide);
+}
+html[data-ds="lab"] .rvc-railcol {
+  background: var(--lab-surface);
+}
+html[data-ds="lab"] .rvc-crumb {
+  font-size: 12.5px;
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .rvc-crumbs svg {
+  width: 12px;
+  height: 12px;
+}
+html[data-ds="lab"] .rvc-headlink:hover {
+  color: var(--lab-ink);
+  text-decoration-color: var(--lab-guide-strong);
+}
+html[data-ds="lab"] .rvc-notes-label,
+html[data-ds="lab"] .rvc-field-head {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .rvc-desc {
+  font-size: 13.5px;
+  line-height: 18px;
+}
+html[data-ds="lab"] .rvc-stage,
+html[data-ds="lab"] .rvc-thumb {
+  border-radius: var(--lab-r);
+  border-color: var(--lab-rule);
+  background: var(--lab-surface);
+}
+html[data-ds="lab"] .rvc-thumb.is-active {
+  border-color: var(--lab-ink);
+  box-shadow: 0 0 0 1px var(--lab-ink);
+}
+html[data-ds="lab"] .rvc-stage-play,
+html[data-ds="lab"] .rvc-stage-nav,
+html[data-ds="lab"] .rvc-stage-chip {
+  background: rgba(14, 16, 19, 0.85);
+  border: 1px solid var(--lab-panel-edge);
+  backdrop-filter: blur(6px);
+}
+html[data-ds="lab"] .rvc-stage-play:hover,
+html[data-ds="lab"] .rvc-stage-nav:hover,
+html[data-ds="lab"] .rvc-stage-chip:hover {
+  filter: none;
+  background: rgba(21, 25, 30, 0.95);
+}
+html[data-ds="lab"] .rvc-stage-chip {
+  border-radius: var(--lab-r);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+html[data-ds="lab"] .rvc-stage-dur {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+html[data-ds="lab"] .rvc-audio {
+  border-radius: var(--lab-r);
+}
+html[data-ds="lab"] .rvc-audio-time {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+html[data-ds="lab"] .rvc-rail-rule {
+  margin: 20px 0;
+  background: var(--lab-rule);
+}
+html[data-ds="lab"] .rvc-field + .rvc-field {
+  margin-top: 20px;
+}
+html[data-ds="lab"] .rvc-checklist {
+  padding: 0 4px;
+  font-size: 13.5px;
+  line-height: 18px;
+  color: var(--lab-ink-2);
+}
+html[data-ds="lab"] .rvc-checklist ul {
+  padding-left: 18px;
+}
+html[data-ds="lab"] .rvc-checklist > * + * {
+  margin-top: 12px;
+}
+html[data-ds="lab"] .rvc-scores {
+  gap: 6px;
+}
+html[data-ds="lab"] .rvc-score {
+  width: 34px;
+  height: 32px;
+  border-radius: var(--lab-r);
+  background: var(--lab-surface);
+  border: 1px solid var(--lab-rule);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--lab-ink-2);
+  transition: border-color var(--lab-fast) ease, background var(--lab-fast) ease, color var(--lab-fast) ease;
+}
+html[data-ds="lab"] .rvc-score:hover {
+  border-color: var(--lab-guide-strong);
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .rvc-score.is-pass {
+  background: var(--lab-go);
+  border-color: var(--lab-go);
+  color: var(--lab-on-go);
+}
+html[data-ds="lab"] .rvc-score.is-fail {
+  background: var(--lab-red-press);
+  border-color: var(--lab-red-press);
+  color: #fff;
+}
+html[data-ds="lab"] .rvc-score:disabled {
+  color: var(--lab-ink-5);
+}
+html[data-ds="lab"] .rvc-score:disabled:hover {
+  border-color: var(--lab-rule);
+  color: var(--lab-ink-5);
+}
+html[data-ds="lab"] .rvc-scale-legend {
+  font-size: 12.5px;
+  line-height: 16px;
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .rvc-footer {
+  border-top-width: 1px;
+}
+html[data-ds="lab"] .rvc-footer.prc-footer {
+  box-shadow: inset 0 1px 0 var(--lab-rule);
+}
+html[data-ds="lab"] .rvc-foot-actions {
+  gap: 8px;
+}
+html[data-ds="lab"] .rvc-skip-count {
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .rvc-apanel {
+  border: 1px solid var(--lab-panel-edge);
+  border-radius: var(--lab-r);
+  background: var(--lab-panel);
+  box-shadow: var(--lab-shadow);
+}
+html[data-ds="lab"] .rvc-arow {
+  gap: 20px;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--lab-ink-2);
+}
+html[data-ds="lab"] .rvc-arow--head {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--lab-ink-3);
+  box-shadow: inset 0 -1px 0 var(--lab-guide);
+}
+html[data-ds="lab"] .rvc-arow.is-hi {
+  background: var(--panel-row-hover);
+}
+html[data-ds="lab"] .rvc-ac--date {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+html[data-ds="lab"] .rvc-ac--result.is-pass {
+  color: var(--lab-green);
+}
+html[data-ds="lab"] .rvc-ac--result.is-fail {
+  color: var(--lab-red);
+}
+html[data-ds="lab"] .rvc-qpanel-foot {
+  padding: 6px 12px;
+  border-top: 1px solid var(--lab-rule);
+}
+html[data-ds="lab"] .rvc-qhint {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--lab-ink-4);
+}
+
+/* --- Search suggestions panel rows: 13.5 names, 12.5 descriptions, 30 rows
+   on radius 2; the hint footer 36 on a hairline. */
+html[data-ds="lab"] .usearch-row {
+  gap: 8px;
+  width: calc(100% - 8px);
+  margin: 0 4px;
+  min-height: 30px;
+  padding: 4px 10px;
+  border-radius: 2px;
+  transition: none;
+}
+html[data-ds="lab"] .usearch-row.active {
+  background: var(--panel-row-hover);
+}
+html[data-ds="lab"] .usearch-row-name,
+html[data-ds="lab"] .usearch-row-ex {
+  font-size: 13.5px;
+  line-height: 18px;
+}
+html[data-ds="lab"] .usearch-row-ex {
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .usearch-row-desc {
+  font-size: 12.5px;
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .usearch-noresults {
+  height: 104px;
+}
+html[data-ds="lab"] .usearch-noresults-title {
+  font-size: 14px;
+  font-weight: 500;
+}
+html[data-ds="lab"] .usearch-noresults-sub {
+  font-size: 12.5px;
+}
+html[data-ds="lab"] .usearch-foot {
+  gap: 14px;
+  height: 36px;
+  margin-top: 6px;
+  padding: 0 12px;
+  border-top: 1px solid var(--lab-rule);
+}
+html[data-ds="lab"] .usearch-hint-label {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .usearch-scope {
+  padding: 2px 4px 2px 8px;
+  border: 1px solid var(--lab-guide);
+  border-radius: var(--lab-r);
+  font-size: 12.5px;
+}
+html[data-ds="lab"] .usearch-scope-x {
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .usearch-clear {
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .usearch-clear:hover,
+html[data-ds="lab"] .usearch-scope-x:hover {
+  color: var(--lab-ink);
+}
+
+/* --- Demo Controls panel (not part of the product, but it sits in the look). */
+html[data-ds="lab"] .demo-panel {
+  width: 272px;
+  padding: 18px;
+  border: 1px solid var(--lab-panel-edge);
+  border-radius: var(--lab-r);
+  background: var(--lab-panel);
+  box-shadow: var(--lab-shadow);
+}
+html[data-ds="lab"] .demo-head {
+  margin-bottom: 16px;
+}
+html[data-ds="lab"] .demo-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .demo-sub {
+  font-size: 12.5px;
+  line-height: 16px;
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .demo-label {
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 16px;
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .demo-launcher {
+  background: var(--lab-bg);
+}
+html[data-ds="lab"] .demo-launcher:hover,
+html[data-ds="lab"] .demo-launcher.is-open {
+  background: linear-gradient(color-mix(in srgb, var(--lab-accent) 14%, transparent), color-mix(in srgb, var(--lab-accent) 14%, transparent)), var(--lab-bg);
+}
+
+/* --- Upload zones and file cards: a dashed guide box on radius 3; the
+   dragged-over state lifts the rule to first ink. */
+html[data-ds="lab"] .drop-primary,
+html[data-ds="lab"] .drop-primary:hover,
+html[data-ds="lab"] .drop-primary.is-active {
+  background-image: none;
+  border: 1px dashed var(--lab-guide);
+  border-radius: var(--lab-r);
+  transition: border-color var(--lab-fast) ease, background-color var(--lab-fast) ease;
+}
+html[data-ds="lab"] .drop-primary:hover {
+  background-color: var(--lab-hover);
+  border-color: var(--lab-guide-strong);
+}
+html[data-ds="lab"] .drop-primary.is-active {
+  background-color: var(--lab-hover);
+  border-color: var(--lab-ink);
+}
+html[data-ds="lab"] .drop-primary-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 18px;
+}
+html[data-ds="lab"] .drop-primary-icon {
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .drop-slim {
+  min-height: 36px;
+  padding: 7px 24px;
+  border: 1px dashed var(--lab-guide);
+  border-radius: var(--lab-r);
+  font-size: 13px;
+  color: var(--lab-ink-3);
+  transition: border-color var(--lab-fast) ease, background var(--lab-fast) ease, color var(--lab-fast) ease;
+}
+html[data-ds="lab"] .drop-slim:hover {
+  background: var(--lab-hover);
+  border-color: var(--lab-guide-strong);
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .drop-slim svg {
+  width: 16px;
+  height: 16px;
+}
+html[data-ds="lab"] .file-row,
+html[data-ds="lab"] .file-card {
+  background: var(--lab-surface);
+  box-shadow: inset 0 0 0 1px var(--lab-rule);
+  border-radius: var(--lab-r);
+}
+html[data-ds="lab"] .file-card-remove {
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .file-card-remove:hover {
+  color: var(--lab-ink);
+}
+
+/* --- Multi-select: the 36 shell with 22px ruled tags, 12.5 Medium. */
+html[data-ds="lab"] .multiselect-field {
+  min-height: 36px;
+  padding: 0 10px;
+  gap: 8px;
+}
+html[data-ds="lab"] .multiselect-field:hover:not(.is-open):not(.is-disabled) {
+  border-color: var(--lab-guide);
+}
+html[data-ds="lab"] .multiselect-placeholder {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .multiselect-tag {
+  gap: 6px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 2px;
+  background: var(--lab-selected);
+  box-shadow: inset 0 0 0 1px var(--lab-rule);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .multiselect-tag-remove {
+  width: 12px;
+  height: 12px;
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .multiselect-tag-remove:hover {
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .multiselect-field .field-chevron svg,
+html[data-ds="lab"] .address-chevron svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* --- Create Spotlight's preview column title. */
+html[data-ds="lab"] .spc-preview-title {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 22px;
+  letter-spacing: -0.01em;
+}
+
+/* --- Inline links: second ink with a hairline underline, first ink on hover. */
+html[data-ds="lab"] .text-link {
+  color: var(--lab-ink-2);
+  text-decoration: underline;
+  text-decoration-color: var(--lab-guide-strong);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  transition: color var(--lab-fast) ease, text-decoration-color var(--lab-fast) ease;
+}
+html[data-ds="lab"] .text-link:hover {
+  color: var(--lab-ink);
+  text-decoration-color: var(--lab-ink);
+}
+
+/* --- Date-scoped column marker: stays orange (it signals a column whose
+   numbers move with the Date Range, the same job as the sort arrow), 12px. */
+html[data-ds="lab"] .th-date-icon svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* --- Custom scrollbar (customScrollbars.ts) --- */
+html[data-ds="lab"] .cbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+}
+html[data-ds="lab"] .cbar-thumb:hover,
+html[data-ds="lab"] .cbar-thumb.is-dragging {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+/* --- Review-run strip (Hands-On, Exam Reviews, Question Bank sub-cards):
+   64 ruled cards, the count in mono Bold 24 on a hairline, title 14 / sub
+   12.5; selected = a second-ink rule. */
+html[data-ds="lab"] .rr {
+  height: 64px;
+  margin-bottom: 20px;
+}
+html[data-ds="lab"] .rr-card {
+  height: 64px;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--lab-r);
+  box-shadow: inset 0 0 0 1px var(--lab-rule);
+  background: var(--lab-surface);
+  transition: box-shadow var(--lab-fast) ease, background var(--lab-fast) ease;
+}
+html[data-ds="lab"] .rr-card:hover {
+  box-shadow: inset 0 0 0 1px var(--lab-guide-strong);
+}
+html[data-ds="lab"] .rr-card.rr-card--add {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--lab-guide);
+}
+html[data-ds="lab"] .rr-card:focus-visible {
+  outline: 1px solid var(--lab-accent);
+  outline-offset: 2px;
+}
+html[data-ds="lab"] .rr-card.is-selected,
+html[data-ds="lab"] .rr-card.is-selected:hover {
+  box-shadow: inset 0 0 0 1px var(--lab-ink-3);
+  background: var(--lab-selected-solid);
+}
+html[data-ds="lab"] .rr-count {
+  padding-right: 12px;
+  box-shadow: inset -1px 0 0 var(--lab-rule);
+  font-family: var(--font-mono);
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+html[data-ds="lab"] .rr-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+}
+html[data-ds="lab"] .rr-sub {
+  font-size: 12.5px;
+  line-height: 16px;
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .rr-chevron {
+  width: 14px;
+  height: 14px;
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .rr-card.ctb-start-card {
+  box-shadow: inset 0 0 0 1px var(--lab-rule);
+  background: var(--lab-surface);
+}
+html[data-ds="lab"] .rr-card.ctb-start-card--accent {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lab-accent) 45%, var(--lab-rule));
+  background: var(--lab-surface);
+}
+
+/* --- Question Bank landing: recent-search pills as Lab chips, the category
+   index at 14 with mono counts and tracked letters. */
+html[data-ds="lab"] .lm-quick-pill {
+  height: 26px;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--lab-guide);
+  border-radius: var(--lab-r);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--lab-ink-2);
+  transition: background var(--lab-fast) ease, border-color var(--lab-fast) ease, color var(--lab-fast) ease;
+}
+html[data-ds="lab"] .lm-quick-pill:hover {
+  background: var(--lab-hover);
+  border-color: var(--lab-guide-strong);
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .lm-quick-pill .icon svg {
+  width: 12px;
+  height: 12px;
+}
+html[data-ds="lab"] .qbl-index-head-row {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--lab-guide);
+}
+html[data-ds="lab"] .qbl-index-head-label {
+  border-radius: var(--lab-r);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 20px;
+}
+html[data-ds="lab"] .qbl-index-head-label:hover,
+html[data-ds="lab"] .qbl-index-add-btn:hover,
+html[data-ds="lab"] .qbl-index-add-btn.is-open,
+html[data-ds="lab"] .qbl-index-row:hover {
+  background: var(--lab-hover);
+}
+html[data-ds="lab"] .qbl-index-add-btn {
+  border-radius: var(--lab-r);
+}
+html[data-ds="lab"] .qbl-index-add-btn svg {
+  width: 16px;
+  height: 16px;
+}
+html[data-ds="lab"] .qbl-index-add {
+  font-size: 12.5px;
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .qbl-index {
+  padding: 8px 8px 16px;
+}
+html[data-ds="lab"] .qbl-index-group {
+  margin-bottom: 20px;
+}
+html[data-ds="lab"] .qbl-index-letter {
+  padding: 4px 8px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--lab-rule-soft);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 16px;
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .qbl-index-row {
+  gap: 12px;
+  padding: 4px 8px;
+  border-radius: var(--lab-r);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--lab-ink);
+  transition: none;
+}
+html[data-ds="lab"] .qbl-index-count {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--lab-ink-3);
+}
+
+/* --- Spotlight's own table (64 rows set by the 144×76 backdrops): the same
+   head and rules as every data table; Approve solid green, Reject a ruled
+   red Secondary; names Medium 13.5, text 13. */
+html[data-ds="lab"] .sp-table thead th {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  line-height: 16px;
+  color: var(--lab-ink-3);
+  border-bottom: 1px solid var(--lab-guide);
+}
+html[data-ds="lab"] .sp-table tbody tr {
+  border-bottom: 1px solid var(--lab-rule);
+  transition: none;
+}
+html[data-ds="lab"] .sp-table tbody tr:nth-child(5n) {
+  border-bottom-color: var(--lab-guide);
+}
+html[data-ds="lab"] .sp-table tbody tr:hover,
+html[data-ds="lab"] .sp-table tbody tr.menu-open {
+  background-color: var(--lab-hover);
+}
+html[data-ds="lab"] .sp-table tbody td {
+  height: 92px;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--lab-ink-2);
+}
+html[data-ds="lab"] .sp-table thead th + th,
+html[data-ds="lab"] .sp-table tbody td + td {
+  border-left: 1px solid var(--lab-rule);
+}
+html[data-ds="lab"] .sp-table td.sp-td-pos,
+html[data-ds="lab"] .sp-row-pos {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .sp-cell-name {
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .sp-cell-desc {
+  font-size: 12.5px;
+  line-height: 16px;
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .sp-td-muted,
+html[data-ds="lab"] .sp-td-by {
+  font-size: 13px;
+  color: var(--lab-ink-2);
+}
+html[data-ds="lab"] .sp-decide-btn {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--lab-r);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 16px;
+  transition: background var(--lab-fast) ease, border-color var(--lab-fast) ease, transform var(--lab-fast) ease;
+}
+html[data-ds="lab"] .sp-decide-btn:hover {
+  filter: none;
+}
+html[data-ds="lab"] .sp-decide-btn:active {
+  transform: scale(0.98);
+}
+html[data-ds="lab"] .sp-decide-btn--approve {
+  background: var(--lab-go);
+  border: 1px solid var(--lab-go);
+  color: var(--lab-on-go);
+}
+html[data-ds="lab"] .sp-decide-btn--approve:hover {
+  background: var(--lab-go-hover);
+  border-color: var(--lab-go-hover);
+}
+html[data-ds="lab"] .sp-decide-btn--reject {
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--lab-red) 55%, transparent);
+  color: var(--lab-red);
+}
+html[data-ds="lab"] .sp-decide-btn--reject:hover {
+  background: color-mix(in srgb, var(--lab-red) 8%, transparent);
+  border-color: var(--lab-red);
+}
+html[data-ds="lab"] .sp-decide-btn > svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* --- Card tables on forms (Quiz Questions, Sections, the question editor's
+   Options, Completion Criteria, Content Links, Product Config lists): a
+   ruled box, radius 3, the head row in tracked 11.5 on a guide rule, rows on
+   soft hairlines, names Medium 13.5, mono numbers. */
+html[data-ds="lab"] :is(.qz, .qsec, .qed-tbl, .cc-panel, .lc-panel, .ind-assign) {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--lab-rule);
+  border-radius: var(--lab-r);
+}
+html[data-ds="lab"] :is(.qz-hd, .qz-row, .qz-empty, .qsec-hd, .qsec-row, .qsec-foot, .qed-tbl-hd, .qed-tbl-row, .qed-tbl-foot, .cc-row, .lc-row, .ind-assign-hd, .ind-assign-row) {
+  border-bottom: 1px solid var(--lab-rule-soft);
+}
+html[data-ds="lab"] :is(.qz-hd, .qsec-hd, .qed-tbl-hd, .cc-row-head, .lc-row-head, .ind-assign-hd) {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  line-height: 16px;
+  color: var(--lab-ink-3);
+  border-bottom: 1px solid var(--lab-guide);
+}
+html[data-ds="lab"] .qsec-hd {
+  padding: 6px 16px;
+}
+html[data-ds="lab"] .qsec-row,
+html[data-ds="lab"] .qsec-foot {
+  padding: 8px 16px;
+}
+html[data-ds="lab"] .qsec-hd .qsec-num {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .qsec-num {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .qsec-secname,
+html[data-ds="lab"] .qsec-revname {
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 18px;
+}
+html[data-ds="lab"] .qsec-revsub {
+  font-size: 12.5px;
+  line-height: 16px;
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .qsec-row.is-disabled .qsec-revname {
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .qsec-row.is-disabled .qsec-revsub {
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .qsec-empty {
+  font-size: 13px;
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .qsec-pct-input,
+html[data-ds="lab"] :is(.qz, .qsec, .qed-tbl, .cc-panel, .lc-panel) .form-input {
+  height: 32px;
+  padding: 6px 10px;
+  background: var(--lab-surface);
+  border: 1px solid var(--lab-rule);
+  border-radius: var(--lab-r);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+html[data-ds="lab"] .qsec-pct-sign {
+  font-size: 12.5px;
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .qsec-grip,
+html[data-ds="lab"] .qsec-x {
+  color: var(--lab-ink-5);
+  transition: color var(--lab-fast) ease;
+}
+html[data-ds="lab"] .qsec-grip:hover,
+html[data-ds="lab"] .qsec-x:hover:not(:disabled) {
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .qsec-add {
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--lab-ink);
+  transition: color var(--lab-fast) ease;
+}
+html[data-ds="lab"] .qsec-add:hover:not(:disabled) {
+  color: var(--lab-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--lab-guide-strong);
+  text-underline-offset: 3px;
+}
+html[data-ds="lab"] .qsec-add svg {
+  width: 14px;
+  height: 14px;
+}
+html[data-ds="lab"] .qsec-x:disabled,
+html[data-ds="lab"] .qsec-add:disabled {
+  color: var(--lab-ink-6);
+}
+
+/* --- Industries rows --- */
+html[data-ds="lab"] .ind-row {
+  --ind-row-rule: inset 0 -1px 0 var(--lab-rule);
+  transition: none;
+}
+html[data-ds="lab"] .ind-row--lg {
+  padding: 12px 8px;
+  min-height: 64px;
+}
+html[data-ds="lab"] .ind-row:hover,
+html[data-ds="lab"] .ind-row.is-active,
+html[data-ds="lab"] .ind-row.menu-open {
+  background: var(--lab-hover);
+}
+html[data-ds="lab"] .ind-row.is-drop-over {
+  box-shadow: inset 0 2px 0 var(--lab-ink), var(--ind-row-rule);
+}
+html[data-ds="lab"] .ind-row.menu-open .row-action-bar > .row-action-btn:last-child {
+  border-color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .ind-row-index {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .ind-row-name {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .ind-row-meta {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--lab-ink-3);
+}
+
+/* --- Row preview panel: the record column on the canvas, the preview column
+   on the surface step; title Bold 20; accordions with 14 SemiBold titles and
+   13 label / value rows on a 160 label column. */
+html[data-ds="lab"] .pp {
+  border-left: 1px solid var(--lab-panel-edge);
+}
+html[data-ds="lab"] .pp-main {
+  gap: 20px;
+  padding: 24px 28px;
+}
+html[data-ds="lab"] .pp-head {
+  gap: 12px;
+  padding-bottom: 12px;
+}
+html[data-ds="lab"] .pp-thumb {
+  width: 96px;
+  height: 96px;
+  border-radius: var(--lab-r);
+}
+html[data-ds="lab"] .pp-title {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 24px;
+  letter-spacing: -0.01em;
+}
+html[data-ds="lab"] .pp-more {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--lab-r);
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .pp-more:hover {
+  background: var(--lab-hover);
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .pp-side {
+  gap: 20px;
+  padding: 24px 28px;
+  background: var(--lab-surface);
+}
+html[data-ds="lab"] .acc {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--lab-rule);
+}
+html[data-ds="lab"] .acc-toggle {
+  padding: 6px 10px;
+  border-radius: var(--lab-r);
+  transition: background var(--lab-fast) ease;
+}
+html[data-ds="lab"] .acc-toggle:hover {
+  background: var(--lab-hover);
+}
+html[data-ds="lab"] .acc-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+}
+html[data-ds="lab"] .acc-chevron {
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .acc-chevron svg {
+  width: 14px;
+  height: 14px;
+}
+html[data-ds="lab"] .acc-content {
+  gap: 12px;
+  padding: 6px 10px 10px;
+}
+html[data-ds="lab"] .acc-rows {
+  gap: 10px;
+}
+html[data-ds="lab"] .acc-row {
+  grid-template-columns: 160px minmax(0, 1fr);
+  column-gap: 16px;
+  font-size: 13px;
+  line-height: 18px;
+}
+html[data-ds="lab"] .acc-label {
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .acc-value {
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .acc-value-sub {
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .acc-value-empty,
+html[data-ds="lab"] .acc-content > .acc-value-empty {
+  font-size: 13px;
+  color: var(--lab-ink-4);
+}
+
+/* --- Confirm cards (review steps, the Full Profile, the preview panel's
+   record cards): ruled boxes with 14 SemiBold heads. */
+html[data-ds="lab"] .confirm-cards {
+  gap: 20px;
+}
+html[data-ds="lab"] .confirm-card {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--lab-rule);
+  border-radius: var(--lab-r);
+}
+html[data-ds="lab"] .confirm-card-head {
+  padding: 8px 12px 8px 14px;
+  border-bottom: 1px solid var(--lab-guide);
+}
+html[data-ds="lab"] .confirm-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+}
+html[data-ds="lab"] .confirm-card-edit:hover {
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .confirm-card-body {
+  column-gap: 24px;
+  row-gap: 14px;
+  padding: 12px 14px;
+}
+html[data-ds="lab"] .confirm-card-slot {
+  padding: 10px 14px;
+}
+html[data-ds="lab"] .confirm-card-field {
+  font-size: 13px;
+  line-height: 18px;
+}
+html[data-ds="lab"] .confirm-card-xscroll {
+  background: transparent;
+  border: 1px solid var(--lab-rule);
+  border-radius: var(--lab-r);
+}
+html[data-ds="lab"] .confirm-card .table thead th,
+html[data-ds="lab"] .confirm-card .table thead th[class] {
+  height: 28px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--lab-ink-3);
+  border-bottom: 1px solid var(--lab-guide);
+}
+html[data-ds="lab"] .confirm-card .table tbody tr {
+  border-bottom: 1px solid var(--lab-rule);
+}
+html[data-ds="lab"] .confirm-card-head .btn-save-draft,
+html[data-ds="lab"] .confirm-card-head .mc-btn-sm {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--lab-guide);
+  border-radius: var(--lab-r);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+}
+html[data-ds="lab"] .confirm-card-head .btn-save-draft:hover,
+html[data-ds="lab"] .confirm-card-head .mc-btn-sm:hover {
+  background: var(--lab-hover);
+  border-color: var(--lab-guide-strong);
+}
+
+/* --- Date range picker: presets as 13 rows (the chosen one first ink,
+   SemiBold), Start / End as 36 mono fields, 28 day cells; the chosen span is
+   an 8% ink wash with its ends filled in ink (selection is ink here too). */
+html[data-ds="lab"] .drp-panel {
+  border-radius: var(--lab-r);
+}
+html[data-ds="lab"] .drp-presets {
+  padding: 10px 16px;
+  border-right: 1px solid var(--lab-rule);
+}
+html[data-ds="lab"] .drp-presets-list {
+  gap: 2px;
+}
+html[data-ds="lab"] .drp-preset {
+  min-height: 28px;
+  padding: 0 8px;
+  margin: 0 -8px;
+  border-radius: 2px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--lab-ink-2);
+  transition: none;
+}
+html[data-ds="lab"] .drp-preset:hover {
+  background: var(--lab-hover);
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .drp-preset.is-active {
+  font-weight: 600;
+  color: var(--lab-ink);
+}
+html[data-ds="lab"] .drp-col {
+  gap: 14px;
+  padding: 12px;
+}
+html[data-ds="lab"] .drp-field {
+  gap: 6px;
+  width: 208px;
+}
+html[data-ds="lab"] .drp-field-label {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+}
+html[data-ds="lab"] .drp-input {
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 8px 10px;
+  background: var(--lab-surface);
+  border: 1px solid var(--lab-rule);
+  border-radius: var(--lab-r);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+}
+html[data-ds="lab"] .drp-input::placeholder {
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .drp-input:focus {
+  border-color: var(--lab-accent);
+}
+html[data-ds="lab"] .drp-my-btn {
+  font-size: 13px;
+  font-weight: 600;
+}
+html[data-ds="lab"] .drp-my-btn:hover,
+html[data-ds="lab"] .drp-nav:hover:not(:disabled) {
+  color: var(--lab-ink-3);
+}
+html[data-ds="lab"] .drp-weekdays,
+html[data-ds="lab"] .drp-grid {
+  grid-template-columns: repeat(7, 30px);
+}
+html[data-ds="lab"] .drp-weekdays span {
+  height: 18px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--lab-ink-4);
+}
+html[data-ds="lab"] .drp-day {
+  width: 30px;
+  height: 28px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--lab-ink);
+  transition: none;
+}
+html[data-ds="lab"] .drp-day:hover:not(:disabled):not(.in-range):not(.is-selected):not(.drp-day--empty) {
+  background: var(--lab-hover);
+  border-radius: 2px;
+}
+html[data-ds="lab"] .drp-day:disabled {
+  color: var(--lab-ink-6);
+}
+html[data-ds="lab"] .drp-day.in-range {
+  background: var(--lab-selected);
+  box-shadow: none;
+}
+html[data-ds="lab"] .drp-day.is-start,
+html[data-ds="lab"] .drp-day.is-end,
+html[data-ds="lab"] .drp-day.is-solo,
+html[data-ds="lab"] .drp-day.is-selected {
+  background: var(--lab-ink);
+  color: var(--lab-bg);
+  font-weight: 600;
+  box-shadow: none;
+}
+html[data-ds="lab"] .drp-day.is-start {
+  border-radius: 2px 0 0 2px;
+}
+html[data-ds="lab"] .drp-day.is-end {
+  border-radius: 0 2px 2px 0;
+}
+html[data-ds="lab"] .drp-day.is-start.is-end,
+html[data-ds="lab"] .drp-day.is-solo,
+html[data-ds="lab"] .drp-day.is-selected {
+  border-radius: 2px;
+}
+html[data-ds="lab"] .drp-my-menu {
+  border: 1px solid var(--lab-panel-edge);
+}
+
+/* ===== Motion =====
+   One grammar: floating panels and dialogs arrive in 120 to 160ms on a
+   strong ease-out from 98% and 2px below their resting place; exits are
+   unmounts (instant). Row hovers, keyboard actions and the toggle itself
+   never animate. */
+@media (prefers-reduced-motion: no-preference) {
+  html[data-ds="lab"] :is(.dropdown, .u-menu, .ct-menu, .usearch-panel, .ss-menu, .ms-menu) {
+    transform-origin: top center;
+    transition: opacity var(--lab-fast) var(--lab-ease), transform var(--lab-fast) var(--lab-ease);
+  }
+  html[data-ds="lab"] .dropdown.up {
+    transform-origin: bottom center;
+  }
+  @starting-style {
+    html[data-ds="lab"] :is(.dropdown, .u-menu, .ct-menu, .usearch-panel, .ss-menu, .ms-menu) {
+      opacity: 0;
+      transform: translateY(-2px) scale(0.985);
+    }
+    html[data-ds="lab"] .dropdown.up {
+      transform: translateY(2px) scale(0.985);
+    }
+  }
+  html[data-ds="lab"] .pr-confirm-overlay {
+    transition: background var(--lab-med) var(--lab-ease);
+  }
+  html[data-ds="lab"] .prm {
+    transition: opacity var(--lab-med) var(--lab-ease), transform var(--lab-med) var(--lab-ease);
+  }
+  @starting-style {
+    html[data-ds="lab"] .pr-confirm-overlay {
+      background: rgba(6, 8, 10, 0);
+    }
+    html[data-ds="lab"] .prm {
+      opacity: 0;
+      transform: scale(0.98);
+    }
+  }
+}
+
+/* ===== The switch itself =====
+   designSystem.ts runs the Lab switch (into or out of this look) inside a
+   View Transition and marks <html data-ds-switching> for its duration; the
+   other two looks still switch instantly. 160ms crossfade, no movement. */
+@media (prefers-reduced-motion: no-preference) {
+  html[data-ds-switching]::view-transition-old(root),
+  html[data-ds-switching]::view-transition-new(root) {
+    animation-duration: 160ms;
+    animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+    mix-blend-mode: normal;
+  }
+}
+
+/* ===== Reduced motion =====
+   Every Lab transition reads its duration from these two tokens, so under
+   `reduce` state changes are instant while hover and focus colours still
+   change (the entrance and dialog blocks above are gated separately). */
+@media (prefers-reduced-motion: reduce) {
+  html[data-ds="lab"] {
+    --lab-fast: 0ms;
+    --lab-med: 0ms;
+  }
+}
+
+/* ===== Disabled =====
+   One look for every unavailable button: a 6% wash on no rule, text in the
+   sixth ink, no press. Last in the file so it outranks the fills above. */
+html[data-ds="lab"] :is(.btn-publish, .btn-save-draft, .prm-cta, .prm-quiet, .btn-apply, .new-task, .cta-primary, .cta-quiet, .btn-primary):is(:disabled, .is-disabled),
+html[data-ds="lab"] :is(.btn-publish, .btn-save-draft, .prm-cta, .prm-quiet, .btn-apply, .new-task, .cta-primary, .cta-quiet, .btn-primary):is(:disabled, .is-disabled):is(:hover, :active) {
+  background: var(--lab-wash-soft);
+  border-color: transparent;
+  color: var(--lab-ink-6);
+  filter: none;
+  transform: none;
+  cursor: not-allowed;
+}
+html[data-ds="lab"] :is(.btn-publish, .btn-save-draft, .prm-cta, .prm-quiet, .btn-apply, .new-task, .cta-primary, .cta-quiet, .btn-primary):is(:disabled, .is-disabled) .cta-kbd {
+  background: transparent;
+  color: var(--lab-ink-6);
+}

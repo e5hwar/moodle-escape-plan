@@ -3,13 +3,14 @@ import { useSyncExternalStore } from "react";
 /* Which design system the prototype is drawn in — the Demo Controls panel's
  * "Design System" setting. "play" is the prototype as built (Eshwar's Play
  * Area); "skillcat" is the SkillCat UI library, drawn to Eric's LMS screens
- * (Figma DJoYweP5YPusfzCFDByOFp). The choice is a `data-ds` attribute on
- * <html> that src/skillcat-ds.css keys off, plus this store for the few
+ * (Figma DJoYweP5YPusfzCFDByOFp); "lab" is the experimental Lab look
+ * (src/lab-ds.css, specs/lab-ds.md). The choice is a `data-ds` attribute on
+ * <html> that src/skillcat-ds.css and src/lab-ds.css key off, plus this store for the few
  * places markup has to differ (the sidebar rail, the date range menu). The
  * React tree is the same either way, so switching keeps the screen, its
  * scroll and anything typed. Survives a reload via localStorage. */
 
-export type DesignSystem = "skillcat" | "play";
+export type DesignSystem = "skillcat" | "play" | "lab";
 
 /* The key carries a version so a stored choice from before the default
  * flipped to SkillCat (2026-11-03) is ignored once, instead of pinning old
@@ -21,7 +22,7 @@ const DEFAULT: DesignSystem = "skillcat";
 function read(): DesignSystem {
   try {
     const v = localStorage.getItem(KEY);
-    if (v === "skillcat" || v === "play") return v;
+    if (v === "skillcat" || v === "play" || v === "lab") return v;
   } catch {
     /* storage blocked — fall through to the default */
   }
@@ -33,7 +34,7 @@ const listeners = new Set<() => void>();
 
 function apply(ds: DesignSystem) {
   const root = document.documentElement;
-  if (ds === "skillcat") root.setAttribute("data-ds", "skillcat");
+  if (ds === "skillcat" || ds === "lab") root.setAttribute("data-ds", ds);
   else root.removeAttribute("data-ds");
 }
 apply(current);
@@ -44,8 +45,24 @@ export function getDesignSystem(): DesignSystem {
 
 export function setDesignSystem(ds: DesignSystem) {
   if (ds === current) return;
+  const from = current;
   current = ds;
-  apply(ds);
+  /* The Lab look crossfades in and out over 160ms (src/lab-ds.css, "The
+   * switch itself") through a View Transition; a switch between the other two
+   * looks stays instant, as before. The attribute scopes the transition's CSS
+   * so nothing else in the app picks it up. */
+  const root = document.documentElement;
+  const crossfade =
+    (ds === "lab" || from === "lab") &&
+    typeof document.startViewTransition === "function" &&
+    !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (crossfade) {
+    root.setAttribute("data-ds-switching", "");
+    const t = document.startViewTransition(() => apply(ds));
+    t.finished.finally(() => root.removeAttribute("data-ds-switching"));
+  } else {
+    apply(ds);
+  }
   try {
     localStorage.setItem(KEY, ds);
   } catch {

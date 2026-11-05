@@ -16,7 +16,7 @@ import {
 } from "../data/legal";
 import { formatShortDate } from "../formatDate";
 import { richTextContent } from "../richText";
-import { AddIcon, PlusThinIcon, RowCloseIcon, RowEditIcon, RowExternalLinkIcon, InfoIcon12 } from "./icons";
+import { AddIcon, CheckBoldIcon, PlusThinIcon, RowCloseIcon, RowEditIcon, RowExternalLinkIcon, InfoIcon12 } from "./icons";
 import { NO_CHANGES_TIP, PrmModal } from "./PrmModal";
 import { ChangesFooter, ChangesReviewList, type StagedChange } from "./ChangesFooter";
 import { ImageUploadField, type PickedImage } from "./ImageUploadField";
@@ -83,33 +83,17 @@ type Cycle = "Monthly" | "Annual";
 const CYCLES: Cycle[] = ["Monthly", "Annual"];
 
 type Tier = "Essentials" | "Growth" | "Professional";
-type Platform = "Apple" | "Google" | "Stripe";
 type PriceTable<K extends string> = Record<K, Record<Cycle, string>>;
 
 type PriceRow<K extends string> = { key: K; name: string };
 
-/* Paywall rows. Apple leads, as on every paywall in the app (748:1593), and
-   the placeholders follow the same rule: the stores issue Product IDs, Stripe
-   issues Price IDs. */
-const B2C_PRICE_ROWS: PriceRow<Platform>[] = [
-  { key: "Apple", name: "Apple Product ID" },
-  { key: "Google", name: "Google Product ID" },
-  { key: "Stripe", name: "Stripe Price ID" },
-];
-
+/* B2B paywall rows: a Stripe Price ID per tier. (B2C Management's own
+   Paywall Pricing — Apple / Google / Stripe IDs — was removed 2026-11-05.) */
 const B2B_PRICE_ROWS: PriceRow<Tier>[] = [
   { key: "Essentials", name: "Stripe Price ID" },
   { key: "Growth", name: "Stripe Price ID" },
   { key: "Professional", name: "Stripe Price ID" },
 ];
-
-/* The default B2C IDs: a sample store Product ID / Stripe Price ID in every
-   platform × cycle. Every Price ID is required, so none starts blank. */
-const DEFAULT_B2C_PRICES: PriceTable<Platform> = {
-  Apple: { Monthly: "com.skillcat.subscription.monthly", Annual: "com.skillcat.subscription.annual" },
-  Google: { Monthly: "skillcat_subscription_monthly", Annual: "skillcat_subscription_annual" },
-  Stripe: { Monthly: "price_1QB2cMo4Tn7HwLp3ZxR8kVdA", Annual: "price_1QB2cAn6Pq2JsMv9YtE5nWcF" },
-};
 
 /* The default B2B rates: a sample Stripe Price ID in every tier × cycle, so
    none starts blank. */
@@ -120,17 +104,41 @@ const DEFAULT_B2B_PRICES: PriceTable<Tier> = {
 };
 
 /** `date` is ISO "YYYY-MM-DD"; it prints through the app's `formatShortDate`. */
-/** One forced update. Each platform is versioned on its own; an entry carries
- *  at least one of the two. */
-type ForceUpdate = { id: string; ios?: string; android?: string; date: string };
+/** One released app version: the platforms it's available on, and whether it's
+ *  marked as the minimum there — a version can only be the minimum on a
+ *  platform it's available on. The newest marked version per platform is the
+ *  one being forced; older marks are history. */
 type AppPlatform = "ios" | "android";
-const APP_PLATFORMS: { key: AppPlatform; name: string }[] = [
-  { key: "ios", name: "iOS" },
-  { key: "android", name: "Android" },
+type PlatformFlags = Record<AppPlatform, boolean>;
+type AppVersion = {
+  id: string;
+  version: string;
+  available: PlatformFlags;
+  minimum: PlatformFlags;
+  date: string;
+};
+/** Table order (iOS first, as the list has always read). */
+const APP_PLATFORMS: { key: AppPlatform; name: string; head: string }[] = [
+  { key: "ios", name: "iOS", head: "AVAILABLE ON IOS" },
+  { key: "android", name: "Android", head: "AVAILABLE ON ANDROID" },
 ];
-/** "iOS 4.2.0 · Android 4.2.0", or just the platform the entry carries. */
-const forceUpdateLabel = (h: ForceUpdate) =>
-  APP_PLATFORMS.filter((p) => h[p.key]).map((p) => `${p.name} ${h[p.key]}`).join(" · ");
+/** The Add New Version modal's order (user, 2026-11-05): the Android pair
+ *  first, then the iOS pair. */
+const MODAL_PLATFORMS = [...APP_PLATFORMS].reverse();
+const NO_PLATFORMS: PlatformFlags = { ios: false, android: false };
+const platformFlags = (on: AppPlatform[]): PlatformFlags => ({
+  ios: on.includes("ios"),
+  android: on.includes("android"),
+});
+/** A seeded version: available on `available`, and marked as the minimum on
+ *  `minimum` (every available platform unless said otherwise). */
+const appVersion = (
+  id: string,
+  version: string,
+  date: string,
+  available: AppPlatform[],
+  minimum: AppPlatform[] = available,
+): AppVersion => ({ id, version, date, available: platformFlags(available), minimum: platformFlags(minimum) });
 
 /** A What's New page and the app versions that open it after updating. A
  *  version belongs to one page at most. */
@@ -162,14 +170,13 @@ const tabRow = (id: string, nameEn: string, nameEs: string, url: string): TabRow
    unsaved?" is one comparison against the last saved copy. The saved copy
    lives in App state, so it outlasts a visit to another page. */
 export type ProductSettings = {
-  forceUpdates: ForceUpdate[];
+  forceUpdates: AppVersion[];
   whatsNewPages: WhatsNewPage[];
   webcamFrequency: string;
   initialTaskCount: string;
   appTabs: TabRow[];
   dashboardTabs: TabRow[];
   supportLinks: SupportLink[];
-  b2cPrices: PriceTable<Platform>;
   b2cTrialDays: string;
   b2cEpaCard: string;
   b2bPrices: PriceTable<Tier>;
@@ -192,10 +199,11 @@ export type B2BValueUsage = { companies: number; tasks: number; certifications: 
 
 export const DEFAULT_PRODUCT_SETTINGS: Settings = {
   forceUpdates: [
-    { id: "fu-4", android: "4.2.1", date: "2026-07-14" },
-    { id: "fu-3", ios: "4.2.0", android: "4.2.0", date: "2026-06-02" },
-    { id: "fu-2", ios: "4.1.3", android: "4.1.2", date: "2026-04-18" },
-    { id: "fu-1", ios: "4.0.0", android: "4.0.0", date: "2026-01-27" },
+    appVersion("fu-5", "4.2.1", "2026-07-14", ["android"]),
+    appVersion("fu-4", "4.2.0", "2026-06-02", ["ios", "android"]),
+    appVersion("fu-3", "4.1.3", "2026-04-18", ["ios"]),
+    appVersion("fu-2", "4.1.0", "2026-03-03", ["ios", "android"], []),
+    appVersion("fu-1", "4.0.0", "2026-01-27", ["ios", "android"]),
   ],
   whatsNewPages: [
     { id: "wn-2", url: "https://skillcat.app/whats-new/4-2", versions: ["4.2.1", "4.2.0"] },
@@ -220,7 +228,6 @@ export const DEFAULT_PRODUCT_SETTINGS: Settings = {
     { id: "sup-message", label: "Send Us A Message", url: "https://skillcat.app/contact" },
     { id: "sup-news", label: "News", url: "https://skillcat.app/news" },
   ],
-  b2cPrices: DEFAULT_B2C_PRICES,
   b2cTrialDays: "3",
   b2cEpaCard: "prod_QEpaApp7Lx2Nc9RvTb",
   b2bPrices: DEFAULT_B2B_PRICES,
@@ -289,8 +296,10 @@ function useEscape(onClose: () => void) {
    shared across the data columns in proportion to it. The glyph columns
    (✕, edit, open, actions) stay fixed. */
 const cw = (px: number) => ({ "--cw": px }) as React.CSSProperties;
-// Equal quarters (user): both versions, their date and the status read as peers.
-const FU_COLS = { ios: cw(120), android: cw(120), date: cw(120), status: cw(120) };
+// Equal peers (user): the version, both platforms, the date and the status.
+const FU_COLS = { version: cw(140), ios: cw(140), android: cw(140), date: cw(140), status: cw(140) };
+// Add New Version's platform table: the name, then its two switch columns.
+const PLATFORM_COLS = { platform: cw(120), available: cw(100), required: cw(150) };
 const WN_COLS = { link: cw(360), versions: cw(200) };
 const DL_COLS = { dest: cw(160), link: cw(280), login: cw(120) };
 const TAB_COLS = { name: cw(160), url: cw(360), visible: cw(64) };
@@ -505,106 +514,139 @@ function PriceIdGrid<K extends string>({
 /* ─── General Settings ─── */
 
 function ForceAppUpdateField({
-  history,
+  versions,
   onChange,
 }: {
-  history: ForceUpdate[];
-  onChange: (h: ForceUpdate[]) => void;
+  versions: AppVersion[];
+  onChange: (v: AppVersion[]) => void;
 }) {
   const t = useDsText();
-  const [adding, setAdding] = useState(false);
-  const [removing, setRemoving] = useState<ForceUpdate | null>(null);
+  const [modal, setModal] = useState<{ kind: "new" } | { kind: "edit"; entry: AppVersion } | null>(null);
+  const [removing, setRemoving] = useState<AppVersion | null>(null);
+  const editing = modal?.kind === "edit" ? modal.entry : null;
 
-  function force(versions: Pick<ForceUpdate, AppPlatform>) {
-    onChange([{ id: `fu-${Date.now()}`, ...versions, date: todayIso() }, ...history]);
-    setAdding(false);
+  // An edit keeps the row's id, place and Added On date; only its number and
+  // platforms change. A new version goes on top, dated today.
+  function save(patch: VersionPatch) {
+    onChange(
+      editing
+        ? versions.map((v) => (v.id === editing.id ? { ...v, ...patch } : v))
+        : [{ id: `fu-${Date.now()}`, ...patch, date: todayIso() }, ...versions],
+    );
+    setModal(null);
   }
 
   function remove(id: string) {
-    onChange(history.filter((h) => h.id !== id));
+    onChange(versions.filter((v) => v.id !== id));
     setRemoving(null);
   }
 
   return (
     <div className="form-group">
       <label className="form-label">{t("Force App Update")}</label>
-      {/* History is newest-first, and each platform's newest version is the one
-          being forced — so the log IS the current state. A row can be Active
-          for one platform while a newer row carries only the other. */}
+      {/* One row per released version, newest first. The newest row marked as
+          the minimum on a platform is the version forced there — so the list
+          IS the current state, and older marks are history. A row can be the
+          minimum on iOS while a newer Android-only row holds Android. */}
       <div className="qsec ct-prop">
         <div className="qsec-hd">
-          <span className="ct-col" style={FU_COLS.ios}>IOS VERSION</span>
-          <span className="ct-col" style={FU_COLS.android}>ANDROID VERSION</span>
-          <span className="ct-col" style={FU_COLS.date}>ENABLED ON</span>
+          <span className="ct-col" style={FU_COLS.version}>VERSION</span>
+          {APP_PLATFORMS.map((p) => (
+            <span key={p.key} className="ct-col" style={FU_COLS[p.key]}>{p.head}</span>
+          ))}
+          <span className="ct-col" style={FU_COLS.date}>ADDED ON</span>
           <span className="ct-col pc-col-status" style={FU_COLS.status}>STATUS</span>
-          <span className="qsec-x" aria-hidden />
+          <span className="pc-col-actions" aria-hidden />
         </div>
 
-        {history.length === 0 && (
+        {versions.length === 0 && (
           <div className="qsec-row">
-            <span className="qsec-empty">{t("No Force Updates Configured Yet")}</span>
+            <span className="qsec-empty">{t("No App Versions Added Yet")}</span>
           </div>
         )}
 
-        {history.map((h) => {
-          const activeFor = activePlatforms(history, h);
+        {versions.map((v) => {
+          const minimumFor = minimumPlatforms(versions, v);
           return (
-            <div className="qsec-row" key={h.id}>
-              {APP_PLATFORMS.map((p) => (
-                <span
-                  key={p.key}
-                  className={`ct-col ${h[p.key] ? "pc-strong" : "pc-muted"}`}
-                  style={FU_COLS[p.key]}
-                >
-                  {h[p.key] ?? "—"}
-                </span>
-              ))}
-              <span className="ct-col pc-muted" style={FU_COLS.date}>{formatShortDate(h.date)}</span>
+            <div className="qsec-row" key={v.id}>
+              <span className="ct-col pc-strong" style={FU_COLS.version}>{v.version}</span>
+              {APP_PLATFORMS.map((p) =>
+                v.available[p.key] ? (
+                  <span
+                    key={p.key}
+                    className="ct-col pc-check"
+                    style={FU_COLS[p.key]}
+                    role="img"
+                    aria-label={`Available on ${p.name}`}
+                  >
+                    <CheckBoldIcon />
+                  </span>
+                ) : (
+                  <span key={p.key} className="ct-col pc-muted" style={FU_COLS[p.key]}>
+                    —
+                  </span>
+                ),
+              )}
+              <span className="ct-col pc-muted" style={FU_COLS.date}>{formatShortDate(v.date)}</span>
               <span className="ct-col pc-col-status" style={FU_COLS.status}>
-                {activeFor.length === 0 ? (
+                {minimumFor.length === 0 ? (
                   <span className="pc-muted">—</span>
                 ) : (
                   <span className="co-status-pill co-status-pill--green">
-                    {activeFor.length === APP_PLATFORMS.length
-                      ? "Active"
-                      : `Active on ${activeFor.map((p) => p.name).join(" & ")}`}
+                    {minimumFor.length === APP_PLATFORMS.length
+                      ? "Minimum Version"
+                      : `Minimum on ${minimumFor.map((p) => p.name).join(" & ")}`}
                   </span>
                 )}
               </span>
-              <button
-                className="qsec-x"
-                aria-label={`Remove force update ${forceUpdateLabel(h)}`}
-                onClick={() => setRemoving(h)}
-              >
-                <RowCloseIcon />
-              </button>
+              <span className="pc-col-actions">
+                <button
+                  className="qsec-x"
+                  title="Edit"
+                  aria-label={`Edit version ${v.version}`}
+                  onClick={() => setModal({ kind: "edit", entry: v })}
+                >
+                  <RowEditIcon />
+                </button>
+                <button
+                  className="qsec-x"
+                  title="Remove"
+                  aria-label={`Remove version ${v.version}`}
+                  onClick={() => setRemoving(v)}
+                >
+                  <RowCloseIcon />
+                </button>
+              </span>
             </div>
           );
         })}
 
         <div className="qsec-foot">
-          <button className="qsec-add" onClick={() => setAdding(true)}>
+          <button className="qsec-add" onClick={() => setModal({ kind: "new" })}>
             <PlusThinIcon />
-            {t("Force New Version")}
+            {t("Add New Version")}
           </button>
         </div>
       </div>
       <p className="form-help">
-        Force learners on older app versions to update. Enter the minimum required version for iOS,
-        Android or both — users below it are prompted to update before they can continue.
+        Every released app version and where it's available. Mark a version as the minimum on a
+        platform to force learners there on older versions to update before they can continue.
       </p>
 
-      {adding && (
-        <ForceUpdateModal
-          history={history}
-          onForce={force}
-          onCancel={() => setAdding(false)}
+      {modal && (
+        <VersionModal
+          // Keyed so switching from one row's edit to another starts fresh.
+          key={editing?.id ?? "new"}
+          entry={editing}
+          versions={versions}
+          onSave={save}
+          onCancel={() => setModal(null)}
         />
       )}
       {removing && (
-        <RemoveForceUpdateModal
+        <RemoveVersionModal
           entry={removing}
-          history={history}
+          versions={versions}
           onRemove={() => remove(removing.id)}
           onCancel={() => setRemoving(null)}
         />
@@ -613,12 +655,12 @@ function ForceAppUpdateField({
   );
 }
 
-/** The platform's newest entry — the version currently forced on it. */
-const activeEntry = (history: ForceUpdate[], p: AppPlatform) => history.find((h) => h[p]);
+/** The platform's newest version marked as its minimum — the one forced there. */
+const minimumEntry = (versions: AppVersion[], p: AppPlatform) => versions.find((v) => v.minimum[p]);
 
-/** The platforms this entry is the Active one for. */
-const activePlatforms = (history: ForceUpdate[], entry: ForceUpdate) =>
-  APP_PLATFORMS.filter((p) => activeEntry(history, p.key)?.id === entry.id);
+/** The platforms this version is the current minimum on. */
+const minimumPlatforms = (versions: AppVersion[], entry: AppVersion) =>
+  APP_PLATFORMS.filter((p) => minimumEntry(versions, p.key)?.id === entry.id);
 
 const VERSION_RE = /^\d+(\.\d+)*$/;
 
@@ -633,130 +675,254 @@ function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-/** What's wrong with a typed version for one platform, if anything. Blank is
- *  fine here — the modal separately needs at least one platform filled. */
-function versionError(v: string, history: ForceUpdate[], p: AppPlatform): string | null {
+/** What's wrong with the typed version, if anything. Blank is no error here —
+ *  the CTA's tip asks for it. Requiring the update on a platform raises the
+ *  bar: the version has to beat the minimum it takes over from — for a new
+ *  version the one forced there now, for an edited row the newest mark BELOW
+ *  it (older history above it doesn't apply, or every past minimum would
+ *  fail its own edit). `self` is the row being edited, which never counts as
+ *  its own duplicate. */
+function versionError(
+  v: string,
+  versions: AppVersion[],
+  minimum: PlatformFlags,
+  self: AppVersion | null,
+): string | null {
   if (!v) return null;
   if (!VERSION_RE.test(v)) return "Use numbers separated by dots, e.g. 4.3.0.";
-  if (history.some((h) => h[p] === v)) return `Version ${v} is already in the log.`;
-  const active = activeEntry(history, p)?.[p];
-  if (active && compareVersions(v, active) <= 0) return `Must be higher than the Active version, ${active}.`;
+  if (versions.some((x) => x.id !== self?.id && compareVersions(x.version, v) === 0))
+    return `Version ${v} is already in the list.`;
+  const older = self ? versions.slice(versions.findIndex((x) => x.id === self.id) + 1) : versions;
+  for (const p of APP_PLATFORMS) {
+    if (!minimum[p.key]) continue;
+    const below = minimumEntry(older, p.key)?.version;
+    if (below && compareVersions(v, below) <= 0)
+      return `Must be higher than the ${self ? "previous " : ""}${p.name} minimum, ${below}.`;
+  }
   return null;
 }
 
-function ForceUpdateModal({
-  history,
-  onForce,
+/** The UPDATE REQUIRED? column's ⓘ. */
+const UPDATE_REQUIRED_TIP =
+  "Learners on this platform below this version are prompted to update before they can continue.\nOnly available once the version is available on the platform.";
+
+type VersionPatch = Pick<AppVersion, "version" | "available" | "minimum">;
+
+/* Add or edit a released version — the shared modal shell (667:884), the
+   What's New Page shape: "Add New Version" / "Add Version" from the Add row,
+   "Edit Version" / "Save Version" from a row's pencil, prefilled. The version
+   number on its own line, then a Card Table (710:1083, as Product Config's
+   lists draw it) with a row per platform and a switch in each of its
+   AVAILABLE? and UPDATE REQUIRED? columns. The Update Required switch only
+   opens once the version is available there, and turns off again when
+   availability is switched off (user, 2026-11-05 — a card table instead of
+   the first cut's paired check rows, then switch rows, same day). Save
+   Version waits for a change (the app's Save Changes gate). */
+function VersionModal({
+  entry,
+  versions,
+  onSave,
   onCancel,
 }: {
-  history: ForceUpdate[];
-  onForce: (versions: Pick<ForceUpdate, AppPlatform>) => void;
+  entry: AppVersion | null;
+  versions: AppVersion[];
+  onSave: (patch: VersionPatch) => void;
   onCancel: () => void;
 }) {
   const t = useDsText();
-  const [values, setValues] = useState<Record<AppPlatform, string>>({ ios: "", android: "" });
-  const typed = { ios: values.ios.trim(), android: values.android.trim() };
-  const errors = {
-    ios: versionError(typed.ios, history, "ios"),
-    android: versionError(typed.android, history, "android"),
-  };
-  const isEmpty = !typed.ios && !typed.android;
-  const isValid = !isEmpty && !errors.ios && !errors.android;
+  const [version, setVersion] = useState(entry?.version ?? "");
+  const [available, setAvailable] = useState<PlatformFlags>(entry?.available ?? NO_PLATFORMS);
+  const [minimum, setMinimum] = useState<PlatformFlags>(entry?.minimum ?? NO_PLATFORMS);
+  const typed = version.trim();
+  const error = versionError(typed, versions, minimum, entry);
+  const anyPlatform = APP_PLATFORMS.some((p) => available[p.key]);
+  const unchanged =
+    !!entry &&
+    typed === entry.version &&
+    sameValue(available, entry.available) &&
+    sameValue(minimum, entry.minimum);
+  const isValid = !!typed && !error && anyPlatform && !unchanged;
+  const tip = unchanged
+    ? NO_CHANGES_TIP
+    : !typed
+      ? "Enter a version number"
+      : !anyPlatform
+        ? "Select at least one platform"
+        : undefined;
 
   useEscape(onCancel);
 
+  function toggleAvailable(p: AppPlatform) {
+    const on = !available[p];
+    setAvailable((a) => ({ ...a, [p]: on }));
+    if (!on) setMinimum((m) => ({ ...m, [p]: false }));
+  }
+
   function submit() {
-    if (isValid) onForce({ ios: typed.ios || undefined, android: typed.android || undefined });
+    if (isValid) onSave({ version: typed, available, minimum });
   }
 
   return (
     <PrmModal
-      title={t("Force New Version")}
-      description="Enter a minimum version for iOS, Android or both. Users below it are prompted to update before they can continue."
-      confirmLabel={t("Force Update")}
+      title={t(entry ? "Edit Version" : "Add New Version")}
+      description={
+        entry
+          ? "Change the version number or the platforms it's available on. Requiring the update on a platform prompts learners there on older versions to update before they can continue."
+          : "Add a released app version and the platforms it's available on. Requiring the update on a platform prompts learners there on older versions to update before they can continue."
+      }
+      confirmLabel={t(entry ? "Save Version" : "Add Version")}
       confirmDisabled={!isValid}
-      confirmTip={isEmpty ? "Enter an iOS or Android version" : undefined}
+      confirmTip={tip}
       onCancel={onCancel}
       onConfirm={submit}
     >
       <div className="prm-stack">
-        {APP_PLATFORMS.map((p, i) => (
-          <div className="prm-field" key={p.key}>
-            <span className="prm-label">
-              {p.name} Minimum Version
-              {errors[p.key] && <span className="form-label-error">{errors[p.key]}</span>}
-            </span>
-            <input
-              autoFocus={i === 0}
-              className={`form-input${errors[p.key] ? " has-error" : ""}`}
-              placeholder={`e.g. ${nextVersionHint(activeEntry(history, p.key)?.[p.key])}`}
-              aria-label={`${p.name} Minimum Version`}
-              value={values[p.key]}
-              onChange={(e) => setValues((v) => ({ ...v, [p.key]: e.target.value }))}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") submit();
-              }}
-              spellCheck={false}
-            />
+        <div className="prm-field">
+          <span className="prm-label">
+            Version<span className="prm-req">*</span>
+            {error && <span className="form-label-error">{error}</span>}
+          </span>
+          <input
+            autoFocus
+            className={`form-input${error ? " has-error" : ""}`}
+            placeholder={`e.g. ${nextVersionHint(versions[0]?.version)}`}
+            aria-label="Version"
+            value={version}
+            onChange={(e) => setVersion(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") submit();
+            }}
+            spellCheck={false}
+          />
+        </div>
+        <div className="prm-field">
+          <span className="prm-label">
+            Platforms<span className="prm-req">*</span>
+          </span>
+          <div className="qsec ct-prop">
+            <div className="qsec-hd">
+              <span className="ct-col" style={PLATFORM_COLS.platform}>PLATFORM</span>
+              <span className="ct-col pc-col-toggle" style={PLATFORM_COLS.available}>AVAILABLE?</span>
+              <span className="ct-col pc-col-toggle" style={PLATFORM_COLS.required}>
+                UPDATE REQUIRED?
+                <span
+                  className="form-help-info"
+                  tabIndex={0}
+                  role="note"
+                  aria-label={UPDATE_REQUIRED_TIP}
+                  data-tip={UPDATE_REQUIRED_TIP}
+                >
+                  <InfoIcon12 />
+                </span>
+              </span>
+            </div>
+            {MODAL_PLATFORMS.map((p) => (
+              <div className="qsec-row" key={p.key}>
+                <span className="ct-col pc-strong" style={PLATFORM_COLS.platform}>{p.name}</span>
+                <span className="ct-col pc-col-toggle" style={PLATFORM_COLS.available}>
+                  <Switch
+                    label={`Available on ${p.name}`}
+                    on={available[p.key]}
+                    onToggle={() => toggleAvailable(p.key)}
+                  />
+                </span>
+                <span className="ct-col pc-col-toggle" style={PLATFORM_COLS.required}>
+                  <Switch
+                    label={`Update required on ${p.name}`}
+                    on={minimum[p.key]}
+                    disabled={!available[p.key]}
+                    onToggle={() => setMinimum((m) => ({ ...m, [p.key]: !m[p.key] }))}
+                  />
+                </span>
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
       </div>
     </PrmModal>
   );
 }
 
-/** A plausible next version to show as the placeholder: the Active one with
- *  its minor part bumped ("4.2.1" → "4.3.0"). */
-function nextVersionHint(active?: string): string {
-  if (!active) return "4.3.0";
-  const [major = 0, minor = 0] = active.split(".").map(Number);
+/** The bare 41×24 switch in a card-table cell (the Tabs lists' VISIBLE?).
+ *  Disabled = the app's solid-grey look (knob #7a7a7a), never opacity. */
+function Switch({
+  label,
+  on,
+  disabled,
+  onToggle,
+}: {
+  label: string;
+  on: boolean;
+  disabled?: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`toggle${on ? " on" : ""}`}
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => !disabled && onToggle()}
+    >
+      <span className="toggle-knob" />
+    </button>
+  );
+}
+
+/** A plausible next version to show as the placeholder: the newest in the
+ *  list with its minor part bumped ("4.2.1" → "4.3.0"). */
+function nextVersionHint(newest?: string): string {
+  if (!newest) return "4.3.0";
+  const [major = 0, minor = 0] = newest.split(".").map(Number);
   return `${major}.${minor + 1}.0`;
 }
 
-function RemoveForceUpdateModal({
+function RemoveVersionModal({
   entry,
-  history,
+  versions,
   onRemove,
   onCancel,
 }: {
-  entry: ForceUpdate;
-  history: ForceUpdate[];
+  entry: AppVersion;
+  versions: AppVersion[];
   onRemove: () => void;
   onCancel: () => void;
 }) {
   const t = useDsText();
   useEscape(onCancel);
 
-  // Any entry can go. Where it's the Active one for a platform, that
-  // platform's previous forced version takes over; older entries are history.
-  const activeFor = activePlatforms(history, entry);
-  const rest = history.filter((h) => h.id !== entry.id);
+  // Any version can go. Where it's the minimum on a platform, that platform's
+  // previous marked version takes over; older rows are history.
+  const minimumFor = minimumPlatforms(versions, entry);
+  const rest = versions.filter((v) => v.id !== entry.id);
 
   return (
     <PrmModal
-      title={t("Remove Force Update?")}
+      title={t("Remove Version?")}
       confirmLabel="Remove"
       danger
       onCancel={onCancel}
       onConfirm={onRemove}
     >
       <p className="prm-content">
-        Remove force update <strong>{forceUpdateLabel(entry)}</strong>?{" "}
-        {activeFor.length === 0 ? (
-          <>It isn't Active on any platform, so no learner is affected.</>
+        Remove version <strong>{entry.version}</strong>?{" "}
+        {minimumFor.length === 0 ? (
+          <>It isn't the minimum on any platform, so no learner is affected.</>
         ) : (
-          activeFor.map((p, i) => {
-            const fallback = activeEntry(rest, p.key)?.[p.key];
+          minimumFor.map((p, i) => {
+            const fallback = minimumEntry(rest, p.key)?.version;
             return (
               <span key={p.key}>
                 {i > 0 && " "}
                 {fallback ? (
                   <>
-                    {p.name} users will fall back to the previous forced version{" "}
+                    {p.name} users will fall back to the previous minimum,{" "}
                     <strong>{fallback}</strong>.
                   </>
                 ) : (
-                  <>No {p.name} version will be forced after this.</>
+                  <>No minimum will be forced on {p.name} after this.</>
                 )}
               </span>
             );
@@ -1573,22 +1739,43 @@ function describeChanges(
     () => setSettings((d) => ({ ...d, [key]: fn(d[key], saved[key]) }));
   const edited = (v: string) => (v.trim() ? "Changed" : "Cleared");
 
-  // Force App Update — entries added or removed, by id.
+  // Force App Update — versions added, edited or removed, by id.
   const savedIds = new Set(saved.forceUpdates.map((h) => h.id));
   const draftIds = new Set(draft.forceUpdates.map((h) => h.id));
-  for (const h of draft.forceUpdates)
-    if (!savedIds.has(h.id))
+  for (const h of draft.forceUpdates) {
+    const was = saved.forceUpdates.find((x) => x.id === h.id);
+    if (!was) {
       out.push({
-        key: `fu-${h.id}`, subject: `Force App Update · ${forceUpdateLabel(h)}`, action: "Added",
+        key: `fu-${h.id}`, subject: `Force App Update · ${h.version}`, action: "Added",
         onDrop: revert("forceUpdates", (d) => d.filter((x) => x.id !== h.id)),
       });
+      continue;
+    }
+    if (sameValue(h, was)) continue;
+    const what = [
+      h.version !== was.version && "Version Changed",
+      !sameValue(h.available, was.available) && "Availability Changed",
+      !sameValue(h.minimum, was.minimum) && "Update Required Changed",
+    ]
+      .filter((x): x is string => !!x)
+      .join(", ");
+    out.push({
+      key: `fu-${h.id}`, subject: `Force App Update · ${was.version}`, action: what,
+      onDrop: revert("forceUpdates", (d) => d.map((x) => (x.id === h.id ? was : x))),
+    });
+  }
   for (const h of saved.forceUpdates)
     if (!draftIds.has(h.id))
       out.push({
-        key: `fu-${h.id}`, subject: `Force App Update · ${forceUpdateLabel(h)}`, action: "Removed",
+        key: `fu-${h.id}`, subject: `Force App Update · ${h.version}`, action: "Removed",
+        // Back in its saved place. Rows still in the draft keep their draft
+        // copy, so undoing a removal never undoes an edit to another row.
         onDrop: revert("forceUpdates", (d, sv) => {
           const keep = new Set([...d.map((x) => x.id), h.id]);
-          return [...d.filter((x) => !savedIds.has(x.id)), ...sv.filter((x) => keep.has(x.id))];
+          return [
+            ...d.filter((x) => !savedIds.has(x.id)),
+            ...sv.filter((x) => keep.has(x.id)).map((x) => d.find((y) => y.id === x.id) ?? x),
+          ];
         }),
       });
 
@@ -1657,27 +1844,19 @@ function describeChanges(
     });
   }
 
-  // Paywall Pricing — per platform / tier × cycle.
-  const prices = <K extends string>(
-    key: "b2cPrices" | "b2bPrices", label: string, rows: PriceRow<K>[],
-  ) => {
-    const d = draft[key] as PriceTable<K>;
-    const sv = saved[key] as PriceTable<K>;
-    for (const r of rows)
-      for (const c of CYCLES)
-        if (d[r.key][c] !== sv[r.key][c])
-          out.push({
-            key: `${key}-${r.key}-${c}`, subject: `${label} · ${r.key} ${c}`,
-            action: `${r.name} ${edited(d[r.key][c])}`,
-            onDrop: () =>
-              setSettings((x) => {
-                const t = x[key] as PriceTable<K>;
-                return { ...x, [key]: { ...t, [r.key]: { ...t[r.key], [c]: sv[r.key][c] } } };
-              }),
-          });
-  };
-  prices("b2cPrices", "B2C Paywall Pricing", B2C_PRICE_ROWS);
-  prices("b2bPrices", "B2B Paywall Pricing", B2B_PRICE_ROWS);
+  // B2B Paywall Pricing — per tier × cycle.
+  for (const r of B2B_PRICE_ROWS)
+    for (const c of CYCLES)
+      if (draft.b2bPrices[r.key][c] !== saved.b2bPrices[r.key][c])
+        out.push({
+          key: `b2bPrices-${r.key}-${c}`, subject: `B2B Paywall Pricing · ${r.key} ${c}`,
+          action: `${r.name} ${edited(draft.b2bPrices[r.key][c])}`,
+          onDrop: () =>
+            setSettings((x) => ({
+              ...x,
+              b2bPrices: { ...x.b2bPrices, [r.key]: { ...x.b2bPrices[r.key], [c]: saved.b2bPrices[r.key][c] } },
+            })),
+        });
 
   // EPA Cards.
   for (const [key, label] of [["b2cEpaCard", "B2C EPA Card"], ["b2bEpaCard", "B2B EPA Card"]] as const)
@@ -1820,13 +1999,11 @@ export function ProductConfigPage({
   // Support Page and tab URL.
   const pricesBlank = (t: PriceTable<string>) =>
     Object.values(t).some((c) => !c.Monthly.trim() || !c.Annual.trim());
-  const b2cPricesBlank = pricesBlank(settings.b2cPrices);
   const b2bPricesBlank = pricesBlank(settings.b2bPrices);
   const blanks = [
     settings.appTabs.some((r) => !r.url.trim()) && "App Tabs URL",
     settings.dashboardTabs.some((r) => !r.url.trim()) && "Dashboard Tabs URL",
     settings.supportLinks.some((l) => !l.url.trim()) && "Support Pages URL",
-    b2cPricesBlank && "B2C Paywall Pricing",
     !settings.b2cEpaCard.trim() && "B2C EPA Card",
     b2bPricesBlank && "B2B Paywall Pricing",
     !settings.b2bEpaCard.trim() && "B2B EPA Card",
@@ -1938,7 +2115,7 @@ export function ProductConfigPage({
                   {tab === "general" && (
                     <>
                       <ForceAppUpdateField
-                        history={settings.forceUpdates}
+                        versions={settings.forceUpdates}
                         onChange={set("forceUpdates")}
                       />
                       <WhatsNewField
@@ -1988,24 +2165,6 @@ export function ProductConfigPage({
 
                   {tab === "b2c" && (
                     <>
-                      <div className="form-group">
-                        <label className="form-label">
-                          {t("Paywall Pricing")}
-                          <span className="req">*</span>
-                          {b2cPricesBlank && <span className="form-label-error">{EMPTY_ERROR}</span>}
-                        </label>
-                        <PriceIdGrid
-                          rows={B2C_PRICE_ROWS}
-                          ghost="Platform"
-                          value={settings.b2cPrices}
-                          onChange={set("b2cPrices")}
-                        />
-                        <p className="form-help">
-                          Set the product / price ID for each platform and billing cycle. These IDs
-                          are used to create subscriptions and checkout sessions for individual
-                          learners.
-                        </p>
-                      </div>
                       <NumberField
                         label={t("Free Trial Duration in Days")}
                         help="The trial length in days for new users."

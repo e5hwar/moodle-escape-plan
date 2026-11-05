@@ -7,12 +7,13 @@ import { setDesignSystem, useDesignSystem, type DesignSystem } from "../designSy
  * Design System (see src/designSystem.ts): both options render the SAME
  * React tree — the screen the admin is on, with everything they have typed —
  * because the switch is only a `data-ds` attribute on <html> that
- * `src/skillcat-ds.css` keys its overrides off, plus the store for the few
- * markup differences. */
+ * `src/skillcat-ds.css` and `src/lab-ds.css` key their overrides off, plus
+ * the store for the few markup differences. */
 
 const DS_OPTIONS: { key: DesignSystem; label: string }[] = [
   { key: "skillcat", label: "SkillCat Design System" },
   { key: "play", label: "Eshwar's Play Area" },
+  { key: "lab", label: "Lab Design System" },
 ];
 
 export function DemoControlsRoot({ children }: { children: ReactNode }) {
