@@ -169,3 +169,5 @@ Every component on Figma "03 · Components" (17007:4) was compared with the code
 **Card tables now follow the DS** (Eshwar 2026-11-05, replaces the 2026-11-04 ruling): Table · Small inside a card — 5% card, 1px divider edge, radius 8, 8 / 16 inside, rows inset 12. The head row is a field-name heading, so it uses Field / Label (Bold 16 / 20 grey) over the solid #404040 line. Its words keep their capitals because they are written that way in the copy.
 
 **Still on rulings:** dialog buttons 32 (Button Medium; Figma's Dialog uses Large = 40 in Compact); list-page tables 40 (Figma: 48 on pages, Small 40 only inside cards and dialogs; Eshwar reconfirmed 40 on 2026-11-05).
+
+**Card table re-cut (Figma 19236:4923, 2026-11-06):** the last row of a table inside a card or dialog has no divider — the card's edge closes the table. Applies to every card table (whatever row ends it: a data row, an "Add …" row or a footer), TableCard comparisons and tables inside modals. List-page tables keep the last-row line. The head row keeps the Field / Label look (Eshwar 2026-11-05) rather than the Header Cell's SemiBold 14 white.

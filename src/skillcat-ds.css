@@ -4129,3 +4129,14 @@ html[data-ds="skillcat"] :is(.qz-hd, .qsec-hd, .qed-tbl-hd, .cc-row-head, .lc-ro
   line-height: 20px;
   color: var(--sc-text-secondary);
 }
+
+/* Table / Row · Show divider off on the last row of a table inside a card or
+   dialog (19236:4923, re-cut 2026-11-06): the card's edge closes the table, so
+   whatever row ends a card table — a data row, an "Add …" row or a footer —
+   draws no line of its own. List-page tables keep theirs. */
+html[data-ds="skillcat"] :is(.qz, .qsec, .qed-tbl, .cc-panel, .lc-panel, .ind-assign) > :last-child,
+html[data-ds="skillcat"] :is(.qz, .qsec, .qed-tbl, .cc-panel, .lc-panel, .ind-assign) > :last-child > :last-child,
+html[data-ds="skillcat"] :is(.tcard, .prm) .table tbody tr:last-child,
+html[data-ds="skillcat"] :is(.tcard, .prm) .table tbody tr:last-child > td {
+  border-bottom: 0;
+}
