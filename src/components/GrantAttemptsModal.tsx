@@ -123,6 +123,7 @@ export function GrantAttemptsModal({
     <>
       {reachedForm && (
       <PrmModal
+        drawer
         title={t("Grant Additional Attempts")}
         description={`Give extra attempts on “${quizName}”. The users you pick get them at no charge, logged as an admin grant.`}
         confirmLabel={t("Grant Attempts")}
@@ -373,6 +374,7 @@ export function SelectGrantUsersModal({
 
   return (
     <PrmModal
+      drawer
       title={title}
       description={description}
       confirmLabel="Continue"

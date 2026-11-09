@@ -947,6 +947,7 @@ export function ContentOverridesPage({
           {/* ===== grant-attempts modal ===== */}
           {grantFor && grantTask && grantUser && (
             <PrmModal
+              drawer
               title={t("Grant Additional Attempts")}
               description={`${grantUser.name} · ${grantTask.name}`}
               confirmLabel="Continue"
@@ -971,6 +972,7 @@ export function ContentOverridesPage({
               other pop-up here. It used to be a one-off 460px `.pm-modal`. */}
           {gradePrompt && (
             <PrmModal
+              drawer
               title={t("Mark Complete")}
               description={`${gradePrompt.taskName} · ${gradePrompt.type}`}
               confirmLabel="Continue"

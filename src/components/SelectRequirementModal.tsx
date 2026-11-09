@@ -363,6 +363,7 @@ export function SelectRequirementModal({
 
   return (
     <PrmModal
+      drawer
       title={t(title)}
       description={typeof description === "function" ? description(tab) : description}
       confirmLabel={

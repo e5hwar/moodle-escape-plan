@@ -171,3 +171,21 @@ Every component on Figma "03 · Components" (17007:4) was compared with the code
 **Still on rulings:** dialog buttons 32 (Button Medium; Figma's Dialog uses Large = 40 in Compact); list-page tables 40 (Figma: 48 on pages, Small 40 only inside cards and dialogs; Eshwar reconfirmed 40 on 2026-11-05).
 
 **Card table re-cut (Figma 19236:4923, 2026-11-06):** the last row of a table inside a card or dialog has no divider — the card's edge closes the table. Applies to every card table (whatever row ends it: a data row, an "Add …" row or a footer), TableCard comparisons and tables inside modals. List-page tables keep the last-row line. The head row keeps the Field / Label look (Eshwar 2026-11-05) rather than the Header Cell's SemiBold 14 white.
+
+## Dialogs vs side panels (Eric's rule, Slack 2026-11-07 — built 2026-11-09)
+
+**Rule:** anything the admin fills in or edits (add, create, edit, settings with options) opens as the Modal **Type=Drawer** (Figma 18822:4612): right side, full height, 550 wide. Confirms and warnings (delete, hide, archive, unsaved changes, payments) stay the centred **Type=Dialog**. SkillCat look only — Play Area and Lab keep their centred modals.
+
+**How:** `PrmModal drawer` (classes `.prm--drawer` / `.pr-confirm-overlay--drawer`, styled only in skillcat-ds.css). The header (title + close, 24 inset, the description right under the title as in the dialog) stays fixed and the body scrolls 24 below it. (The DS puts the description in the body 8 above the content; at 26 under the title it read detached, so Eshwar moved it up, 2026-11-09.) actions sit under a #404040 rule, 24 inset, Cancel then the primary, right-aligned. Slides in like the row preview panel. Buttons keep the dialog's Compact 32 (open decision above).
+
+**Eshwar's reading (2026-11-09):** only confirmations are dialogs. Every other modal is a Drawer, the table pickers included.
+
+**Drawers (`drawer` passed):** Add / Edit Version · What's New Page · Edit Tab · Partnership / list-name edits · Insert Link · Edit User · Edit Name · NATE Details · ID review + Upload ID · Change Account Holder · Create / Edit Scholarship · New / Rename Category & Sub-Category · New / Rename Industry & Sub-Industry · Add / Manage Industries · Assign Industries · New / Edit Course & Lesson · Access Restriction · Create New Price · Grant Additional Attempts (both) · Mark Complete · Review Name Change · Reject Attempt (has a reasons form) · uploads (QB Import CSV, Cert CSV Upload, Upload Backup, Upload New File) · Manage Billing Emails and View Invoices (info + Open Stripe — not confirms, Eshwar 2026-11-09) · company Cancel Subscription (reasons form; its stacked "Are you sure?" stays a dialog) · every table picker (Add Requirement, Add Existing Tasks, Import Courses, Select Tasks / Users / Skills / Questions, Edit Random Pool, Question Preview, Find a Deep Link, Card / Certificate Design).
+
+**Dialogs (unchanged):** delete / archive / revoke / remove (all `doubleConfirm`), Hide / Show / Make Visible, Unarchive, "Apply / Save N Changes?", Submit Review?, Edit Completion Criteria?, unsaved-changes (LeaveGuard), merge / transfer confirms, approve / request-ID confirms, the user-profile Cancel Subscription? (a confirm sentence), Confirm grant, the billing Save Changes summary, and Edit Task's "not wired up" notice (a warning).
+
+**Fitting 550 (drawer-only rules):**
+- Pickers use the **large Drawer, 96% of the window** (Eshwar 2026-11-09, an exception: the DS only draws 550). PrmModal `pickFull` implies it, and the Template picker passes `drawerLarge` (`.prm--drawer-lg`). Every column is kept. Rows scroll inside the drawer, and below the column floor the table scrolls sideways as everywhere. (The earlier two-column trim at 550 was removed.)
+- Bulk-upload errors: Row · name · Issue only (Category / Sub-Category or Course / Lesson and Type drop).
+- Review Name Change: the ID stacks above the fields, the hover magnifier is off (clicking opens the full view), and the I / R / A keycaps drop from the footer (518 > 502). The shortcuts still work.
+- Assign Industries: the row splits 2 : 3 so the select's placeholder fits on one line. A multiselect placeholder never wraps in this look.

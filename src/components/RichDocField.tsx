@@ -339,6 +339,7 @@ function LinkModal({ onCancel, onInsert }: { onCancel: () => void; onInsert: (hr
   }, [onCancel]);
   return (
     <PrmModal
+      drawer
       title={t("Insert Link")}
       confirmLabel={t("Insert Link")}
       confirmDisabled={!v}

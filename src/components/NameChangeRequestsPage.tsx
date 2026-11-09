@@ -473,6 +473,7 @@ function ReviewModal({
   return (
     <>
       <PrmModal
+        drawer
         wide
         className="ncr-modal"
         title={t("Review Name Change")}

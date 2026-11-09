@@ -1164,6 +1164,7 @@ function EditAccountHolderModal({
 
   return (
     <PrmModal
+      drawer
       title={t("Change Account Holder")}
       description={
         <>
@@ -1263,6 +1264,7 @@ function AddBillingEmailsModal({ company, onClose }: { company: Company; onClose
 
   return (
     <PrmModal
+      drawer
       title={t("Manage Billing Emails")}
       description="Add/Remove emails that receive invoices"
       confirmLabel="Open Stripe"
@@ -1292,6 +1294,7 @@ function ViewInvoicesModal({ company, onClose }: { company: Company; onClose: ()
 
   return (
     <PrmModal
+      drawer
       title={t("View Invoices")}
       confirmLabel="Open Stripe"
       confirmHref={stripeUrl}
@@ -1368,6 +1371,7 @@ function CancelSubscriptionModal({
 
   return (
     <PrmModal
+      drawer
       title={t("Cancel Subscription")}
       description={company.name}
       cancelLabel="Back"

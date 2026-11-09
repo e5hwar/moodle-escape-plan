@@ -1879,6 +1879,7 @@ function NewCategoryModal({
 
   return (
     <PrmModal
+      drawer
       title={`New ${noun}`}
       description={
         parent
@@ -1971,6 +1972,7 @@ function CatNameModal({
 
   return (
     <PrmModal
+      drawer
       title={title}
       description={description}
       confirmLabel={submitLabel}

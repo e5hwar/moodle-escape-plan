@@ -4084,6 +4084,7 @@ function ResourceUploadModal({
 
   return (
     <PrmModal
+      drawer
       className="qbu qbu--pick"
       title={t("Upload New File")}
       description="Add a file learners can open throughout the attempt"

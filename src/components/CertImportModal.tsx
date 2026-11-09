@@ -58,6 +58,7 @@ export function CertImportModal({
 
   return (
     <PrmModal
+      drawer
       title={t("Upload Backup")}
       description={t("Restore from a Certification backup file exported from the \u22ef menu.")}
       confirmLabel={t("Restore & Continue")}

@@ -113,6 +113,7 @@ export function BulkUploadModal({
   if (!report) {
     return (
       <PrmModal
+        drawer
         className="qbu qbu--pick"
         title={t("Bulk Upload Questions")}
         description={t("Add Questions along with the Categories/Sub-Categories they belong to")}
@@ -174,6 +175,7 @@ export function BulkUploadModal({
     const hidden = report.issues.length - issues.length;
     return (
       <PrmModal
+        drawer
         /* The 1181px shell is the error TABLE's — a file that couldn't be read
            at all is one sentence, so it keeps the confirm width. */
         className={`qbu${report.fatal ? "" : " qbu--errors"}`}
@@ -232,6 +234,7 @@ export function BulkUploadModal({
   const newPaths = [...report.newCategories, ...report.newSubcategories];
   return (
     <PrmModal
+      drawer
       className="qbu qbu--ready"
       title={`Add ${n} ${n === 1 ? "Question" : "Questions"}`}
       description={t("Here's what this file adds to the bank. Categories and Sub-Categories that don't exist yet are created on import.")}

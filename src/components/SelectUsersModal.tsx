@@ -216,6 +216,7 @@ export function SelectUsersModal({
 
   return (
     <PrmModal
+      drawer
       title={t("Select Users")}
       description={description}
       confirmLabel="Continue"

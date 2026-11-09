@@ -104,6 +104,7 @@ export function IdModal({
           difference. The document type and upload stamp are gone; both read off
           the ID itself. */}
       <PrmModal
+        drawer
         className="mid-modal"
         ariaLabel={`${record.name}'s ID`}
         title={
@@ -232,6 +233,7 @@ export function UploadIdModal({
          replacing it. The drop zone fills the body until a file is chosen,
          then the document itself takes its place. */
       <PrmModal
+        drawer
         className="mid-modal--upload"
         title="Upload ID"
         ariaLabel={`Upload a new ID for ${record.name}`}

@@ -313,6 +313,7 @@ export function SelectQuestionsModal({
 
   return (
     <PrmModal
+      drawer
       title={
         isPool
           ? editingPool
@@ -577,6 +578,7 @@ function QuestionPreviewModal({
   const t = useDsText();
   return (
     <PrmModal
+      drawer
       title={t("Question Preview")}
       description={`${question.type} · ${categoryOf(question)}`}
       confirmLabel="Close"

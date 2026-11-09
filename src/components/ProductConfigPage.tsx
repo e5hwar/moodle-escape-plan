@@ -764,6 +764,7 @@ function VersionModal({
 
   return (
     <PrmModal
+      drawer
       title={t(entry ? "Edit Version" : "Add New Version")}
       description={
         entry
@@ -1075,6 +1076,7 @@ function WhatsNewModal({
 
   return (
     <PrmModal
+      drawer
       title={page ? "Edit What's New Page" : "New What's New Page"}
       description="Learners who update the app to one of these versions are shown this page."
       confirmLabel={t(page ? "Save What's New Page" : "Create What's New Page")}
@@ -1301,6 +1303,7 @@ function TabEditModal({
 
   return (
     <PrmModal
+      drawer
       title={t("Edit Tab")}
       confirmLabel={t("Save Tab")}
       confirmDisabled={!isValid}
@@ -1637,6 +1640,7 @@ function OptionNameModal({
 
   return (
     <PrmModal
+      drawer
       title={title}
       description={description}
       confirmLabel={confirmLabel}

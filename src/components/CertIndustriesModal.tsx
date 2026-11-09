@@ -44,6 +44,7 @@ export function CertIndustriesModal({
   const keyOf = (label: string) => options.find((o) => o.label === label)?.key;
   return (
     <PrmModal
+      drawer
       title={managing && had ? "Manage Industries" : "Add Industries"}
       description={
         managing ? (

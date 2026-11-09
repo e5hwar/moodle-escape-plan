@@ -842,6 +842,7 @@ export function EditUserModal({
 
   return (
     <PrmModal
+      drawer
       title={t("Edit User")}
       description="An email or a phone number is required. Changing either resets its verified status."
       confirmLabel={t("Save Changes")}
@@ -941,6 +942,7 @@ function EditNateModal({
 
   return (
     <PrmModal
+      drawer
       title={initial ? "Edit NATE Details" : "Add NATE Details"}
       description="These are the details the user registered with on the NATE form — they can differ from the SkillCat profile."
       confirmLabel={initial ? "Save Changes" : "Add Details"}

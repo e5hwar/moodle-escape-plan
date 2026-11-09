@@ -281,6 +281,7 @@ function EditNameModal({
 
   return (
     <PrmModal
+      drawer
       title={t("Edit Name")}
       description="The name shown on this user's profile and submissions."
       confirmLabel={t("Save Changes")}

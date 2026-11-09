@@ -163,6 +163,7 @@ export function SelectSkillsModal({
 
   return (
     <PrmModal
+      drawer
       title={t("Select Skills")}
       description={t("Choose the Skills that make up this Mastery Skill")}
       confirmLabel="Continue"

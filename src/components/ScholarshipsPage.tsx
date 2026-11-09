@@ -849,6 +849,7 @@ function ScholarshipModal({
   return (
     <>
     <PrmModal
+      drawer
       title={editing ? "Edit Scholarship" : "Create Scholarship"}
       description={
         !editing

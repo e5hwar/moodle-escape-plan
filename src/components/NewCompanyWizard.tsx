@@ -3029,6 +3029,7 @@ function CreatePriceModal({
   // is why the groups carry no bottom margin of their own.
   return (
     <PrmModal
+      drawer
       title={t("Create New Price")}
       description="Set the per-seat rate per currency. This price becomes available to select for any future company."
       confirmLabel={t("Create Price")}

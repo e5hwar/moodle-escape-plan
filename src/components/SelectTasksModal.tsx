@@ -234,6 +234,7 @@ export function SelectTasksModal({
 
   return (
     <PrmModal
+      drawer
       title={t("Select Tasks")}
       description={description}
       confirmLabel="Continue"

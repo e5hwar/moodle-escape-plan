@@ -2691,6 +2691,7 @@ function NodeModal({
 
   return (
     <PrmModal
+      drawer
       title={node ? `Edit ${kind}` : `New ${kind}`}
       description={NODE_MODAL_COPY[kind]}
       confirmLabel={node ? `Save ${kind}` : `Add ${kind}`}
@@ -3433,6 +3434,7 @@ function AccessRestrictionModal({
 
   return (
     <PrmModal
+      drawer
       title={existing ? "Edit Access Restriction" : "Add Access Restriction"}
       description={`Learners can't start "${task.name}" until the Tasks below are completed.`}
       confirmLabel={existing ? "Save Restriction" : "Add Restriction"}

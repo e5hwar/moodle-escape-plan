@@ -133,6 +133,8 @@ export function TemplatePickerModal({
 
   return (
     <PrmModal
+      drawer
+      drawerLarge
       title={title}
       description={description}
       hideFooter

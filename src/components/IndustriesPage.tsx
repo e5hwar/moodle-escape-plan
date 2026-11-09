@@ -1831,6 +1831,7 @@ function NameModal({
 
   return (
     <PrmModal
+      drawer
       title={title}
       description={nameHelp}
       confirmLabel={submitLabel}
@@ -2201,6 +2202,7 @@ function AssignIndustriesModal({
 
   return (
     <PrmModal
+      drawer
       className="ind-assign-modal"
       title={t("Assign Industries")}
       description={t("Pick the Industry or Sub-Industry these Certifications are listed under. The order can later be updated from the Industry/Sub-Industry page")}

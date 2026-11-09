@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Bold · Guide Map · Tasks</title>
+<link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:1440px;height:900px;overflow:hidden}
+body{font-family:"Fira Sans",sans-serif;font-size:14px;line-height:1.3;-webkit-font-smoothing:antialiased;background:#0b1c24;color:#eef2ea}
+.mono,kbd{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+.app{display:flex;width:1440px;height:900px}
+.rail{width:72px;flex:none;position:relative;background:#f05523;color:#0b1c24;display:flex;flex-direction:column;align-items:center;padding:22px 0 24px}
+.coast{position:absolute;left:72px;top:0;width:40px;height:900px;pointer-events:none}
+.rail svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ri{width:38px;height:38px;display:flex;align-items:center;justify-content:center;position:relative;border-radius:14px 12px 15px 11px}
+.ri.cur{background:#0b1c24;color:#f05523;border-radius:14px 12px 15px 11px}
+.grp{display:flex;flex-direction:column;gap:8px;margin-top:26px}
+.rail-foot{margin-top:auto;display:flex;flex-direction:column;gap:10px;align-items:center}
+.badge{position:absolute;top:-2px;right:-3px;min-width:17px;height:17px;padding:0 5px;border-radius:999px;background:#0b1c24;color:#f05523;font-size:10.5px;font-weight:600;display:flex;align-items:center;justify-content:center;line-height:1}
+.main{flex:1;min-width:0;padding:34px 40px 0 56px;display:flex;flex-direction:column}
+.head{display:flex;align-items:flex-end;justify-content:space-between}
+h1{margin:0;font-size:32px;line-height:.95;letter-spacing:-.03em;font-weight:700}
+.sum{margin:10px 0 0;font-size:12.5px;color:#9fb3b8}
+.actions{display:flex;gap:10px}
+.btn{height:36px;padding:0 16px;display:inline-flex;align-items:center;gap:10px;font-weight:500;font-size:13.5px;white-space:nowrap;border-radius:999px;border:1.5px solid rgba(238,242,234,.7);color:#eef2ea}
+.btn.primary{background:#f05523;border-color:#f05523;color:#0b1c24;padding-right:6px;font-weight:600}
+.btn.primary kbd{width:24px;height:24px;border-radius:999px;background:#0b1c24;color:#f05523;font-size:11px;display:flex;align-items:center;justify-content:center}
+kbd{font-size:11px;display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 5px;line-height:1;border-radius:999px;border:1px solid rgba(238,242,234,.35);color:#9fb3b8}
+.search{display:flex;align-items:center;gap:12px;padding:0 16px;margin-top:26px;height:44px;border-radius:999px;border:1.5px solid #2a4652;color:#9fb3b8}
+.search svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round}
+.ph{flex:1;font-size:13.5px}.kbds{display:flex;gap:4px}
+.chips{display:flex;gap:8px;align-items:center;margin-top:12px}
+.chip{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 13px 0 10px;font-size:13px;font-weight:500;border-radius:999px;border:1.5px solid rgba(238,242,234,.45);color:#eef2ea;white-space:nowrap}
+.chip .dot{width:14px;height:14px;border-radius:999px;border:1.5px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:10px;line-height:1}
+.chip.on{background:#eef2ea;color:#0b1c24;border-color:#eef2ea}.chip.on .dot{background:#f05523;border-color:#f05523;color:#0b1c24}
+.clear{font-size:13px;color:#9fb3b8;margin-left:4px}
+table{width:100%;border-collapse:collapse;margin-top:26px}
+th{text-align:left;font-weight:500;white-space:nowrap;height:34px;font-size:12.5px;letter-spacing:.02em;color:#ff8a76;padding:0 14px}
+td{white-space:nowrap;height:40px;padding:0 14px;font-size:13.5px;color:#c9d6d9;border-radius:0}
+th:first-child{width:38%}th:nth-child(2){width:18%}th:nth-child(3){width:24%}th:last-child,td:last-child{width:48px;text-align:right;padding-right:14px}
+tr:nth-child(even) td{background:#0e2531}
+tr td:first-child{border-radius:12px 0 0 12px}tr td:last-child{border-radius:0 12px 12px 0}
+.nm{font-weight:500;color:#eef2ea;font-size:14px}td.mono{font-size:12.5px;color:#b9c8cc}
+.sort{font-size:10px;color:#9fb3b8}.sort.on{color:#ff8a76}.gear{color:#9fb3b8}
+tr.hov td{background:#163a4a}
+.kebab{color:#9fb3b8;letter-spacing:1px}
+.tag{display:inline-flex;align-items:center;height:20px;padding:0 9px;border-radius:999px;background:#ffd23f;color:#0b1c24;font-size:11px;font-weight:600;margin-left:10px;vertical-align:middle;line-height:1}
+tr.hid td,tr.hid .nm{color:#6f8a92}
+.pager{margin-top:auto;display:flex;justify-content:flex-end;align-items:center;gap:18px;padding:16px 0;font-size:12.5px;color:#9fb3b8}.pg{color:#4b6670}
+</style></head>
+<body><div class="app">
+<aside class="rail">
+<svg class="coast" viewBox="0 0 40 900" preserveAspectRatio="none"><path d="M0 0H2C2 100 4 120 12 150C22 180 22 196 10 228C3 250 2 270 2 900H0Z" fill="#f05523"/></svg>
+<span class="ri"><svg class="i" viewBox="0 0 18 18"><path d="M3 12c0-4 2.5-7 6-7s6 3 6 7M2 12h14M6 5.5l1-2.5h4l1 2.5"/></svg></span>
+<span class="ri" style="margin-top:6px"><svg class="i" viewBox="0 0 18 18"><path d="M3 4h12v10H3zM7 4v10"/></svg></span>
+<div class="grp"><span class="ri cur"><svg class="i" viewBox="0 0 18 18"><rect x="3" y="3" width="12" height="12" rx="2.5"/><path d="M6 8h6M6 11h4"/></svg></span><span class="ri"><svg class="i" viewBox="0 0 18 18"><circle cx="9" cy="7" r="4"/><path d="M6.5 10.5 5 16l4-2 4 2-1.5-5.5"/></svg></span><span class="ri"><svg class="i" viewBox="0 0 18 18"><rect x="2.5" y="5" width="13" height="9" rx="2"/><circle cx="9" cy="9.5" r="2.5"/><path d="M6.5 5l1-2h3l1 2"/></svg></span></div>
+<div class="grp"><span class="ri"><svg class="i" viewBox="0 0 18 18"><circle cx="7" cy="6.5" r="2.5"/><circle cx="12.5" cy="7.5" r="2"/><path d="M2.5 15c0-3 2-4.5 4.5-4.5S11.5 12 11.5 15M11 15c0-2 1-3.5 3-3.5s2.5 1.5 2.5 3.5"/></svg></span><span class="ri"><svg class="i" viewBox="0 0 18 18"><path d="M3 15V4l6-2 6 2v11M3 15h12M7 7h1M10 7h1M7 10h1M10 10h1"/></svg></span><span class="ri"><svg class="i" viewBox="0 0 18 18"><rect x="2.5" y="4.5" width="9" height="9" rx="2"/><path d="M11.5 8l4-2.5v7l-4-2.5z"/></svg><span class="badge">12</span></span></div>
+<div class="grp"><span class="ri"><svg class="i" viewBox="0 0 18 18"><path d="M3 8v2.5h2l5 3.5V4L5 8zM12.5 7a3 3 0 0 1 0 4.5"/></svg></span><span class="ri"><svg class="i" viewBox="0 0 18 18"><path d="M14.5 5.5a3.5 3.5 0 0 1-4.6 4.4L5 14.8 3.2 13l4.9-4.9a3.5 3.5 0 0 1 4.4-4.6L10.2 5.7l2.1 2.1z"/></svg></span></div>
+<div class="rail-foot"><span class="ri"><svg class="i" viewBox="0 0 18 18"><circle cx="9" cy="6.5" r="3"/><path d="M3 16c0-3.5 2.7-5.5 6-5.5s6 2 6 5.5"/></svg></span></div>
+</aside>
+<main class="main">
+<header class="head"><div><h1>Tasks</h1><p class="sum mono">69 Tasks · Across 11 Certifications</p></div>
+<div class="actions"><span class="btn">Skills</span><span class="btn">Question Bank</span><span class="btn primary">Create Task <kbd>C</kbd></span></div></header>
+<div class="search"><svg viewBox="0 0 18 18"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg><span class="ph mono">Search Tasks...</span><span class="kbds"><kbd>⌘</kbd><kbd>K</kbd></span></div>
+<div class="chips"><span class="chip"><span class="dot">+</span>Task Type</span><span class="chip"><span class="dot">+</span>Certifications</span><span class="chip on"><span class="dot">×</span>Created By <b>SkillCat</b></span><span class="chip"><span class="dot">+</span>More Filters</span><span class="clear">Clear Filters</span></div>
+<table><thead><tr><th>Name <span class="sort">↕</span></th><th>Type <span class="sort">↕</span></th><th>Certifications</th><th>Date Modified <span class="sort on">↓</span></th><th class="gear">⚙</th></tr></thead><tbody>
+<tr><td><span class="nm">NexStar Onboarding</span></td><td>Resource</td><td>—</td><td class="mono">Apr 28, 2026</td><td class="kebab">···</td></tr>
+<tr><td><span class="nm">Field Visit – Brazing Joints</span></td><td>Hands-On Task</td><td>HVAC JobReady +1</td><td class="mono">Apr 28, 2026</td><td class="kebab">···</td></tr>
+<tr><td><span class="nm">NATE RTW Final Exam</span></td><td>Quiz</td><td>NATE Ready-to-Work</td><td class="mono">Apr 25, 2026</td><td class="kebab">···</td></tr>
+<tr class="hid"><td><span class="nm">Tool Inventory Photo</span><span class="tag">Hidden</span></td><td>Hands-On Task</td><td>—</td><td class="mono">Apr 25, 2026</td><td class="kebab">···</td></tr>
+<tr class="hov"><td><span class="nm">Airflow Calibration Quiz</span></td><td>Quiz</td><td>HVAC JobReady</td><td class="mono">Apr 24, 2026</td><td class="kebab">···</td></tr>
+<tr><td><span class="nm">HVAC Install</span></td><td>Hands-On Task</td><td>HVAC JobReady</td><td class="mono">Apr 22, 2026</td><td class="kebab">···</td></tr>
+<tr><td><span class="nm">EPA 608 Core – Refrigerant Recovery</span></td><td>xAPI</td><td>EPA 608 Type I +3</td><td class="mono">Apr 22, 2026</td><td class="kebab">···</td></tr>
+<tr><td><span class="nm">EPA 609 Final Exam</span></td><td>Quiz</td><td>EPA 609</td><td class="mono">Apr 22, 2026</td><td class="kebab">···</td></tr>
+<tr><td><span class="nm">Compressor Replacement</span></td><td>Hands-On Task</td><td>HVAC JobReady</td><td class="mono">Apr 21, 2026</td><td class="kebab">···</td></tr>
+<tr><td><span class="nm">Brazing Copper Lines</span></td><td>Hands-On Task</td><td>HVAC JobReady +1</td><td class="mono">Apr 20, 2026</td><td class="kebab">···</td></tr>
+<tr><td><span class="nm">EPA 608 Universal Final Exam</span></td><td>Quiz</td><td>EPA 608 Universal</td><td class="mono">Apr 20, 2026</td><td class="kebab">···</td></tr>
+<tr><td><span class="nm">Recovery Machine Setup</span></td><td>Hands-On Task</td><td>EPA 608 Type I +1</td><td class="mono">Apr 19, 2026</td><td class="kebab">···</td></tr>
+<tr><td><span class="nm">HVAC Field Tools Walkthrough</span></td><td>xAPI</td><td>HVAC JobReady +4</td><td class="mono">Apr 19, 2026</td><td class="kebab">···</td></tr>
+<tr><td><span class="nm">Condenser Coil Cleaning</span></td><td>Hands-On Task</td><td>HVAC JobReady</td><td class="mono">Apr 18, 2026</td><td class="kebab">···</td></tr>
+</tbody></table>
+<footer class="pager"><span class="mono">Showing 1 - 39 of 39</span><span class="pg">‹</span><span class="pg">›</span></footer>
+</main></div>
+</body></html>

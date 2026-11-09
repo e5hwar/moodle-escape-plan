@@ -673,6 +673,7 @@ function RejectModal({
 
   return (
     <PrmModal
+      drawer
       title={copy.title}
       /* The sentence that used to open the body is the title's subtext — it
          describes what the pop-up does, so it belongs to the header. */

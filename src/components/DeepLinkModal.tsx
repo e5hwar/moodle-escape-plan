@@ -164,6 +164,7 @@ export function DeepLinkModal({
 
   return (
     <PrmModal
+      drawer
       title={t("Find a Deep Link")}
       description="Pick where the Spotlight's button takes the user in the app."
       pickFull

@@ -1,4 +1,4 @@
-import { useDsText } from "../designSystem";
+import { useDesignSystem, useDsText } from "../designSystem";
 import { useEffect, useState, type ReactNode } from "react";
 
 /** Modal close glyph — the design's tdesign:close (20px, 2.42 square-capped). */
@@ -33,6 +33,8 @@ export function PrmModal({
   go,
   footerExtra,
   wide,
+  drawer,
+  drawerLarge,
   pickFull,
   className,
   hideFooter,
@@ -81,6 +83,18 @@ export function PrmModal({
   footerExtra?: ReactNode;
   /** A form-carrying modal runs wider than the 640px confirm shell. */
   wide?: boolean;
+  /** A form — anything the admin fills in or edits (add, create, edit,
+   *  settings with options). In the SkillCat DS look it renders as the Modal
+   *  component's Type=Drawer (Figma EEki6uMz0Q3KkQv8vhKkvD 18822:4612): a
+   *  550 panel on the right, full height, header fixed, body scrolling,
+   *  actions under a rule. Confirms and warnings (delete, hide, archive,
+   *  unsaved changes, payments) stay centred dialogs and never pass it
+   *  (Eric's rule, 2026-11-07). The other looks ignore it. */
+  drawer?: boolean;
+  /** The large Drawer — 96% of the window — for table pickers, so every
+   *  column still fits (Eshwar 2026-11-09; the DS only draws 550). Implied by
+   *  `pickFull`; the Template picker, which isn't `pickFull`, passes it. */
+  drawerLarge?: boolean;
   /** Table picker (the `.stm-*` family — Select Tasks/Questions/Users/
    *  Certifications, Add Requirement, Deep Link, Grant Attempts): the card
    *  fills the viewport inside the scrim's 24px gutter and its row area grows
@@ -113,6 +127,8 @@ export function PrmModal({
   children?: ReactNode;
 }) {
   const t = useDsText();
+  const ds = useDesignSystem();
+  const asDrawer = !!drawer && ds === "skillcat";
   const [sure, setSure] = useState(false);
 
   // Escape on the stacked confirm closes both. Window capture, so the page's
@@ -134,18 +150,27 @@ export function PrmModal({
 
   return (
     <>
-      <div className="pr-confirm-overlay" onClick={onCancel}>
+      <div
+        className={`pr-confirm-overlay${asDrawer ? " pr-confirm-overlay--drawer" : ""}`}
+        onClick={onCancel}
+      >
         <div
           className={`prm ${wide ? "prm--wide" : ""}${
             pickFull ? " prm--pick-full" : ""
+          }${asDrawer ? " prm--drawer" : ""}${
+            asDrawer && (pickFull || drawerLarge) ? " prm--drawer-lg" : ""
           }${className ? ` ${className}` : ""}`}
           role="dialog"
           aria-modal="true"
           aria-label={typeof title === "string" ? title : ariaLabel}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="prm-body">
-            <div className="prm-headgroup">
+          {/* Drawer: the header (title, close, and the description 4 under
+              the title, as in the dialog) sits outside the scrolling body.
+              `children` keeps its slot either way, so switching looks never
+              remounts a half-filled form. */}
+          {asDrawer ? (
+            <div className="prm-headgroup prm-drawer-head">
               <div className="prm-head">
                 <h2 className="prm-title">{title}</h2>
                 <button className="prm-close" onClick={onCancel} aria-label="Close">
@@ -154,6 +179,19 @@ export function PrmModal({
               </div>
               {description && <p className="prm-text">{description}</p>}
             </div>
+          ) : null}
+          <div className="prm-body">
+            {asDrawer ? null : (
+              <div className="prm-headgroup">
+                <div className="prm-head">
+                  <h2 className="prm-title">{title}</h2>
+                  <button className="prm-close" onClick={onCancel} aria-label="Close">
+                    <ModalCloseIcon />
+                  </button>
+                </div>
+                {description && <p className="prm-text">{description}</p>}
+              </div>
+            )}
             {children}
           </div>
           {!hideFooter && (

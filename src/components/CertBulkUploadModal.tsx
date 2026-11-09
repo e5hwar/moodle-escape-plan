@@ -109,6 +109,7 @@ export function CertBulkUploadModal({
     return (
       <>
         <PrmModal
+          drawer
           className="qbu qbu--pick"
           title={t("CSV Upload")}
           description={t("Bulk-create Courses, Lessons, and Tasks from a CSV file.")}
@@ -171,6 +172,7 @@ export function CertBulkUploadModal({
     const hidden = report.issues.length - issues.length;
     return (
       <PrmModal
+        drawer
         /* The 1181px shell is the error TABLE's — a file that couldn't be read
            at all is one sentence, so it keeps the confirm width. */
         className={`qbu${report.fatal ? "" : " qbu--errors"}`}
@@ -238,6 +240,7 @@ export function CertBulkUploadModal({
   const hasLessons = report.courses.some((c) => c.children.some((ch) => ch.kind === "lesson"));
   return (
     <PrmModal
+      drawer
       className="qbu qbu--ready"
       title={`Add ${n} ${n === 1 ? "Task" : "Tasks"}`}
       description={t("Here's the structure this file builds. Tasks already in the library are reused, not copied \u2014 the rest are created as new Tasks.")}
