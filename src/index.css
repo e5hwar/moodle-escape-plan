@@ -6823,9 +6823,6 @@ button.rr-card.ctb-start-card--accent:hover {
   flex: 1;
   margin-left: -11px; /* 16px row gap − the node's 5px grip gap */
 }
-.ctb-task-name-row .cert-restricted-pill {
-  margin-left: 0;
-}
 .ctb-course-task .ctb-task-gate {
   margin: 8px 24px 0;
 }
@@ -7227,13 +7224,12 @@ button.rr-card.ctb-start-card--accent:hover {
 }
 
 /* ===== Task Access Restrictions ===== */
-/* State chips on a Task card / Course / Lesson ("Restricted", "Hidden") are
+/* State chips on a Course / Lesson ("Hidden") are
    the shared Table Pill (`.co-status-pill--accent`); these classes only place
    them — 4px after the name, never shrinking. The pill is 29px against the
    name's 19px line: the -5px block margins let it overhang that line instead
    of growing the row, which still holds it (34px Lesson head, 33px Task in
    Course). */
-.cert-restricted-pill,
 .cert-hidden-pill {
   flex-shrink: 0;
   margin-left: 4px;
@@ -11729,8 +11725,7 @@ a.prm-cta {
   gap: 4px;
   min-width: 0;
 }
-.rot-name-row .cert-hidden-pill,
-.rot-name-row .cert-restricted-pill {
+.rot-name-row .cert-hidden-pill {
   margin-left: 4px;
 }
 .rot-list {
@@ -17910,6 +17905,14 @@ body:has(.pm-overlay) .pl-copied-toast {
   cursor: default;
 }
 .ms-menu .dropdown-list .dropdown-item.ms-menu-item--locked:hover {
+  background: transparent;
+}
+/* A pinned option (MultiSelect `fixed`): ticked like a pick, but it can't be
+   unticked — no hover wash, default cursor; the tooltip says why. */
+.ms-menu .dropdown-list .dropdown-item.ms-menu-item--fixed {
+  cursor: default;
+}
+.ms-menu .dropdown-list .dropdown-item.ms-menu-item--fixed:hover {
   background: transparent;
 }
 .ms-menu-check-slot {

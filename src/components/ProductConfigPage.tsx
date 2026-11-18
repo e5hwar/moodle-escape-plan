@@ -141,10 +141,9 @@ const appVersion = (
 ): AppVersion => ({ id, version, date, available: platformFlags(available), minimum: platformFlags(minimum) });
 
 /** A What's New page and the app versions that open it after updating. A
- *  version belongs to one page at most. */
+ *  version belongs to one page at most, and comes from the App Versions list
+ *  on the same tab — removing a version there drops it from its page. */
 type WhatsNewPage = { id: string; url: string; versions: string[] };
-/** The released app versions a What's New page can be set for, newest first. */
-const APP_VERSIONS = ["4.3.0", "4.2.1", "4.2.0", "4.1.3", "4.1.2", "4.1.0", "4.0.0"];
 
 type BilingualDoc = { en: string; es: string };
 
@@ -207,7 +206,7 @@ export const DEFAULT_PRODUCT_SETTINGS: Settings = {
   ],
   whatsNewPages: [
     { id: "wn-2", url: "https://skillcat.app/whats-new/4-2", versions: ["4.2.1", "4.2.0"] },
-    { id: "wn-1", url: "https://skillcat.app/whats-new/4-1", versions: ["4.1.3", "4.1.2", "4.1.0"] },
+    { id: "wn-1", url: "https://skillcat.app/whats-new/4-1", versions: ["4.1.3", "4.1.0"] },
   ],
   webcamFrequency: "20",
   initialTaskCount: "5",
@@ -297,7 +296,7 @@ function useEscape(onClose: () => void) {
    (✕, edit, open, actions) stay fixed. */
 const cw = (px: number) => ({ "--cw": px }) as React.CSSProperties;
 // Equal peers (user): the version, both platforms, the date and the status.
-const FU_COLS = { version: cw(140), ios: cw(140), android: cw(140), date: cw(140), status: cw(140) };
+const FU_COLS = { version: cw(120), ios: cw(130), android: cw(130), date: cw(120), status: cw(220) };
 // Add New Version's platform table: the name, then its two switch columns.
 const PLATFORM_COLS = { platform: cw(120), available: cw(100), required: cw(150) };
 const WN_COLS = { link: cw(360), versions: cw(200) };
@@ -515,10 +514,15 @@ function PriceIdGrid<K extends string>({
 
 function ForceAppUpdateField({
   versions,
+  pages,
   onChange,
 }: {
   versions: AppVersion[];
-  onChange: (v: AppVersion[]) => void;
+  /** The What's New pages — their versions come from this list. */
+  pages: WhatsNewPage[];
+  /** One write for both, so a removed or renumbered version leaves no page
+   *  pointing at a version the list no longer has. */
+  onChange: (v: AppVersion[], pages: WhatsNewPage[]) => void;
 }) {
   const t = useDsText();
   const [modal, setModal] = useState<{ kind: "new" } | { kind: "edit"; entry: AppVersion } | null>(null);
@@ -527,27 +531,47 @@ function ForceAppUpdateField({
 
   // An edit keeps the row's id, place and Added On date; only its number and
   // platforms change. A new version goes on top, dated today.
+  // A renumbered version stays on its What's New page under the new number.
   function save(patch: VersionPatch) {
+    const from = editing?.version;
     onChange(
       editing
         ? versions.map((v) => (v.id === editing.id ? { ...v, ...patch } : v))
         : [{ id: `fu-${Date.now()}`, ...patch, date: todayIso() }, ...versions],
+      from && from !== patch.version
+        ? pages.map((p) =>
+            p.versions.includes(from)
+              ? { ...p, versions: p.versions.map((x) => (x === from ? patch.version : x)) }
+              : p,
+          )
+        : pages,
     );
     setModal(null);
   }
 
-  function remove(id: string) {
-    onChange(versions.filter((v) => v.id !== id));
+  // A removed version leaves its What's New page. A page left with no
+  // versions stays, flagged, and blocks Save until it's fixed or removed.
+  function remove(entry: AppVersion) {
+    onChange(
+      versions.filter((v) => v.id !== entry.id),
+      pages.map((p) =>
+        p.versions.includes(entry.version)
+          ? { ...p, versions: p.versions.filter((x) => x !== entry.version) }
+          : p,
+      ),
+    );
     setRemoving(null);
   }
 
   return (
     <div className="form-group">
-      <label className="form-label">{t("Force App Update")}</label>
-      {/* One row per released version, newest first. The newest row marked as
-          the minimum on a platform is the version forced there — so the list
-          IS the current state, and older marks are history. A row can be the
-          minimum on iOS while a newer Android-only row holds Android. */}
+      <label className="form-label">{t("App Versions")}</label>
+      {/* One row per released version, newest first. The list drives two
+          things per platform (user, 2026-11-18): the newest AVAILABLE row is
+          what older builds are alerted to update to, and the newest row marked
+          as the minimum is the version forced there. So the list IS the
+          current state, and older marks are history. A row can be the minimum
+          on iOS while a newer Android-only row holds Android. */}
       <div className="qsec ct-prop">
         <div className="qsec-hd">
           <span className="ct-col" style={FU_COLS.version}>VERSION</span>
@@ -566,7 +590,7 @@ function ForceAppUpdateField({
         )}
 
         {versions.map((v) => {
-          const minimumFor = minimumPlatforms(versions, v);
+          const status = versionStatus(versions, v);
           return (
             <div className="qsec-row" key={v.id}>
               <span className="ct-col pc-strong" style={FU_COLS.version}>{v.version}</span>
@@ -589,14 +613,10 @@ function ForceAppUpdateField({
               )}
               <span className="ct-col pc-muted" style={FU_COLS.date}>{formatShortDate(v.date)}</span>
               <span className="ct-col pc-col-status" style={FU_COLS.status}>
-                {minimumFor.length === 0 ? (
+                {status === null ? (
                   <span className="pc-muted">—</span>
                 ) : (
-                  <span className="co-status-pill co-status-pill--green">
-                    {minimumFor.length === APP_PLATFORMS.length
-                      ? "Minimum Version"
-                      : `Minimum on ${minimumFor.map((p) => p.name).join(" & ")}`}
-                  </span>
+                  <span className="co-status-pill co-status-pill--green">{status}</span>
                 )}
               </span>
               <span className="pc-col-actions">
@@ -629,8 +649,9 @@ function ForceAppUpdateField({
         </div>
       </div>
       <p className="form-help">
-        Every released app version and where it's available. Mark a version as the minimum on a
-        platform to force learners there on older versions to update before they can continue.
+        Every released app version and where it's available. Listing a version alerts learners on
+        older versions to update. Mark it as Update Required on a platform to force learners below it
+        to update before they can continue.
       </p>
 
       {modal && (
@@ -647,7 +668,8 @@ function ForceAppUpdateField({
         <RemoveVersionModal
           entry={removing}
           versions={versions}
-          onRemove={() => remove(removing.id)}
+          page={pages.find((p) => p.versions.includes(removing.version))}
+          onRemove={() => remove(removing)}
           onCancel={() => setRemoving(null)}
         />
       )}
@@ -661,6 +683,31 @@ const minimumEntry = (versions: AppVersion[], p: AppPlatform) => versions.find((
 /** The platforms this version is the current minimum on. */
 const minimumPlatforms = (versions: AppVersion[], entry: AppVersion) =>
   APP_PLATFORMS.filter((p) => minimumEntry(versions, p.key)?.id === entry.id);
+
+/** The platform's newest available version — the one older builds there are
+ *  alerted to update to. */
+const latestEntry = (versions: AppVersion[], p: AppPlatform) => versions.find((v) => v.available[p]);
+
+/** The platforms this version is the newest available on. */
+const latestPlatforms = (versions: AppVersion[], entry: AppVersion) =>
+  APP_PLATFORMS.filter((p) => latestEntry(versions, p.key)?.id === entry.id);
+
+/** The STATUS cell, naming both roles a row can hold (user, 2026-11-18):
+ *  "Latest" where it's the newest available version (the alert), "Required"
+ *  where it's the minimum (the forced update), with the platform when it
+ *  holds the role on one platform only — "Latest · Required on iOS". */
+function versionStatus(versions: AppVersion[], entry: AppVersion): string | null {
+  const latest = latestPlatforms(versions, entry);
+  const required = minimumPlatforms(versions, entry);
+  const names = (on: typeof APP_PLATFORMS) => on.map((p) => p.name).join(" & ");
+  const role = (label: string, on: typeof APP_PLATFORMS) =>
+    on.length === 0 ? null : on.length === APP_PLATFORMS.length ? label : `${label} on ${names(on)}`;
+  // Both roles on the same platform(s) share one "on …" tail.
+  if (latest.length && required.length && latest.every((p, i) => p === required[i]) && latest.length === required.length)
+    return role("Latest · Required", latest);
+  const parts = [role("Latest", latest), role("Required", required)].filter((x): x is string => !!x);
+  return parts.length ? parts.join(" · ") : null;
+}
 
 const VERSION_RE = /^\d+(\.\d+)*$/;
 
@@ -704,7 +751,7 @@ function versionError(
 
 /** The UPDATE REQUIRED? column's ⓘ. */
 const UPDATE_REQUIRED_TIP =
-  "Learners on this platform below this version are prompted to update before they can continue.\nOnly available once the version is available on the platform.";
+  "Forces learners on this platform below this version to update before they can continue. Without it they only see an alert to update.\nOnly available once the version is available on the platform.";
 
 type VersionPatch = Pick<AppVersion, "version" | "available" | "minimum">;
 
@@ -768,8 +815,8 @@ function VersionModal({
       title={t(entry ? "Edit Version" : "Add New Version")}
       description={
         entry
-          ? "Change the version number or the platforms it's available on. Requiring the update on a platform prompts learners there on older versions to update before they can continue."
-          : "Add a released app version and the platforms it's available on. Requiring the update on a platform prompts learners there on older versions to update before they can continue."
+          ? "Change the version number or the platforms it's available on. Learners on older versions see an alert to update. Turn on Update Required to force learners below this version to update before they can continue."
+          : "Add a released app version and the platforms it's available on. Learners on older versions see an alert to update. Turn on Update Required to force learners below this version to update before they can continue."
       }
       confirmLabel={t(entry ? "Save Version" : "Add Version")}
       confirmDisabled={!isValid}
@@ -883,11 +930,14 @@ function nextVersionHint(newest?: string): string {
 function RemoveVersionModal({
   entry,
   versions,
+  page,
   onRemove,
   onCancel,
 }: {
   entry: AppVersion;
   versions: AppVersion[];
+  /** The What's New page this version opens, if any. */
+  page?: WhatsNewPage;
   onRemove: () => void;
   onCancel: () => void;
 }) {
@@ -895,8 +945,10 @@ function RemoveVersionModal({
   useEscape(onCancel);
 
   // Any version can go. Where it's the minimum on a platform, that platform's
-  // previous marked version takes over; older rows are history.
+  // previous marked version takes over; where it's the newest available, the
+  // previous available version becomes what older builds are alerted to.
   const minimumFor = minimumPlatforms(versions, entry);
+  const latestFor = latestPlatforms(versions, entry);
   const rest = versions.filter((v) => v.id !== entry.id);
 
   return (
@@ -910,7 +962,7 @@ function RemoveVersionModal({
       <p className="prm-content">
         Remove version <strong>{entry.version}</strong>?{" "}
         {minimumFor.length === 0 ? (
-          <>It isn't the minimum on any platform, so no learner is affected.</>
+          <>It isn't required on any platform, so no forced update changes.</>
         ) : (
           minimumFor.map((p, i) => {
             const fallback = minimumEntry(rest, p.key)?.version;
@@ -929,6 +981,32 @@ function RemoveVersionModal({
             );
           })
         )}
+        {latestFor.map((p) => {
+          const next = latestEntry(rest, p.key)?.version;
+          return (
+            <span key={`latest-${p.key}`}>
+              {" "}
+              {next ? (
+                <>
+                  {p.name} users will be alerted to update to <strong>{next}</strong> instead.
+                </>
+              ) : (
+                <>{p.name} users will no longer be alerted to update.</>
+              )}
+            </span>
+          );
+        })}
+        {page && (
+          <>
+            {" "}
+            It's also on the What's New page <strong>{page.url}</strong>
+            {page.versions.length === 1 ? (
+              <>, its only version — the page will need a new version before you can save.</>
+            ) : (
+              <>, and will be removed from it.</>
+            )}
+          </>
+        )}
       </p>
     </PrmModal>
   );
@@ -940,20 +1018,30 @@ function RemoveVersionModal({
    so Save Changes saves them like the Force App Update log above. */
 function WhatsNewField({
   pages,
+  appVersions,
   onChange,
 }: {
   pages: WhatsNewPage[];
+  /** The App Versions list's version numbers, newest first — the only
+   *  versions a page can be set for, unsaved rows included. */
+  appVersions: string[];
   onChange: (p: WhatsNewPage[]) => void;
 }) {
   const t = useDsText();
+  // A page whose versions were all removed from App Versions: the card
+  // flags it (1570:3366) and Save stays blocked until it's fixed or removed.
+  const empty = pages.some((p) => p.versions.length === 0);
   const [modal, setModal] = useState<{ kind: "new" } | { kind: "edit"; page: WhatsNewPage } | null>(null);
   const [removing, setRemoving] = useState<WhatsNewPage | null>(null);
   const editing = modal?.kind === "edit" ? modal.page : null;
 
   return (
     <div className="form-group">
-      <label className="form-label">{t("What's New Page")}</label>
-      <div className="qsec ct-prop">
+      <label className="form-label">
+        {t("What's New Page")}
+        {empty && <span className="form-label-error">Select at least one version</span>}
+      </label>
+      <div className={`qsec ct-prop${empty ? " has-error" : ""}`}>
         <div className="qsec-hd">
           <span className="ct-col" style={WN_COLS.link}>LINK</span>
           <span className="ct-col" style={WN_COLS.versions}>VERSIONS</span>
@@ -969,9 +1057,13 @@ function WhatsNewField({
         {pages.map((p) => (
           <div className="qsec-row" key={p.id}>
             <span className="ct-col pc-muted" style={WN_COLS.link}>{p.url}</span>
-            <span className="ct-col pc-strong" style={WN_COLS.versions}>
-              {sortVersions(p.versions).join(", ")}
-            </span>
+            {p.versions.length ? (
+              <span className="ct-col pc-strong" style={WN_COLS.versions}>
+                {sortVersions(p.versions).join(", ")}
+              </span>
+            ) : (
+              <span className="ct-col pc-muted" style={WN_COLS.versions}>—</span>
+            )}
             <span className="pc-col-actions">
               <button
                 className="qsec-x"
@@ -1007,6 +1099,7 @@ function WhatsNewField({
       {modal && (
         <WhatsNewModal
           page={editing}
+          options={appVersions}
           others={pages.filter((p) => p.id !== editing?.id)}
           onCancel={() => setModal(null)}
           onSubmit={(patch) => {
@@ -1042,12 +1135,15 @@ const sortVersions = (v: string[]) => [...v].sort((a, b) => compareVersions(b, a
    listed but locked. A new entry's fields only go red once visited. */
 function WhatsNewModal({
   page,
+  options,
   others,
   onSubmit,
   onCancel,
 }: {
   /** Null when adding. */
   page: WhatsNewPage | null;
+  /** The App Versions list, newest first. */
+  options: string[];
   /** Every other page — their links can't repeat, their versions are taken. */
   others: WhatsNewPage[];
   onSubmit: (patch: Pick<WhatsNewPage, "url" | "versions">) => void;
@@ -1108,7 +1204,7 @@ function WhatsNewModal({
             {versionsError && <span className="form-label-error">{versionsError}</span>}
           </span>
           <MultiSelect
-            options={APP_VERSIONS}
+            options={options}
             value={sortVersions(versions)}
             onChange={setVersions}
             placeholder={t("Select Versions")}
@@ -1144,9 +1240,13 @@ function RemoveWhatsNewModal({
       onConfirm={onRemove}
     >
       <p className="prm-content">
-        Remove <strong>{page.url}</strong>? Learners updating to{" "}
-        <strong>{sortVersions(page.versions).join(", ")}</strong> will no longer be shown a
-        What's New page.
+        Remove <strong>{page.url}</strong>?
+        {page.versions.length > 0 && (
+          <>
+            {" "}Learners updating to <strong>{sortVersions(page.versions).join(", ")}</strong> will
+            no longer be shown a What's New page.
+          </>
+        )}
       </p>
     </PrmModal>
   );
@@ -1743,14 +1843,14 @@ function describeChanges(
     () => setSettings((d) => ({ ...d, [key]: fn(d[key], saved[key]) }));
   const edited = (v: string) => (v.trim() ? "Changed" : "Cleared");
 
-  // Force App Update — versions added, edited or removed, by id.
+  // App Versions (ex-Force App Update) — versions added, edited or removed, by id.
   const savedIds = new Set(saved.forceUpdates.map((h) => h.id));
   const draftIds = new Set(draft.forceUpdates.map((h) => h.id));
   for (const h of draft.forceUpdates) {
     const was = saved.forceUpdates.find((x) => x.id === h.id);
     if (!was) {
       out.push({
-        key: `fu-${h.id}`, subject: `Force App Update · ${h.version}`, action: "Added",
+        key: `fu-${h.id}`, subject: `App Versions · ${h.version}`, action: "Added",
         onDrop: revert("forceUpdates", (d) => d.filter((x) => x.id !== h.id)),
       });
       continue;
@@ -1764,14 +1864,14 @@ function describeChanges(
       .filter((x): x is string => !!x)
       .join(", ");
     out.push({
-      key: `fu-${h.id}`, subject: `Force App Update · ${was.version}`, action: what,
+      key: `fu-${h.id}`, subject: `App Versions · ${was.version}`, action: what,
       onDrop: revert("forceUpdates", (d) => d.map((x) => (x.id === h.id ? was : x))),
     });
   }
   for (const h of saved.forceUpdates)
     if (!draftIds.has(h.id))
       out.push({
-        key: `fu-${h.id}`, subject: `Force App Update · ${h.version}`, action: "Removed",
+        key: `fu-${h.id}`, subject: `App Versions · ${h.version}`, action: "Removed",
         // Back in its saved place. Rows still in the draft keep their draft
         // copy, so undoing a removal never undoes an edit to another row.
         onDrop: revert("forceUpdates", (d, sv) => {
@@ -2013,6 +2113,7 @@ export function ProductConfigPage({
     !settings.b2bEpaCard.trim() && "B2B EPA Card",
     docBlank(settings.termsOfService) && "Terms of Service",
     docBlank(settings.privacyPolicy) && "Privacy Policy",
+    settings.whatsNewPages.some((p) => p.versions.length === 0) && "What's New Page Versions",
   ].filter((x): x is string => !!x);
   const canSave = overLimit.length === 0 && badNumbers.length === 0 && blanks.length === 0;
   const blockedTip = canSave
@@ -2120,10 +2221,14 @@ export function ProductConfigPage({
                     <>
                       <ForceAppUpdateField
                         versions={settings.forceUpdates}
-                        onChange={set("forceUpdates")}
+                        pages={settings.whatsNewPages}
+                        onChange={(forceUpdates, whatsNewPages) =>
+                          setSettings((s) => ({ ...s, forceUpdates, whatsNewPages }))
+                        }
                       />
                       <WhatsNewField
                         pages={settings.whatsNewPages}
+                        appVersions={sortVersions(settings.forceUpdates.map((v) => v.version))}
                         onChange={set("whatsNewPages")}
                       />
                       <NumberField

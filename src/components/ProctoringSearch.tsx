@@ -28,7 +28,7 @@ export function ProctoringSearch({
 }: {
   submissions: Submission[];
   /** The Quizzes the `Quiz:` scope offers — every reviewed Quiz, whether or
-   *  not it has rows here (each still shows its count). */
+   *  not it has rows here. */
   quizzes: string[];
   exams: string[];
   onExamsChange: (next: string[]) => void;
@@ -271,7 +271,7 @@ export function ProctoringSearch({
                     />
                   );
                 }
-                const row = suggestionRow(opt, { allExams });
+                const row = suggestionRow(opt);
                 if (!row) return null;
                 return (
                   <OptionRow
@@ -282,7 +282,7 @@ export function ProctoringSearch({
                   >
                     <span className="usearch-chip">{row.chip}</span>
                     <span className="usearch-row-ex">{row.example}</span>
-                    <span className="usearch-row-desc">{row.desc}</span>
+                    {row.desc && <span className="usearch-row-desc">{row.desc}</span>}
                   </OptionRow>
                 );
               })}
@@ -313,20 +313,17 @@ export function ProctoringSearch({
   );
 }
 
-type NameCounts = { names: string[]; counts: Map<string, number> };
-
 /** Chip / example / description for one "Suggested filters" row — the static
- * prefix hints when the box is empty, a real scope value once it isn't. */
+ * prefix hints when the box is empty, a real scope value once it isn't —
+ * values only, no counts (spec review, 2026-11-18). */
 function suggestionRow(
   opt: Opt,
-  all: { allExams: NameCounts },
-): { key: string; chip: string; example: string; desc: string } | null {
-  const count = (c: NameCounts, name: string) => `${c.counts.get(name) ?? 0} submissions`;
+): { key: string; chip: string; example: string; desc?: string } | null {
   switch (opt.kind) {
     case "exam-filter":
       return { key: "exam-filter", chip: "Quiz:", example: "Quiz: EPA 608 Universal", desc: "Filter by Quiz" };
     case "exam":
-      return { key: `exam:${opt.name}`, chip: "Quiz:", example: opt.name, desc: count(all.allExams, opt.name) };
+      return { key: `exam:${opt.name}`, chip: "Quiz:", example: opt.name, };
     default:
       return null;
   }

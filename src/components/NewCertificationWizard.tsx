@@ -78,7 +78,9 @@ const USER_TYPE_VALUES = ["B2B Only"];
 
 // Access Restriction (spec V1) — a Task can be gated behind other Tasks within
 // the same Certification. The user must complete `all` or `any` one of the
-// selected prerequisite Tasks; a prerequisite counts once it is Completed.
+// selected prerequisite Tasks; a prerequisite counts once it is Completed —
+// except the ID Upload Task, which counts once the ID is In Review OR
+// Completed (SEB, 2026-11-18): learners don't wait on the ID review.
 type AccessRestriction = {
   enabled: boolean;
   mode: "all" | "any";
@@ -122,6 +124,118 @@ function flattenTasks(courses: CertCourse[]): CertTask[] {
   return out;
 }
 
+/* ── Proctored Quizzes and the ID Upload Task (SEB, 2026-11-18) ──
+   On desktop web a proctored Quiz runs in Safe Exam Browser, which needs the
+   learner's ID on file first. So a proctored Quiz in a Certification is always
+   gated behind the library's ID Upload Task: each one gets an ID Upload Task
+   of its own as the Task right before it (inside the same Lesson, when it
+   sits in one) and an Access Restriction naming it — so a Certification with
+   several proctored Quizzes holds several ID Upload Tasks. The restriction modal pins that
+   Task, and the Task can't be removed from the tree while it gates one. */
+
+/** The library's ID Upload Task, when there is a live one. */
+function idUploadLibraryTask(): Task | undefined {
+  return getTasks().find((t) => isIdUpload(t) && !t.hidden);
+}
+
+/** True for the ID Upload Task in a Certification's tree (matched by name, as
+ *  the tree stores library Tasks). */
+function isIdUploadCertTask(t: Pick<CertTask, "name">): boolean {
+  return t.name === idUploadLibraryTask()?.name;
+}
+
+/** A Quiz with Proctoring Required — answered in the Task wizard for one made
+ *  here, else read off its library record. */
+function isProctoredQuiz(t: CertTask): boolean {
+  if (t.kind !== "quiz") return false;
+  if (t.record) return !!t.record.proctoring;
+  return !!getTasks().find((l) => l.name === t.name)?.proctoring;
+}
+
+/** The Tasks in `all` whose Access Restriction names `t`. */
+function gatedBy(t: CertTask, all: CertTask[]): CertTask[] {
+  return all.filter((q) => !!q.restriction?.enabled && q.restriction.taskIds.includes(t.id));
+}
+
+/** Why the ID Upload Task can't leave the tree right now, or `undefined` when
+ *  it can: any Access Restriction here that names it holds it in place —
+ *  removing it would leave that gate pointing at nothing. */
+function idUploadPinReason(t: CertTask, all: CertTask[]): string | undefined {
+  if (!isIdUploadCertTask(t)) return undefined;
+  const gated = gatedBy(t, all);
+  if (gated.length === 0) return undefined;
+  return gated.some(isProctoredQuiz)
+    ? "A proctored Quiz in this Certification needs it"
+    : "Remove it from the Access Restriction first";
+}
+
+/** Give every proctored Quiz in the tree its own ID Upload Task, as the Task
+ *  right before it — in the same Lesson, or straight in the Course for a
+ *  loose Quiz — and gate the Quiz on that one. A Certification can hold
+ *  several ID Upload Tasks, one per proctored Quiz. A Quiz already preceded by
+ *  an ID Upload Task keeps it; any other is added. The Quiz's restriction
+ *  keeps its other Tasks, with its own ID Upload Task leading (in place of any
+ *  other ID Upload it named) and Unlocks When on All. Run whenever Tasks join
+ *  the tree; a tree with nothing to change comes back as it was. */
+function gateProctoredQuizzes(courses: CertCourse[]): CertCourse[] {
+  const lib = idUploadLibraryTask();
+  const all = flattenTasks(courses);
+  if (!lib || !all.some(isProctoredQuiz)) return courses;
+  const idUploadIds = new Set(all.filter(isIdUploadCertTask).map((t) => t.id));
+
+  const gateOn = (q: CertTask, idId: string): CertTask => {
+    const r = q.restriction?.enabled ? q.restriction : undefined;
+    if (r && r.mode === "all" && r.taskIds[0] === idId && !r.taskIds.slice(1).some((id) => idUploadIds.has(id))) {
+      return q;
+    }
+    const others = (r?.taskIds ?? []).filter((id) => id !== idId && !idUploadIds.has(id));
+    return { ...q, restriction: { enabled: true, mode: "all", taskIds: [idId, ...others] } };
+  };
+
+  /* One sibling list: a Lesson's Tasks, or a Course's children (where a
+     Lesson is a neighbour too, so a loose Quiz right after one still gets an
+     ID Upload Task of its own). */
+  function gateList<T>(items: T[], taskOf: (x: T) => CertTask | undefined, wrap: (t: CertTask) => T): T[] {
+    const out: T[] = [];
+    for (const item of items) {
+      const q = taskOf(item);
+      if (!q || !isProctoredQuiz(q)) {
+        out.push(item);
+        continue;
+      }
+      const prev = out.length > 0 ? taskOf(out[out.length - 1]) : undefined;
+      let idTask = prev && isIdUploadCertTask(prev) ? prev : undefined;
+      if (!idTask) {
+        idTask = libraryTaskToCertTask(lib!);
+        idUploadIds.add(idTask.id);
+        out.push(wrap(idTask));
+      }
+      const gated = gateOn(q, idTask.id);
+      out.push(gated === q ? item : wrap(gated));
+    }
+    return out;
+  }
+
+  return courses.map((co) => ({
+    ...co,
+    children: gateList<CourseChild>(
+      co.children.map((ch) =>
+        ch.kind === "lesson"
+          ? {
+              kind: "lesson" as const,
+              lesson: {
+                ...ch.lesson,
+                tasks: gateList<CertTask>(ch.lesson.tasks, (t) => t, (t) => t),
+              },
+            }
+          : ch,
+      ),
+      (ch) => (ch.kind === "task" ? ch.task : undefined),
+      (task) => ({ kind: "task" as const, task }),
+    ),
+  }));
+}
+
 // Reorder a sibling list by moving the item with `fromId` to sit where `toId`
 // currently is. `toIdx` is captured from the ORIGINAL list: dragging down lands
 // the item just after the target, dragging up lands it just before — and, unlike
@@ -135,6 +249,46 @@ function reorderList<T>(list: T[], fromId: string, toId: string, idOf: (t: T) =>
   const [moved] = next.splice(fromIdx, 1);
   next.splice(toIdx, 0, moved);
   return next;
+}
+
+/* A proctored Quiz and the ID Upload Task right before it (the one its
+   restriction names) move as one: dragging either carries both, and a drop
+   never lands between them. A sibling list is read as units — that pair, or
+   any single item — and reordered unit by unit, with reorderList's rule for
+   which side of the target it lands on. Returns the units as [first, last]
+   index pairs. */
+function siblingUnits<T>(list: T[], taskOf: (x: T) => CertTask | undefined): [number, number][] {
+  const units: [number, number][] = [];
+  for (let i = 0; i < list.length; i++) {
+    const a = taskOf(list[i]);
+    const b = i + 1 < list.length ? taskOf(list[i + 1]) : undefined;
+    const paired =
+      !!a && !!b && isIdUploadCertTask(a) && isProctoredQuiz(b) && !!b.restriction?.enabled &&
+      b.restriction.taskIds.includes(a.id);
+    units.push(paired ? [i, ++i] : [i, i]);
+  }
+  return units;
+}
+
+function reorderUnits<T>(
+  list: T[],
+  fromId: string,
+  toId: string,
+  idOf: (t: T) => string,
+  taskOf: (t: T) => CertTask | undefined,
+): T[] {
+  const units = siblingUnits(list, taskOf);
+  const unitOf = (id: string) => {
+    const at = list.findIndex((t) => idOf(t) === id);
+    return units.findIndex(([a, b]) => at >= a && at <= b);
+  };
+  const from = unitOf(fromId);
+  const to = unitOf(toId);
+  if (from < 0 || to < 0 || from === to) return list;
+  const blocks = units.map(([a, b]) => list.slice(a, b + 1));
+  const [moved] = blocks.splice(from, 1);
+  blocks.splice(to, 0, moved);
+  return blocks.flat();
 }
 
 // Stable key for a Course child, whichever kind it is.
@@ -334,8 +488,8 @@ const DURATION_BY_KIND: Record<TaskKind, string> = {
 // exam goes last — after the Lesson, where a learner would meet it — rather
 // than wherever the library happens to list it.
 function associatedTasks(cert: Certification): Task[] {
-  // The ID Upload Task is left out of the sample structure; an admin adds it
-  // to a tree by hand (it can then gate other Tasks there).
+  // The ID Upload Task is left out of the list; `gateProctoredQuizzes` adds one
+  // right before each proctored Quiz, the only place it belongs.
   const matched = taskLibrary.filter(
     (t) => !isIdUpload(t) && t.usedIn.some((u) => CERT_BY_USEDIN.get(u)?.id === cert.id),
   );
@@ -408,7 +562,8 @@ function buildSampleStructure(editing: Certification): {
       ]
     : [];
 
-  return { courses: [course], conditionSets };
+  // A seed Certification's proctored final exam sits behind the ID Upload Task.
+  return { courses: gateProctoredQuizzes([course]), conditionSets };
 }
 
 // Build the Course(s) a single imported Certification contributes to a Learning
@@ -870,7 +1025,8 @@ function buildInitialData(editing?: Certification, restored = false): WizardData
   const savedSets = editing.conditionSets ?? sample?.conditionSets ?? [];
   return {
     ...BLANK_DATA,
-    courses: editing.courses ?? sample!.courses,
+    // A tree saved before the ID Upload rule picks up its ID Upload Tasks too.
+    courses: editing.courses ? gateProctoredQuizzes(editing.courses) : sample!.courses,
     // Never zero sets: an empty one is somewhere to add the first requirement.
     conditionSets: savedSets.length ? savedSets : [newConditionSet()],
     importedCerts: editing.importedCerts ?? [],
@@ -988,7 +1144,7 @@ export function NewCertificationWizard({ onClose, onCreate, onSave, editingCert,
   const [step, setStep] = useState(0);
   const [data, setData] = useState<WizardData>(() => {
     const initial = buildInitialData(editingCert ?? restored, !editingCert && !!restored);
-    return imported ? { ...initial, courses: coursesFromImport(imported.courses) } : initial;
+    return imported ? { ...initial, courses: gateProctoredQuizzes(coursesFromImport(imported.courses)) } : initial;
   });
   // The CSV Upload's acknowledgment — the Question Bank raises the same toast
   // when its bulk upload lands. Stable `onDone`, so typing into the Details
@@ -1224,7 +1380,8 @@ export function NewCertificationWizard({ onClose, onCreate, onSave, editingCert,
   function appendTask(courseId: string, lessonId: string | undefined, task: CertTask) {
     setData((d) => ({
       ...d,
-      courses: d.courses.map((co) => {
+      // A proctored Quiz brings the ID Upload Task in with it.
+      courses: gateProctoredQuizzes(d.courses.map((co) => {
         if (co.id !== courseId) return co;
         if (lessonId) {
           return {
@@ -1237,7 +1394,7 @@ export function NewCertificationWizard({ onClose, onCreate, onSave, editingCert,
           };
         }
         return { ...co, children: [...co.children, { kind: "task" as const, task }] };
-      }),
+      })),
     }));
   }
 
@@ -2035,7 +2192,12 @@ function TasksStep({
       update({
         courses: data.courses.map((co) =>
           co.id === courseId
-            ? { ...co, children: reorderList(co.children, fromId, toId, childKey) }
+            ? {
+                ...co,
+                children: reorderUnits(co.children, fromId, toId, childKey, (ch) =>
+                  ch.kind === "task" ? ch.task : undefined,
+                ),
+              }
             : co,
         ),
       });
@@ -2050,7 +2212,7 @@ function TasksStep({
                   kind: "lesson" as const,
                   lesson: {
                     ...ch.lesson,
-                    tasks: reorderList(ch.lesson.tasks, fromId, toId, (t) => t.id),
+                    tasks: reorderUnits(ch.lesson.tasks, fromId, toId, (t) => t.id, (t) => t),
                   },
                 }
               : ch,
@@ -2058,6 +2220,35 @@ function TasksStep({
         })),
       });
     }
+  }
+
+  /* The ids of one sibling list, in order, and the units they form (a
+     proctored Quiz with its ID Upload Task counts as one — see reorderUnits). */
+  function scopeUnits(scope: string): { ids: string[]; units: [number, number][] } {
+    if (scope.startsWith("course:")) {
+      const co = data.courses.find((c) => c.id === scope.slice("course:".length));
+      const list = co?.children ?? [];
+      return { ids: list.map(childKey), units: siblingUnits(list, (ch) => (ch.kind === "task" ? ch.task : undefined)) };
+    }
+    if (scope.startsWith("lesson:")) {
+      const lessonId = scope.slice("lesson:".length);
+      const lesson = data.courses
+        .flatMap((c) => c.children)
+        .find((ch) => ch.kind === "lesson" && ch.lesson.id === lessonId);
+      const list = lesson?.kind === "lesson" ? lesson.lesson.tasks : [];
+      return { ids: list.map((t) => t.id), units: siblingUnits(list, (t) => t) };
+    }
+    return { ids: data.courses.map((c) => c.id), units: data.courses.map((_, i): [number, number] => [i, i]) };
+  }
+  /* Where a drop over `id` lands: null inside the dragged item's own unit,
+     else the row whose edge the line belongs on — the unit's first row for
+     "before", its last for "after" — so the line never sits inside a pair. */
+  function dropEdge(scope: string, fromId: string, id: string, pos: "before" | "after") {
+    const { ids, units } = scopeUnits(scope);
+    const unitAt = (x: string) => units.find(([a, b]) => ids.indexOf(x) >= a && ids.indexOf(x) <= b);
+    const target = unitAt(id);
+    if (!target || target === unitAt(fromId)) return null;
+    return { id: ids[pos === "before" ? target[0] : target[1]], pos };
   }
 
   // Build the handle + drop-target prop pairs for one row in a sibling list.
@@ -2081,13 +2272,19 @@ function TasksStep({
       onDragOver: (e) => {
         const d = dragRef.current;
         if (d && d.scope === scope && d.id !== id) {
-          e.preventDefault();
           // Claimed here, so an enclosing block of another list (a Lesson
           // around its own Tasks) doesn't also light up.
           e.stopPropagation();
-          e.dataTransfer.dropEffect = "move";
           const pos = e.currentTarget.getBoundingClientRect().top > d.top ? "after" : "before";
-          if (dropAt?.id !== id || dropAt.pos !== pos) setDropAt({ id, pos });
+          const edge = dropEdge(scope, d.id, id, pos);
+          // Over the dragged item's own partner: nowhere to go.
+          if (!edge) {
+            if (dropAt) setDropAt(null);
+            return;
+          }
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          if (dropAt?.id !== edge.id || dropAt.pos !== edge.pos) setDropAt(edge);
         }
       },
       onDragLeave: (e) => {
@@ -2159,8 +2356,9 @@ function TasksStep({
     }
 
     update({
-      // Hand-added Courses stay, after the imported ones.
-      courses: [...importedCourses, ...manual],
+      // Hand-added Courses stay, after the imported ones. An imported
+      // proctored Quiz brings the ID Upload Task in with it.
+      courses: gateProctoredQuizzes([...importedCourses, ...manual]),
       importedCerts: selected.map((c) => c.id),
       conditionSets,
     });
@@ -2282,6 +2480,14 @@ function TasksStep({
 
   // Remove a Task wherever it lives — directly under a Course or inside a Lesson.
   function removeTaskById(taskId: string) {
+    /* A removed Task leaves every Access Restriction that named it; one left
+       naming nothing is dropped, so no Task keeps a gate with nothing in it. */
+    const unlink = (t: CertTask): CertTask => {
+      const r = t.restriction;
+      if (!r?.taskIds.includes(taskId)) return t;
+      const taskIds = r.taskIds.filter((id) => id !== taskId);
+      return { ...t, restriction: taskIds.length > 0 ? { ...r, taskIds } : undefined };
+    };
     update({
       courses: data.courses.map((co) => ({
         ...co,
@@ -2291,9 +2497,9 @@ function TasksStep({
             ch.kind === "lesson"
               ? {
                   kind: "lesson" as const,
-                  lesson: { ...ch.lesson, tasks: ch.lesson.tasks.filter((t) => t.id !== taskId) },
+                  lesson: { ...ch.lesson, tasks: ch.lesson.tasks.filter((t) => t.id !== taskId).map(unlink) },
                 }
-              : ch,
+              : { kind: "task" as const, task: unlink(ch.task) },
           ),
       })),
     });
@@ -3151,24 +3357,43 @@ function gatePrereqs(task: CertTask, allTasks: CertTask[]): string[] {
 }
 
 // The restriction banner under a gated Task (Figma 1246:2615), naming its
-// prerequisites. Nothing at all while there are none to name.
+// prerequisites. Nothing at all while there are none to name. The ID Upload
+// Task leads with its own clause — it opens the gate at In Review OR
+// Completed — and the rest share "is/are completed":
+//   ID Upload is In Review or Completed, and A, B are completed
+//   ID Upload is In Review or Completed, or A or B is completed
 function TaskGate({ names, mode }: { names: string[]; mode: AccessRestriction["mode"] }) {
   const t = useDsText();
   if (names.length === 0) return null;
+  const idName = names.find((name) => isIdUploadCertTask({ name }));
+  const rest = names.filter((name) => name !== idName);
+  const joiner = mode === "all" ? ", " : " or ";
   // "A and B are completed" vs. the single-prerequisite / any-of "is completed".
-  const verb = mode === "all" && names.length > 1 ? "are completed" : "is completed";
+  const verb = mode === "all" && rest.length > 1 ? "are completed" : "is completed";
+  // The line is one ellipsized row; when it's cut off, hovering shows it whole.
+  const idClause = idName ? `${idName} is In Review or Completed` : "";
+  const restClause = rest.length > 0 ? `${rest.join(joiner)} ${verb}` : "";
+  const sentence = `${t("Not Available Unless:")} ${[idClause, restClause]
+    .filter(Boolean)
+    .join(mode === "all" ? ", and " : ", or ")}`;
   return (
     <div className="ctb-task-gate">
       <span className="ctb-task-gate-icon"><RestrictionLockIcon /></span>
-      <p className="ctb-task-gate-text">
+      <p className="ctb-task-gate-text" data-tip={sentence} data-tip-overflow>
         {t("Not Available Unless:")}{" "}
-        {names.map((name, i) => (
+        {idName && (
+          <>
+            <strong>{idName}</strong> is In Review or Completed
+            {rest.length > 0 && (mode === "all" ? ", and " : ", or ")}
+          </>
+        )}
+        {rest.map((name, i) => (
           <Fragment key={i}>
-            {i > 0 && (mode === "all" ? ", " : " or ")}
+            {i > 0 && joiner}
             <strong>{name}</strong>
           </Fragment>
-        ))}{" "}
-        {verb}
+        ))}
+        {rest.length > 0 && ` ${verb}`}
       </p>
     </div>
   );
@@ -3227,19 +3452,19 @@ function TaskRow({
   // The "Edit" placeholder and the Delete confirm.
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const restricted = !!task.restriction?.enabled;
+  // A restriction counts only while it still names a live Task — one whose
+  // prerequisites have all left the tree is no gate at all.
+  const restricted = gatePrereqs(task, allTasks).length > 0;
   // A Task pulled from the library is owned by the Certifications it already
   // belongs to (this one is still unsaved, so it never appears in the list).
   const sharedWith = task.usedIn ?? [];
   const prereqs = gatePrereqs(task, allTasks);
+  // The ID Upload Task stays while any Access Restriction here names it.
+  const pinReason = idUploadPinReason(task, allTasks);
+  const pinned = !!pinReason;
   const pills = (
     <>
       {task.requiresSubscription && <SubscriptionMark />}
-      {/* Restriction switched on but no prerequisite picked yet — the gate has
-          nothing to name, so flag the half-configured state instead. */}
-      {restricted && prereqs.length === 0 && (
-        <span className="co-status-pill co-status-pill--accent cert-restricted-pill">Restricted</span>
-      )}
     </>
   );
 
@@ -3282,11 +3507,29 @@ function TaskRow({
                   <span className={`menu-item-icon ${restricted ? "is-on" : ""}`}><AccessRestrictionIcon /></span>
                   {restricted ? "Edit Access Restriction" : "Add Access Restriction"}
                 </button>
-                <button className="menu-item" onClick={() => { onRemove(); close(); toast("Task Removed"); }}>
-                  <span className="menu-item-icon"><RemoveCircleIcon /></span>
-                  Remove Task
-                </button>
-                {sharedWith.length > 0 ? (
+                {pinned ? (
+                  <button className="menu-item" disabled>
+                    <span className="menu-item-icon"><RemoveCircleIcon /></span>
+                    <span className="menu-item-stack">
+                      Remove Task
+                      <span className="menu-item-sub">{pinReason}</span>
+                    </span>
+                  </button>
+                ) : (
+                  <button className="menu-item" onClick={() => { onRemove(); close(); toast("Task Removed"); }}>
+                    <span className="menu-item-icon"><RemoveCircleIcon /></span>
+                    Remove Task
+                  </button>
+                )}
+                {pinned ? (
+                  <button className="menu-item" disabled>
+                    <span className="menu-item-icon"><MenuDeleteIcon /></span>
+                    <span className="menu-item-stack">
+                      Delete Task
+                      <span className="menu-item-sub">{pinReason}</span>
+                    </span>
+                  </button>
+                ) : sharedWith.length > 0 ? (
                   <button className="menu-item" disabled>
                     <span className="menu-item-icon"><MenuDeleteIcon /></span>
                     <span className="menu-item-stack">
@@ -3389,17 +3632,38 @@ function AccessRestrictionModal({
   onSave: (restriction: AccessRestriction | undefined) => void;
 }) {
   const t = useDsText();
-  const existing = task.restriction?.enabled ? task.restriction : undefined;
+  // A restriction whose Tasks have all left the tree opens as a new one.
+  const existing =
+    task.restriction?.enabled && task.restriction.taskIds.some((id) => allTasks.some((t) => t.id === id))
+      ? task.restriction
+      : undefined;
   /* The Certification's own Tasks. The library's ID Upload Task is one of
      them only once it has been added to this Certification's tree; until then
      it is listed greyed out with a pill saying so, and can't be picked. */
-  const options: { id: string; name: string }[] = allTasks.filter((t) => t.id !== task.id);
+  /* A Certification can hold several ID Upload Tasks (one before each
+     proctored Quiz), all named alike, so the list offers ONE: the one this
+     restriction already names, else the nearest one above this Task in tree
+     order, else the first. */
+  const idUploads = allTasks.filter(isIdUploadCertTask);
+  const selfAt = allTasks.findIndex((t) => t.id === task.id);
+  const idPick =
+    idUploads.find((t) => task.restriction?.taskIds.includes(t.id)) ??
+    [...idUploads].reverse().find((t) => allTasks.indexOf(t) < selfAt) ??
+    idUploads[0];
+  const options: { id: string; name: string }[] = allTasks.filter(
+    (t) => t.id !== task.id && (!isIdUploadCertTask(t) || t.id === idPick?.id),
+  );
   const idUpload = getTasks().find((t) => isIdUpload(t) && !t.hidden);
   const idUploadMissing = !!idUpload && !allTasks.some((t) => t.name === idUpload.name);
   const [ids, setIds] = useState<string[]>(
     (existing?.taskIds ?? []).filter((id) => options.some((o) => o.id === id)),
   );
-  const [mode, setMode] = useState<AccessRestriction["mode"]>(existing?.mode ?? "all");
+  /* A proctored Quiz is always gated behind the ID Upload Task in its tree:
+     that pick is pinned (no ×, can't be unticked), the restriction itself
+     can't be removed, and Unlocks When stays on All — with Any One, finishing
+     another Task would skip the ID. */
+  const pinnedId = isProctoredQuiz(task) && idPick?.id !== task.id ? idPick : undefined;
+  const [mode, setMode] = useState<AccessRestriction["mode"]>(pinnedId ? "all" : existing?.mode ?? "all");
 
   // PrmModal has no key handling of its own, so the owner closes on Escape.
   useEffect(() => {
@@ -3418,6 +3682,10 @@ function AccessRestrictionModal({
     ? [idUpload.name, ...otherNames]
     : otherNames;
   const picked = ids.map((id) => options.find((o) => o.id === id)?.name).filter((n): n is string => !!n);
+  // One Task (or none yet) leaves nothing for Unlocks When to decide, and a
+  // proctored Quiz is held on All.
+  const single = ids.length <= 1;
+  const modeLocked = single || !!pinnedId;
   // Editing with nothing changed has nothing to save (the Save Changes gate).
   const initialIds = (existing?.taskIds ?? []).filter((id) => options.some((o) => o.id === id));
   const unchanged =
@@ -3441,7 +3709,7 @@ function AccessRestrictionModal({
       confirmDisabled={ids.length === 0 || unchanged}
       confirmTip={ids.length > 0 && unchanged ? NO_CHANGES_TIP : undefined}
       footerExtra={
-        existing ? (
+        existing && !pinnedId ? (
           <button className="prm-quiet" onClick={() => onSave(undefined)}>
             Remove Restriction
           </button>
@@ -3467,22 +3735,44 @@ function AccessRestrictionModal({
                   }
                 : undefined
             }
+            fixed={
+              pinnedId
+                ? { [pinnedId.name]: "Required: this Quiz is proctored, so learners upload their ID first." }
+                : undefined
+            }
             placeholder={t("Select Tasks")}
             searchPlaceholder={t("Search Tasks...")}
             popupMenu
             defaultOpen
           />
+          {/* Whenever the ID Upload Task is picked, say when it counts: the
+              learner moves on once the ID is In Review — no wait for approval. */}
+          {pinnedId ? (
+            <p className="form-help">
+              {t(`This Quiz is proctored, so learners must upload their ID before starting it. ${pinnedId.name} is required and can't be removed. It counts once the ID is In Review or Completed.`)}
+            </p>
+          ) : (
+            idUpload &&
+            picked.includes(idUpload.name) && (
+              <p className="form-help">
+                {t(`${idUpload.name} counts once the learner's ID is In Review or Completed.`)}
+              </p>
+            )
+          )}
         </div>
         {/* Both answers are real choices, so the chosen one takes the
             Single-Select's accent state (639:895) — the neutral fill is the
             modal card's own 20% wash and would vanish into it. */}
         <div className="prm-field">
           <label className="prm-label">{t("Unlocks When")}</label>
-          <div className="seg-control">
+          {/* With one Task, All and Any One mean the same thing — the
+              choice only opens up from the second Task. */}
+          <div className={`seg-control${modeLocked ? " is-disabled" : ""}`} aria-disabled={modeLocked || undefined}>
             <button
               type="button"
               className={`seg-btn${mode === "all" ? " active accent" : ""}`}
               aria-pressed={mode === "all"}
+              disabled={modeLocked}
               onClick={() => setMode("all")}
             >
               {t("All Tasks are Completed")}
@@ -3491,11 +3781,17 @@ function AccessRestrictionModal({
               type="button"
               className={`seg-btn${mode === "any" ? " active accent" : ""}`}
               aria-pressed={mode === "any"}
+              disabled={modeLocked}
               onClick={() => setMode("any")}
             >
               {t("Any One Task is Completed")}
             </button>
           </div>
+          {pinnedId ? (
+            <p className="form-help">{t("A proctored Quiz needs every Task above, so ID Upload can't be skipped.")}</p>
+          ) : (
+            single && <p className="form-help">{t("Add a second Task to choose between All and Any One.")}</p>
+          )}
         </div>
       </div>
     </PrmModal>
@@ -4337,9 +4633,6 @@ function TaskSummaryRow({
     <div className="rot-name-row">
       <span className="rot-task-name">{task.name}</span>
       {task.requiresSubscription && <SubscriptionMark />}
-      {task.restriction?.enabled && prereqs.length === 0 && (
-        <span className="co-status-pill co-status-pill--accent cert-restricted-pill">Restricted</span>
-      )}
     </div>
   );
   return (

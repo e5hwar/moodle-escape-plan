@@ -2532,6 +2532,11 @@ html[data-ds="skillcat"] .drp-preset--custom::after {
   height: 16px;
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%23a8a8a8' stroke-width='1.33' stroke-linecap='square'%3E%3Cpath d='M6 3l5 5-5 5'/%3E%3C/svg%3E") center no-repeat;
 }
+/* A custom range applied: "Custom Range" reads as the active item (bold)
+   but keeps its chevron — it still opens the calendar, not applies. */
+html[data-ds="skillcat"] .drp-presets--menu .drp-preset--custom.is-active::after {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%23a8a8a8' stroke-width='1.33' stroke-linecap='square'%3E%3Cpath d='M6 3l5 5-5 5'/%3E%3C/svg%3E");
+}
 /* The Users banner (name changes) is the same static DS Banner here — the
    card-into-note morph is off with the rest of the collapse. */
 html[data-ds="skillcat"] .tasks.clh .clh-head > .clh-banner {

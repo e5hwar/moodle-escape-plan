@@ -3166,8 +3166,14 @@ export function MultiSelect({
   hasError = false,
   onLeave,
   locked,
+  fixed,
   disabled = false,
 }: {
+  /** Options that are always picked and can't be taken out, keyed by label →
+   *  the reason (the row's tooltip). Their chip has no ×, and their menu row
+   *  stays ticked and ignores clicks — the Access Restriction's ID Upload Task
+   *  on a proctored Quiz. */
+  fixed?: Record<string, string>;
   /** Inside a Locked Field: the trigger is a div, so the fieldset's `disabled`
    *  can't reach it — the menu stays shut and the field stays drawn as it is.
    *  (The chips' × are buttons; the fieldset already disables those.) */
@@ -3217,6 +3223,7 @@ export function MultiSelect({
   }, [options, query]);
 
   function toggle(opt: string) {
+    if (fixed?.[opt]) return;
     onChange(value.includes(opt) ? value.filter((v) => v !== opt) : [...value, opt]);
   }
 
@@ -3243,7 +3250,7 @@ export function MultiSelect({
                 tags={value.map((v) => ({
                   key: v,
                   label: v,
-                  onRemove: () => onChange(value.filter((x) => x !== v)),
+                  onRemove: fixed?.[v] ? undefined : () => onChange(value.filter((x) => x !== v)),
                 }))}
               />
             )}
@@ -3256,6 +3263,7 @@ export function MultiSelect({
             options={filtered}
             value={value}
             locked={locked}
+            fixed={fixed}
             toggle={toggle}
             searchPlaceholder={searchPlaceholder}
             query={query}
@@ -3271,10 +3279,11 @@ export function MultiSelect({
    `autoFocus`: the overlay Dropdown's first paint is the hidden one it measures,
    and focusing a hidden element does nothing. */
 function MultiSelectMenu({
-  options, value, locked, toggle, searchPlaceholder, query, setQuery,
+  options, value, locked, fixed, toggle, searchPlaceholder, query, setQuery,
 }: {
   options: string[]; value: string[]; toggle: (opt: string) => void;
   locked?: Record<string, { detail: string; tip?: string }>;
+  fixed?: Record<string, string>;
   searchPlaceholder?: string; query: string; setQuery: (v: string) => void;
 }) {
   const searchRef = useRef<HTMLInputElement | null>(null);
@@ -3310,6 +3319,16 @@ function MultiSelectMenu({
                 <span className="ms-menu-check-slot" />
                 <span className="dropdown-item-name">{opt}</span>
                 <span className="dropdown-item-detail">{lock.detail}</span>
+              </div>
+            );
+          }
+          const pin = fixed?.[opt];
+          if (pin) {
+            // Always ticked, never untickable — the row reads as picked.
+            return (
+              <div key={opt} className="dropdown-item is-current ms-menu-item--fixed" data-tip={pin}>
+                <span className="checkbox checked"><CheckIcon /></span>
+                <span className="ms-menu-label">{opt}</span>
               </div>
             );
           }

@@ -149,7 +149,7 @@ const T = (
 export const tasks: Task[] = [
   /* The ID Upload Task: learners upload a government ID here before the exams
      it gates (see ACCESS_CHAINS). Seeded, never edited. */
-  T("T-0234", "Government ID Upload", "ID Upload",
+  T("T-0234", "ID Upload", "ID Upload",
     ["EPA 608 Type I", "EPA 608 Type II", "EPA 608 Type III", "EPA 608 Universal", "NATE RTW", "EPA 609"],
     "SkillCat", [], "Sep 11, 2023", "Mar 30, 2026", { requiresSubscription: false }),
   T("T-2104", "Tool Inventory Photo", "Hands-On Task", [], "SkillCat", [], "Apr 25, 2026", "Apr 25, 2026", { hidden: true }),
@@ -379,7 +379,7 @@ for (const t of tasks) {
    the gate strands the exams behind it, and hiding a gated exam breaks the
    chain's promise — until the Task is taken out of the chain. */
 export type AccessChain = { gateId: string; gatedIds: string[] };
-/** The seeded Government ID Upload Task. */
+/** The seeded ID Upload Task. */
 export const ID_UPLOAD_TASK_ID = "T-0234";
 
 /** The reason an Access Restriction Task can't be hidden or deleted — shown

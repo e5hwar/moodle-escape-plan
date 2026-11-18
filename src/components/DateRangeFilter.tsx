@@ -361,9 +361,12 @@ export function DateRangePanel({
   /* SkillCat DS (Eshwar's comment on Eric's "Companies, date range" screen):
      the menu opens on the shortcuts, which apply on pick; the two-month
      calendar only appears after "Custom range", the way the B2B Dashboard
-     does it. The Play Area keeps the rail-plus-calendar panel. */
+     does it. The Play Area keeps the rail-plus-calendar panel. The menu
+     ALWAYS opens on the shortcuts, even when a custom range is applied —
+     "Custom Range" is the only way in, and the calendar it opens starts on
+     the applied range (spec review, 2026-11-18). */
   const presetsFirst = useDesignSystem() === "skillcat";
-  const [custom, setCustom] = useState(() => presetsFirst && !applied.preset && !!applied.start);
+  const [custom, setCustom] = useState(false);
   if (presetsFirst && !custom) {
     return (
       <div className="drp" onClick={() => setMyMenu(null)}>
@@ -382,7 +385,10 @@ export function DateRangePanel({
                   {t(p.label)}
                 </button>
               ))}
-              <button className="drp-preset drp-preset--custom" onClick={() => setCustom(true)}>
+              <button
+                className={`drp-preset drp-preset--custom${!applied.preset && applied.start ? " is-active" : ""}`}
+                onClick={() => setCustom(true)}
+              >
                 Custom Range
               </button>
             </div>

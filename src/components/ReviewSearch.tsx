@@ -375,7 +375,7 @@ export function ReviewSearch({
                     />
                   );
                 }
-                const row = suggestionRow(opt, { allTasks, allCerts, allCompanies });
+                const row = suggestionRow(opt);
                 if (!row) return null;
                 return (
                   <OptionRow
@@ -386,7 +386,7 @@ export function ReviewSearch({
                   >
                     <span className="usearch-chip">{row.chip}</span>
                     <span className="usearch-row-ex">{row.example}</span>
-                    <span className="usearch-row-desc">{row.desc}</span>
+                    {row.desc && <span className="usearch-row-desc">{row.desc}</span>}
                   </OptionRow>
                 );
               })}
@@ -449,15 +449,12 @@ export function ReviewSearch({
   );
 }
 
-type NameCounts = { names: string[]; counts: Map<string, number> };
-
 /** Chip / example / description for one "Suggested filters" row — the static
- * prefix hints when the box is empty, a real scope value once it isn't. */
+ * prefix hints when the box is empty, a real scope value once it isn't —
+ * values only, no counts (spec review, 2026-11-18). */
 function suggestionRow(
   opt: Opt,
-  all: { allTasks: NameCounts; allCerts: NameCounts; allCompanies: NameCounts },
-): { key: string; chip: string; example: string; desc: string } | null {
-  const count = (c: NameCounts, name: string) => `${c.counts.get(name) ?? 0} submissions`;
+): { key: string; chip: string; example: string; desc?: string } | null {
   switch (opt.kind) {
     case "task-filter":
       return { key: "task-filter", chip: "Task:", example: "Task: HVAC Install", desc: "Filter by Task" };
@@ -471,11 +468,11 @@ function suggestionRow(
     case "company-filter":
       return { key: "company-filter", chip: "Company:", example: "Company: Acme Inc.", desc: "Filter by User's Company" };
     case "task":
-      return { key: `task:${opt.name}`, chip: "Task:", example: opt.name, desc: count(all.allTasks, opt.name) };
+      return { key: `task:${opt.name}`, chip: "Task:", example: opt.name, };
     case "certification":
-      return { key: `cert:${opt.name}`, chip: "Certification:", example: opt.name, desc: count(all.allCerts, opt.name) };
+      return { key: `cert:${opt.name}`, chip: "Certification:", example: opt.name, };
     case "company":
-      return { key: `company:${opt.name}`, chip: "Company:", example: opt.name, desc: count(all.allCompanies, opt.name) };
+      return { key: `company:${opt.name}`, chip: "Company:", example: opt.name, };
     default:
       return null;
   }

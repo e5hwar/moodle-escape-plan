@@ -244,7 +244,7 @@ export function ManageIdsSearch({
                     />
                   );
                 }
-                const row = suggestionRow(opt, allStatuses);
+                const row = suggestionRow(opt);
                 if (!row) return null;
                 return (
                   <OptionRow
@@ -255,7 +255,7 @@ export function ManageIdsSearch({
                   >
                     <span className="usearch-chip">{row.chip}</span>
                     <span className="usearch-row-ex">{row.example}</span>
-                    <span className="usearch-row-desc">{row.desc}</span>
+                    {row.desc && <span className="usearch-row-desc">{row.desc}</span>}
                   </OptionRow>
                 );
               })}
@@ -299,18 +299,11 @@ export const STATUS_LABEL: Record<IdRecord["status"], string> = {
   "not-started": "Not Started",
 };
 
-type NameCounts = { names: string[]; counts: Map<string, number> };
-
-/** "1 user" / "4 users" — used by both the scope lists and the suggestions. */
-function userCount(n = 0): string {
-  return `${n} user${n === 1 ? "" : "s"}`;
-}
-
-/** Chip / example / description for one "Suggested filters" row. */
+/** Chip / example / description for one "Suggested filters" row — values
+ *  only, no counts (spec review, 2026-11-18). */
 function suggestionRow(
   opt: Opt,
-  allStatuses: NameCounts,
-): { key: string; chip: string; example: string; desc: string } | null {
+): { key: string; chip: string; example: string; desc?: string } | null {
   switch (opt.kind) {
     case "status-filter":
       return {
@@ -324,7 +317,6 @@ function suggestionRow(
         key: `status:${opt.name}`,
         chip: "Status:",
         example: opt.name,
-        desc: userCount(allStatuses.counts.get(opt.name)),
       };
     default:
       return null;
