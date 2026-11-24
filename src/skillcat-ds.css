@@ -3634,16 +3634,16 @@ html[data-ds="skillcat"] .stm-table .checkbox.checked:disabled {
   border-width: 0.5px;
 }
 /* Switch: hover / pressed / focus / disabled. */
-html[data-ds="skillcat"] .toggle:hover:not(:disabled):not(.on) {
+html[data-ds="skillcat"] .toggle:hover:not(:disabled):not(.is-disabled):not(.on) {
   background: linear-gradient(rgba(122, 122, 122, 0.3), rgba(122, 122, 122, 0.3)), #404040;
 }
-html[data-ds="skillcat"] .toggle:active:not(:disabled):not(.on) {
+html[data-ds="skillcat"] .toggle:active:not(:disabled):not(.is-disabled):not(.on) {
   background: linear-gradient(rgba(122, 122, 122, 0.2), rgba(122, 122, 122, 0.2)), #404040;
 }
-html[data-ds="skillcat"] .toggle.on:hover:not(:disabled) {
+html[data-ds="skillcat"] .toggle.on:hover:not(:disabled):not(.is-disabled) {
   background: var(--sc-primary-hover);
 }
-html[data-ds="skillcat"] .toggle.on:active:not(:disabled) {
+html[data-ds="skillcat"] .toggle.on:active:not(:disabled):not(.is-disabled) {
   background: var(--sc-primary-pressed);
 }
 html[data-ds="skillcat"] .toggle:focus-visible {
@@ -3651,10 +3651,12 @@ html[data-ds="skillcat"] .toggle:focus-visible {
   outline-offset: 2px;
 }
 html[data-ds="skillcat"] .toggle:disabled,
-html[data-ds="skillcat"] .toggle.on:disabled {
+html[data-ds="skillcat"] .toggle.on:disabled,
+html[data-ds="skillcat"] .toggle.is-disabled {
   background: var(--sc-surface-control);
 }
-html[data-ds="skillcat"] .toggle:disabled .toggle-knob {
+html[data-ds="skillcat"] .toggle:disabled .toggle-knob,
+html[data-ds="skillcat"] .toggle.is-disabled .toggle-knob {
   background: var(--sc-text-disabled);
 }
 /* Choice / Description: radio hover; disabled radio + #404040 title. */

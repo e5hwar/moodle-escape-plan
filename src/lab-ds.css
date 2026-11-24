@@ -1633,6 +1633,7 @@ html[data-ds="lab"] .toggle.on .toggle-knob {
   background: var(--lab-bg);
 }
 html[data-ds="lab"] .toggle:disabled,
+html[data-ds="lab"] .toggle.is-disabled,
 html[data-ds="lab"] .toggle-row.disabled .toggle,
 html[data-ds="lab"] .qsec-row.is-disabled .toggle {
   background: var(--lab-rule);
@@ -1886,7 +1887,8 @@ html[data-ds="lab"] .prm-check-label {
 /* A switch that can't be flipped yet (Add New Version's Update Required
    before the version is available there): the knob drops to the fifth ink (a
    glyph grey) on the rule-grey track. */
-html[data-ds="lab"] .toggle:disabled .toggle-knob {
+html[data-ds="lab"] .toggle:disabled .toggle-knob,
+html[data-ds="lab"] .toggle.is-disabled .toggle-knob {
   background: var(--lab-ink-5);
 }
 html[data-ds="lab"] .prm-stack {

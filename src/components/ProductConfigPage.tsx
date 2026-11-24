@@ -19,7 +19,7 @@ import { richTextContent } from "../richText";
 import { AddIcon, CheckBoldIcon, PlusThinIcon, RowCloseIcon, RowEditIcon, RowExternalLinkIcon, InfoIcon12 } from "./icons";
 import { NO_CHANGES_TIP, PrmModal } from "./PrmModal";
 import { ChangesFooter, ChangesReviewList, type StagedChange } from "./ChangesFooter";
-import { ImageUploadField, type PickedImage } from "./ImageUploadField";
+import type { PickedImage } from "./ImageUploadField";
 import { RichDocField } from "./RichDocField";
 import { Stepper } from "./Stepper";
 import { PermissionsSection } from "./PermissionsPage";
@@ -29,9 +29,9 @@ import { MultiSelect } from "./NewCompanyWizard";
 import { useCreateShortcut } from "../hooks/useCreateShortcut";
 import { useLeaveGuard } from "./LeaveGuard";
 import { useToast } from "./useToast";
-import { CharCount, LimitError } from "./CharCount";
+import { LimitError } from "./CharCount";
 import { LimitedInput } from "./LimitedInput";
-import { NAME_MAX, isOver, limitClass, limitLabel } from "../data/fieldLimits";
+import { NAME_MAX, isOver } from "../data/fieldLimits";
 
 /* Product Config — platform-wide settings, one tab per area.
 
@@ -44,7 +44,7 @@ import { NAME_MAX, isOver, limitClass, limitLabel } from "../data/fieldLimits";
      header row, a row per entry and an orange "+ Add" row closing the card —
      in its PROPORTIONAL variant (`.ct-prop`): the columns grow together;
    - numbers are the `Stepper` (618:1264), Price IDs the paywall matrix
-     (752:2816), bilingual copy `LangField`, the legal documents `RichDocField`;
+     (752:2816), the legal documents `RichDocField`;
    - forcing and removing an app version confirm through `PrmModal` (483:588);
    - nothing is saved until the Content Links save footer's Save Changes
      (561:2236), which only appears once something has changed.
@@ -73,11 +73,11 @@ type TabRow = {
   nameEs: string;
   visible: boolean;
   url: string;
-  /** The tab's icon — the shared single-image upload's pick. */
+  /** The tab's icon — fixed, shown in the app but not edited here. */
   icon: PickedImage | null;
+  /** The page can't be hidden — its VISIBLE? switch stays on, locked. */
+  alwaysVisible?: boolean;
 };
-
-type SupportLink = { id: string; label: string; url: string };
 
 type Cycle = "Monthly" | "Annual";
 const CYCLES: Cycle[] = ["Monthly", "Annual"];
@@ -175,7 +175,6 @@ export type ProductSettings = {
   initialTaskCount: string;
   appTabs: TabRow[];
   dashboardTabs: TabRow[];
-  supportLinks: SupportLink[];
   b2cTrialDays: string;
   b2cEpaCard: string;
   b2bPrices: PriceTable<Tier>;
@@ -215,17 +214,12 @@ export const DEFAULT_PRODUCT_SETTINGS: Settings = {
     tabRow("app-resources", "Resources", "Recursos", "https://skillcat.app/resources"),
   ],
   dashboardTabs: [
+    { ...tabRow("dash-support", "Support", "Soporte", "https://dashboard.skillcat.app"), alwaysVisible: true },
     tabRow("dash-assessments", "Assessments", "Evaluaciones", "https://dashboard.skillcat.app/assessments"),
     tabRow("dash-troubleshooting", "Troubleshooting", "Solución de Problemas", "https://dashboard.skillcat.app/troubleshooting"),
     tabRow("dash-manuals", "Manuals", "Manuales", "https://dashboard.skillcat.app/manuals"),
     tabRow("dash-error-codes", "Error Codes", "Códigos de Error", "https://dashboard.skillcat.app/error-codes"),
     tabRow("dash-analytics", "Analytics", "Analíticas", "https://dashboard.skillcat.app/analytics"),
-  ],
-  supportLinks: [
-    { id: "sup-b2b-dashboard", label: "B2B Dashboard", url: "https://dashboard.skillcat.app" },
-    { id: "sup-guides", label: "Guides", url: "https://skillcat.app/guides" },
-    { id: "sup-message", label: "Send Us A Message", url: "https://skillcat.app/contact" },
-    { id: "sup-news", label: "News", url: "https://skillcat.app/news" },
   ],
   b2cTrialDays: "3",
   b2cEpaCard: "prod_QEpaApp7Lx2Nc9RvTb",
@@ -302,68 +296,9 @@ const PLATFORM_COLS = { platform: cw(120), available: cw(100), required: cw(150)
 const WN_COLS = { link: cw(360), versions: cw(200) };
 const DL_COLS = { dest: cw(160), link: cw(280), login: cw(120) };
 const TAB_COLS = { name: cw(160), url: cw(360), visible: cw(64) };
-const SUP_COLS = { page: cw(160), url: cw(400) };
 const OPTION_COLS = { name: cw(240) };
 
 /* ─── Shared field parts ─── */
-
-/* Dual-language text input (Figma 49:348) — the same local LangField every
-   wizard carries: one bordered box, EN over ES, split by a hairline. */
-function LangField({
-  en,
-  es,
-  onChangeEn,
-  onChangeEs,
-  placeholderEn,
-  placeholderEs,
-  ariaLabel,
-  maxLength,
-}: {
-  en: string;
-  es: string;
-  onChangeEn: (v: string) => void;
-  onChangeEs: (v: string) => void;
-  placeholderEn?: string;
-  placeholderEs?: string;
-  /** Names both inputs when the field's label isn't adjacent (a table cell). */
-  ariaLabel?: string;
-  /** A SOFT limit per language: each row shows the characters left and the
-   *  shell flags amber past the suggested length, red past the limit — the
-   *  caller's label row names the tier (`LimitError`) and Save Changes
-   *  blocks on the red one. */
-  maxLength?: number;
-}) {
-  const flag = maxLength !== undefined ? limitClass(maxLength, en, es) : "";
-  const over = flag === "has-error";
-  return (
-    <div className={`lang-field ${flag}`}>
-      <div className="lang-field-row">
-        <span className="lang-tag">EN</span>
-        <input
-          className="lang-field-input"
-          value={en}
-          onChange={(e) => onChangeEn(e.target.value)}
-          placeholder={placeholderEn}
-          aria-label={ariaLabel ? `${ariaLabel} (English)` : undefined}
-          aria-invalid={over || undefined}
-        />
-        {maxLength !== undefined && <CharCount value={en} max={maxLength} />}
-      </div>
-      <div className="lang-field-divider" />
-      <div className="lang-field-row">
-        <span className="lang-tag">ES</span>
-        <input
-          className="lang-field-input"
-          value={es}
-          onChange={(e) => onChangeEs(e.target.value)}
-          placeholder={placeholderEs}
-          aria-label={ariaLabel ? `${ariaLabel} (Spanish)` : undefined}
-        />
-        {maxLength !== undefined && <CharCount value={es} max={maxLength} />}
-      </div>
-    </div>
-  );
-}
 
 /* A URL, on the Spotlight Button Destination's shell (Figma 699:1071 without
    its host prefix): the address and a "Test It Out" link that opens it in a
@@ -897,21 +832,29 @@ function Switch({
   label,
   on,
   disabled,
+  tip,
   onToggle,
 }: {
   label: string;
   on: boolean;
   disabled?: boolean;
+  /** Why it's disabled. A disabled switch with a tip stays hoverable and
+   *  focusable (`aria-disabled` + `.is-disabled`, the CTAs' pattern) so the
+   *  tip can show. */
+  tip?: string;
   onToggle: () => void;
 }) {
+  const soft = disabled && !!tip;
   return (
     <button
       type="button"
-      className={`toggle${on ? " on" : ""}`}
+      className={`toggle${on ? " on" : ""}${soft ? " is-disabled" : ""}`}
       role="switch"
       aria-checked={on}
       aria-label={label}
-      disabled={disabled}
+      disabled={disabled && !soft}
+      aria-disabled={soft || undefined}
+      data-tip={soft ? tip : undefined}
       onClick={() => !disabled && onToggle()}
     >
       <span className="toggle-knob" />
@@ -1294,21 +1237,27 @@ function DeepLinksField({ links }: { links: SystemDeepLink[] }) {
 
 /* ─── Display Settings ─── */
 
-/* App / Dashboard tabs — the page's OptionListField pattern (user,
+/* App Tabs / Dashboard Pages — the page's OptionListField pattern (user,
    2026-10-06: "This table should just show the name and URL, not as an input
    field. Edit icon opens the editor"): plain `.qsec` rows — the EN name, the
    URL ("—" when blank) and the visibility switch — with an edit pencil. The
-   tabs are a fixed set, so there is no remove ✕ and no Add row. The pencil
-   opens TabEditModal, where the name, URL and icon are edited; it writes back
-   to the page draft, so Save Changes saves it like every other setting. */
+   set is fixed, so there is no remove ✕ and no Add row, and (user,
+   2026-11-24) the names and icons are fixed too: the pencil opens
+   TabEditModal for the URL alone. A row marked `alwaysVisible` (Dashboard
+   Pages' Support, ex-Support Pages) keeps its switch on and locked,
+   with a hover tip saying why. Edits write back to the page draft, so Save
+   Changes saves them like every other setting. */
 function TabsField({
   label,
   help,
+  noun,
   rows,
   onUpdate,
 }: {
   label: string;
   help: string;
+  /** "Tab" / "Page" — the name column's header and the editor's title. */
+  noun: string;
   rows: TabRow[];
   onUpdate: (fn: (rows: TabRow[]) => TabRow[]) => void;
 }) {
@@ -1322,50 +1271,46 @@ function TabsField({
       <label className="form-label">{t(label)}</label>
       <div className="qsec ct-prop">
         <div className="qsec-hd">
-          <span className="ct-col" style={TAB_COLS.name}>TAB NAME</span>
+          <span className="ct-col" style={TAB_COLS.name}>{noun.toUpperCase()} NAME</span>
           <span className="ct-col" style={TAB_COLS.url}>URL</span>
           <span className="ct-col pc-col-toggle" style={TAB_COLS.visible}>VISIBLE?</span>
           <span className="pc-col-edit" aria-hidden />
         </div>
-        {rows.map((row) => {
-          const name = row.nameEn.trim() || "this tab";
-          return (
-            <div className="qsec-row" key={row.id}>
-              <span className="ct-col pc-strong" style={TAB_COLS.name}>{row.nameEn}</span>
-              <span className="ct-col pc-muted" style={TAB_COLS.url}>{row.url.trim() || "—"}</span>
-              <span className="ct-col pc-col-toggle" style={TAB_COLS.visible}>
-                <button
-                  type="button"
-                  className={`toggle${row.visible ? " on" : ""}`}
-                  aria-pressed={row.visible}
-                  aria-label={`Show ${name}`}
-                  onClick={() => setRow(row.id, { visible: !row.visible })}
-                >
-                  <span className="toggle-knob" />
-                </button>
-              </span>
-              <span className="pc-col-edit">
-                <button
-                  className="qsec-x"
-                  title="Edit"
-                  aria-label={`Edit ${name}`}
-                  onClick={() => setEditing(row)}
-                >
-                  <RowEditIcon />
-                </button>
-              </span>
-            </div>
-          );
-        })}
+        {rows.map((row) => (
+          <div className="qsec-row" key={row.id}>
+            <span className="ct-col pc-strong" style={TAB_COLS.name}>{row.nameEn}</span>
+            <span className="ct-col pc-muted" style={TAB_COLS.url}>{row.url.trim() || "—"}</span>
+            <span className="ct-col pc-col-toggle" style={TAB_COLS.visible}>
+              <Switch
+                label={`Show ${row.nameEn}`}
+                on={row.alwaysVisible || row.visible}
+                disabled={row.alwaysVisible}
+                tip={row.alwaysVisible ? `The ${row.nameEn} ${noun.toLowerCase()} can't be hidden.` : undefined}
+                onToggle={() => setRow(row.id, { visible: !row.visible })}
+              />
+            </span>
+            <span className="pc-col-edit">
+              <button
+                className="qsec-x"
+                title="Edit"
+                aria-label={`Edit ${row.nameEn}`}
+                onClick={() => setEditing(row)}
+              >
+                <RowEditIcon />
+              </button>
+            </span>
+          </div>
+        ))}
       </div>
       <p className="form-help">{t(help)}</p>
 
       {editing && (
         <TabEditModal
           row={editing}
+          noun={noun}
           onCancel={() => setEditing(null)}
-          onSave={(patch) => {
-            setRow(editing.id, patch);
+          onSave={(url) => {
+            setRow(editing.id, { url });
             setEditing(null);
           }}
         />
@@ -1374,61 +1319,39 @@ function TabsField({
   );
 }
 
-/* Edit one tab — the shared modal shell (Figma 667:884), OptionNameModal's
-   shape: Tab Name (dual-language, required, the 128 soft limit named in its
-   label row), URL, and the Icon on the shared single-image upload (678:2012 /
-   1529:3890). */
+/* Edit one tab or page — the shared drawer (Figma 667:884). The name and icon
+   are fixed (user, 2026-11-24), so it holds the URL alone and the title names
+   the row. */
 function TabEditModal({
   row,
+  noun,
   onCancel,
   onSave,
 }: {
   row: TabRow;
+  noun: string;
   onCancel: () => void;
-  onSave: (patch: Pick<TabRow, "nameEn" | "nameEs" | "url" | "icon">) => void;
+  onSave: (url: string) => void;
 }) {
   const t = useDsText();
-  const [nameEn, setNameEn] = useState(row.nameEn);
-  const [nameEs, setNameEs] = useState(row.nameEs);
   const [url, setUrl] = useState(row.url);
-  const [icon, setIcon] = useState<PickedImage | null>(row.icon);
-  // Every field but the Spanish name is required, and Save Tab waits for an
-  // actual change (the app's Save Changes gate).
-  const unchanged =
-    nameEn.trim() === row.nameEn && nameEs.trim() === row.nameEs && url.trim() === row.url && icon === row.icon;
-  const isValid =
-    !!nameEn.trim() && !!url.trim() && !!icon && !isOver(NAME_MAX, nameEn, nameEs) && !unchanged;
+  // Required, and Save waits for an actual change (the app's Save Changes gate).
+  const unchanged = url.trim() === row.url;
+  const isValid = !!url.trim() && !unchanged;
 
   useEscape(onCancel);
 
   return (
     <PrmModal
       drawer
-      title={t("Edit Tab")}
-      confirmLabel={t("Save Tab")}
+      title={`${t("Edit")} ${row.nameEn} ${t(noun)}`}
+      confirmLabel={`${t("Save")} ${t(noun)}`}
       confirmDisabled={!isValid}
       confirmTip={unchanged ? NO_CHANGES_TIP : undefined}
       onCancel={onCancel}
-      onConfirm={() =>
-        isValid && onSave({ nameEn: nameEn.trim(), nameEs: nameEs.trim(), url: url.trim(), icon })
-      }
+      onConfirm={() => isValid && onSave(url.trim())}
     >
       <div className="prm-stack">
-        <div className="prm-field">
-          <span className="prm-label">
-            Tab Name<span className="prm-req">*</span>
-            <LimitError max={NAME_MAX} values={[nameEn, nameEs]} />
-          </span>
-          <LangField
-            en={nameEn}
-            es={nameEs}
-            onChangeEn={setNameEn}
-            onChangeEs={setNameEs}
-            placeholderEn={t("Tab Name...")}
-            placeholderEs={t("Nombre de la Pesta\u00f1a...")}
-            maxLength={NAME_MAX}
-          />
-        </div>
         <div className="prm-field">
           <span className="prm-label">
             URL<span className="prm-req">*</span>
@@ -1436,57 +1359,8 @@ function TabEditModal({
           </span>
           <UrlField value={url} onChange={setUrl} ariaLabel="URL" />
         </div>
-        <div className="prm-field">
-          <span className="prm-label">
-            Icon<span className="prm-req">*</span>
-            {!icon && <span className="form-label-error">{EMPTY_ERROR}</span>}
-          </span>
-          <ImageUploadField value={icon} onChange={setIcon} />
-        </div>
       </div>
     </PrmModal>
-  );
-}
-
-function SupportPagesField({
-  links,
-  onChange,
-}: {
-  links: SupportLink[];
-  onChange: (links: SupportLink[]) => void;
-}) {
-  const t = useDsText();
-  return (
-    <div className="form-group">
-      <label className="form-label">
-        {t("Support Pages")}
-        <span className="req">*</span>
-        {links.some((l) => !l.url.trim()) && (
-          <span className="form-label-error">{EMPTY_ERROR}</span>
-        )}
-      </label>
-      <div className="qsec ct-prop">
-        <div className="qsec-hd">
-          <span className="ct-col" style={SUP_COLS.page}>PAGE</span>
-          <span className="ct-col" style={SUP_COLS.url}>URL</span>
-        </div>
-        {links.map((link) => (
-          <div className="qsec-row" key={link.id}>
-            <span className="ct-col pc-strong" style={SUP_COLS.page}>{t(link.label)}</span>
-            <div className="ct-col" style={SUP_COLS.url}>
-              <UrlField
-                value={link.url}
-                onChange={(url) =>
-                  onChange(links.map((x) => (x.id === link.id ? { ...x, url } : x)))
-                }
-                ariaLabel={`URL for ${link.label}`}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-      <p className="form-help">{t("Set the destination URL for each support page surfaced to users.")}</p>
-    </div>
   );
 }
 
@@ -1921,15 +1795,13 @@ function describeChanges(
         onDrop: revert(k, (_, sv) => sv),
       });
 
-  // App / Dashboard Tabs — per tab, what about it moved.
-  for (const [key, label] of [["appTabs", "App Tabs"], ["dashboardTabs", "Dashboard Tabs"]] as const)
+  // App Tabs / Dashboard Pages — per row, what about it moved.
+  for (const [key, label] of [["appTabs", "App Tabs"], ["dashboardTabs", "Dashboard Pages"]] as const)
     for (const row of draft[key]) {
       const was = saved[key].find((r) => r.id === row.id);
       if (!was || sameValue(row, was)) continue;
       const what = [
-        (row.nameEn !== was.nameEn || row.nameEs !== was.nameEs) && "Renamed",
         row.url !== was.url && "URL Changed",
-        row.icon !== was.icon && "Icon Changed",
         row.visible !== was.visible && (row.visible ? "Shown" : "Hidden"),
       ].filter((x): x is string => !!x);
       out.push({
@@ -1938,15 +1810,6 @@ function describeChanges(
       });
     }
 
-  // Support Pages.
-  for (const link of draft.supportLinks) {
-    const was = saved.supportLinks.find((l) => l.id === link.id);
-    if (!was || link.url === was.url) continue;
-    out.push({
-      key: `sup-${link.id}`, subject: `Support Pages · ${link.label}`, action: `URL ${edited(link.url)}`,
-      onDrop: revert("supportLinks", (d) => d.map((l) => (l.id === link.id ? was : l))),
-    });
-  }
 
   // B2B Paywall Pricing — per tier × cycle.
   for (const r of B2B_PRICE_ROWS)
@@ -2085,13 +1948,6 @@ export function ProductConfigPage({
   // Unsaved settings ask before any way off the page throws them away. Tabs
   // and the template pages don’t: the settings live up here and survive both.
   useLeaveGuard(dirty);
-  // Tab names carry a SOFT limit: typing past it is allowed, saving isn't.
-  // (Option names are gated in their own modal, so they never land here long.)
-  const tabsOver = (rows: TabRow[]) => rows.some((r) => isOver(NAME_MAX, r.nameEn, r.nameEs));
-  const overLimit = [
-    tabsOver(settings.appTabs) && limitLabel("App Tabs", NAME_MAX),
-    tabsOver(settings.dashboardTabs) && limitLabel("Dashboard Tabs", NAME_MAX),
-  ].filter((x): x is string => !!x);
   // Number settings left blank or under their minimum.
   const numberErr = Object.fromEntries(
     (Object.keys(NUMBER_MINS) as NumberKey[]).map((k) => [k, numberProblem(k, settings[k])]),
@@ -2100,14 +1956,13 @@ export function ProductConfigPage({
     .filter((k) => numberErr[k])
     .map((k) => `${NUMBER_LABELS[k]} (at least ${NUMBER_MINS[k]})`);
   // Required IDs and URLs left blank — every Price ID, both EPA cards, every
-  // Support Page and tab URL.
+  // tab and page URL.
   const pricesBlank = (t: PriceTable<string>) =>
     Object.values(t).some((c) => !c.Monthly.trim() || !c.Annual.trim());
   const b2bPricesBlank = pricesBlank(settings.b2bPrices);
   const blanks = [
     settings.appTabs.some((r) => !r.url.trim()) && "App Tabs URL",
-    settings.dashboardTabs.some((r) => !r.url.trim()) && "Dashboard Tabs URL",
-    settings.supportLinks.some((l) => !l.url.trim()) && "Support Pages URL",
+    settings.dashboardTabs.some((r) => !r.url.trim()) && "Dashboard Pages URL",
     !settings.b2cEpaCard.trim() && "B2C EPA Card",
     b2bPricesBlank && "B2B Paywall Pricing",
     !settings.b2bEpaCard.trim() && "B2B EPA Card",
@@ -2115,11 +1970,10 @@ export function ProductConfigPage({
     docBlank(settings.privacyPolicy) && "Privacy Policy",
     settings.whatsNewPages.some((p) => p.versions.length === 0) && "What's New Page Versions",
   ].filter((x): x is string => !!x);
-  const canSave = overLimit.length === 0 && badNumbers.length === 0 && blanks.length === 0;
+  const canSave = badNumbers.length === 0 && blanks.length === 0;
   const blockedTip = canSave
     ? undefined
     : [
-        ...(overLimit.length ? ["Shorten these to save:", ...overLimit.map((l) => `• ${l}`)] : []),
         ...(badNumbers.length ? ["Fill in a valid number to save:", ...badNumbers.map((l) => `• ${l}`)] : []),
         ...(blanks.length ? ["Fill these in to save:", ...blanks.map((l) => `• ${l}`)] : []),
       ].join("\n");
@@ -2255,19 +2109,17 @@ export function ProductConfigPage({
                     <>
                       <TabsField
                         label={t("App Tabs")}
-                        help="Customise the tabs shown in the learner app. Set the name per language, visibility, destination URL, and an icon."
+                        help="Customise the tabs shown in the learner app. Set each tab's visibility and destination URL."
+                        noun="Tab"
                         rows={settings.appTabs}
                         onUpdate={update("appTabs")}
                       />
                       <TabsField
-                        label={t("Dashboard Tabs")}
-                        help="Customise the tabs shown in the B2B dashboard. Set the name per language, visibility, destination URL, and an icon."
+                        label={t("Dashboard Pages")}
+                        help="Customise the pages shown in the B2B dashboard. Set each page's visibility and destination URL."
+                        noun="Page"
                         rows={settings.dashboardTabs}
                         onUpdate={update("dashboardTabs")}
-                      />
-                      <SupportPagesField
-                        links={settings.supportLinks}
-                        onChange={set("supportLinks")}
                       />
                     </>
                   )}

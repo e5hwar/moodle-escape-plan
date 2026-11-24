@@ -16277,14 +16277,21 @@ body:has(.pm-overlay) .pl-copied-toast {
   opacity: 0.45;
 }
 
-.toggle:disabled {
+.toggle:disabled,
+.toggle.is-disabled {
   cursor: not-allowed;
 }
 /* A disabled switch is solid grey: the knob drops to #7a7a7a on the off
    track (the same look a disabled card-table row gives its switch), never
    opacity. */
-.toggle:disabled .toggle-knob {
+.toggle:disabled .toggle-knob,
+.toggle.is-disabled .toggle-knob {
   background: #7a7a7a;
+}
+/* A locked switch that's on (aria-disabled + a tip saying why, e.g. Dashboard
+   Pages' Support): the same solid grey, track and knob. */
+.toggle.is-disabled {
+  background: #404040;
 }
 
 /* =============================================================

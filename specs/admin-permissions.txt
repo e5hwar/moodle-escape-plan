@@ -1,0 +1,183 @@
+SkillCat Admin - Permissions (V1)
+Draft, Nov 20, 2026 (spec version: frontend spec Appendix A)
+
+How to read this:
+- Each line is one permission: its key, then what it allows.
+- Any permission in a section also lets the admin view that section.
+- create_edit always means create and edit together: whoever can create can also edit.
+- ★ = high-impact (deletes data, moves money or entitlements, or recomputes users' records).
+  Limit these to certain roles.
+- Permissions are not limited by Created By, Task Type or Question Bank Category.
+- Without a section's view permission, the section is missing from the sidebar and its pages don't open.
+- Without an action's permission, the button, menu item or field is shown greyed out.
+
+==============================================================================================================
+1. Tasks
+==============================================================================================================
+tasks.view                          Tasks list, Preview Panel
+tasks.create_edit                   Create and edit xAPI, Quiz, Hands-On and Resource Tasks
+tasks.paywall                       Turn a Quiz's paywall on or off and set its Price IDs, when creating or
+                                    editing. Without it, the paywall fields are greyed out: a new Quiz can
+                                    only be created free, and an existing Quiz's paywall can't be changed
+tasks.proctoring                    Turn Proctoring on or off on a Quiz, when creating or editing. Without it,
+                                    the Proctoring field is greyed out: a new Quiz can only be created without
+                                    proctoring, and an existing Quiz's setting can't be changed
+tasks.unlock_criteria ★             Unlock completion criteria or pass marks after users have completed the
+                                    Task (recomputes their completion)
+tasks.visibility                    Make Hidden / Make Visible
+tasks.delete ★                      Delete Task
+
+==============================================================================================================
+2. Quiz Attempts & Purchases
+==============================================================================================================
+quiz_attempts.view                  Quiz Attempts page, attempt viewer, Who Paid (Quiz)
+quiz_attempts.delete ★              Delete Attempt (resets the cooldown, renumbers later attempts, recomputes
+                                    completion)
+quiz_attempts.grant_revoke ★        Grant Additional Attempts (free or on a paid Quiz), Revoke Access on an
+                                    unused purchased attempt
+
+==============================================================================================================
+3. Hands-On Task Submissions
+==============================================================================================================
+hands_on.view                       Queue and read-only Review Console
+hands_on.review                     Score and submit a review
+
+==============================================================================================================
+4. Certifications
+==============================================================================================================
+certs.view                          List, Preview Panel, Who Paid (Certification)
+certs.create_edit                   Create (From Scratch, Upload Backup, CSV Upload) and edit Certifications:
+                                    details, structure, Access Restrictions; Backup Certification (download);
+                                    Mark as Done on Setup status
+certs.paywall                       Set the paywall (Free, Non-Consumable, Consumable) and Product IDs, when
+                                    creating or editing. Without it, the Paywall step is greyed out: a new
+                                    Certification can only be created Free, and an existing one's paywall
+                                    can't be changed
+certs.deep_link ★                   Edit the Deep Link slug, when creating or editing (the old link stops
+                                    working at once). Without it, the slug field is greyed out and the slug
+                                    made from the name is used
+certs.unlock_criteria ★             Edit locked completion criteria (recomputes users)
+certs.visibility                    Make Hidden / Make Visible
+certs.archive                       Archive & Replace, its settings, Unarchive
+certs.delete ★                      Delete Certification
+cert_access.grant_revoke ★          Grant Access (a permanent entitlement) and Revoke Access on a Consumable
+content_links.create_edit           Add, edit and remove Content Links
+
+==============================================================================================================
+5. Awards
+==============================================================================================================
+awards.create_edit                  Add Award, edit it in Manage Award, and set its Status. Active issues it
+                                    at once to everyone who already completed the Certification. Archived
+                                    stops issuing it to new completers, and existing holders keep it
+awards.delete ★                     Delete Award
+award_templates.create_edit         Create, edit and delete Card/Certificate templates (Product Config tab)
+
+==============================================================================================================
+6. Industries
+==============================================================================================================
+industries.create_edit              Create, rename, hide, delete and reorder Industries and Sub-Industries
+industries.tag                      Assign Industries to Certifications, Remove a tag from a hub
+
+==============================================================================================================
+7. Skills
+==============================================================================================================
+skills.view                         Skills list
+skills.create_edit                  Create and edit Skills and Mastery Skills, including their linked Tasks or
+                                    Skills
+skills.archive_delete ★             Archive, make Active again, Delete
+
+==============================================================================================================
+8. Feedback Forms
+==============================================================================================================
+feedback.view                       Forms list, form detail, Export Responses CSV
+feedback.create_edit ★              Create, Duplicate Form, edit questions and triggers, Delete Form (only
+                                    while it has no responses)
+feedback.archive                    Archive and Unarchive
+
+==============================================================================================================
+9. Question Bank
+==============================================================================================================
+qb.view                             Category View, questions table, Version History
+qb.create_edit                      Create questions (including from inside a Quiz) and edit them (each edit
+                                    is a new version), CSV Import, create/rename/delete Categories and Sub-
+                                    Categories
+qb.archive_delete ★                 Archive and Unarchive a question; Delete one that has never been answered
+
+==============================================================================================================
+10. User Progress (Manage Completions)
+==============================================================================================================
+progress.view                       Manage User Progress / Training Progress page
+progress.mark ★                     Mark Tasks and Certifications complete or incomplete, set grades
+
+==============================================================================================================
+11. Users
+==============================================================================================================
+users.view                          Users list (including View All Employees from Companies), Full Profile
+                                    with email and phone, Purchases & Bills, EPA Card Orders, Scholarships
+                                    list
+users.login_as ★                    Login As a learner
+users.edit                          Edit User Details: contact details. The name fields also need
+                                    identity.review
+users.scholarships ★                Grant a Scholarship, change its expiry date, restore an Ended one, Revoke
+users.cancel_refund ★               Cancel a B2C Subscription, Refund a purchase (opens Stripe or Google),
+                                    Cancel an EPA Card Order
+users.subscription.transfer ★       Transfer Subscription
+users.merge ★                       Merge Accounts
+
+==============================================================================================================
+12. Exam Reviews, IDs & Name Changes
+==============================================================================================================
+identity.view                       Exam Reviews queue, Pending ID Re-Uploads, read-only Review Console,
+                                    Integrity Notes and Past Rejections; View ID and its timeline (Users menu,
+                                    Full Profile, Manage IDs); Name Change Requests list
+identity.review ★                   Exam Reviews: Approve, Reject a Proctored Exam, Request ID Re-Upload,
+                                    correct the name (Name Mismatch Card, Hover Card rename, Edit User Details
+                                    name fields). IDs: Upload & Approve, approve an In Review or Re-Upload
+                                    Requested ID. Name Change Requests: Approve, Reject, Request ID Proof
+identity.upload_id                  Upload ID, and Upload Without Approval when replacing an In Review or
+                                    Re-Upload Requested ID (Upload & Approve needs identity.review)
+identity.integrity_notes.write      Write an Integrity Note (optional when rejecting, so a reviewer without it
+                                    can still reject)
+
+==============================================================================================================
+13. Companies
+==============================================================================================================
+companies.view                      Companies list, View Invoices, Manage Billing Emails (Stripe links)
+companies.view_dashboard ★          View Company Dashboard as the Account Holder (also the only way to edit
+                                    Company/Tenant-Created content)
+companies.create_edit ★             Create Company, Copy Stripe Checkout Link, Edit Company Details, set Sales
+                                    Rep and CSM, Delete Company (Pending Payment Setup only)
+companies.subscription.manage ★     Manage Subscription: tier, cycle, price, seats on conversion, payment
+                                    method, Free Trial, Free Access
+companies.subscription.cancel ★     Cancel Subscription
+companies.account_holder.change     Change Account Holder, including Remove & Replace
+companies.prices.create ★           Create New Price in the Stripe catalogue
+
+==============================================================================================================
+14. Spotlight
+==============================================================================================================
+spotlight.view                      Spotlight list
+spotlight.create_edit               Create and edit a Spotlight; Enable an Ended or Rejected one (sends it
+                                    back to review)
+spotlight.approve                   Approve, Reject, reorder the Active queue, Disable (kept separate from
+                                    create, as the Platform Spec requires)
+
+==============================================================================================================
+15. Product Config
+==============================================================================================================
+config.view                         See every tab read-only
+config.roles ★                      Permissions tab: create and edit roles; invite, deactivate and reactivate
+                                    SkillCat Admin accounts and give them roles
+config.app_versions ★               Force App Update: add, edit and remove versions
+config.whats_new                    What's New pages
+config.proctoring                   Webcam Capture Frequency
+config.display                      App Tabs, Dashboard Tabs, Support Pages
+config.b2c                          EPA Card Product ID, B2C Free Trial Duration
+config.b2b.pricing ★                Per-seat Price IDs, default rates, B2B EPA Product ID, B2B Free Trial
+                                    Duration
+config.b2b.lists ★                  Partnerships, Trade, Cancellation Reasons (removing a value strips it
+                                    everywhere)
+config.legal                        Terms of Service, Privacy Policy
+
+--------------------------------------------------------------------------------------------------------------
+69 permissions in total.
